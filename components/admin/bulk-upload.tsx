@@ -17,7 +17,7 @@ import { Upload, Download, FileText, Users, MapPin, Building, Globe } from "luci
 interface UploadResult {
   success: number
   failed: number
-  errors: Array<{ row: number; error: string }>
+  errors: Array<{ row: number; error: string; field?: string; code?: string }>
 }
 
 export function BulkUpload() {
@@ -222,15 +222,30 @@ export function BulkUpload() {
                           </div>
                           {results.errors.length > 0 && (
                             <div className="mt-2">
-                              <p className="font-medium">Errors:</p>
-                              <ul className="text-sm space-y-1">
-                                {results.errors.slice(0, 5).map((error, index) => (
-                                  <li key={index}>
-                                    Row {error.row}: {error.error}
-                                  </li>
+                              <p className="font-medium">Detailed Errors:</p>
+                              <div className="text-sm space-y-2 max-h-60 overflow-y-auto">
+                                {results.errors.slice(0, 10).map((error, index) => (
+                                  <div key={index} className="p-2 bg-red-50 border border-red-200 rounded">
+                                    <div className="font-medium text-red-800">Row {error.row}:</div>
+                                    <div className="text-red-700">{error.error}</div>
+                                    {error.field && (
+                                      <div className="text-xs text-red-600 mt-1">
+                                        Field: <span className="font-mono">{error.field}</span>
+                                      </div>
+                                    )}
+                                    {error.code && (
+                                      <div className="text-xs text-red-600">
+                                        Error Code: <span className="font-mono">{error.code}</span>
+                                      </div>
+                                    )}
+                                  </div>
                                 ))}
-                                {results.errors.length > 5 && <li>... and {results.errors.length - 5} more errors</li>}
-                              </ul>
+                                {results.errors.length > 10 && (
+                                  <div className="text-center text-sm text-muted-foreground">
+                                    ... and {results.errors.length - 10} more errors
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>

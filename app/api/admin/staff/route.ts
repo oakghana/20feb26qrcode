@@ -6,24 +6,58 @@ export async function GET(request: NextRequest) {
   try {
     console.log("[v0] Staff API - GET request received")
 
-    const supabase = await createClient()
+    let supabase
+    let clientError
+    try {
+      supabase = await createClient()
+      console.log("[v0] Staff API - Supabase client created successfully")
+    } catch (error) {
+      clientError = error
+      console.error("[v0] Staff API - Failed to create Supabase client:", clientError)
+      return NextResponse.json({ error: "Database connection failed" }, { status: 500 })
+    }
 
     // Get authenticated user and check admin role
+    console.log("[v0] Staff API - Checking user authentication")
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser()
 
-    if (authError || !user) {
-      console.log("[v0] Staff API - Unauthorized")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (authError) {
+      console.error("[v0] Staff API - Auth error:", authError)
+      return NextResponse.json({ error: "Authentication failed" }, { status: 401 })
     }
 
-    // Check if user has admin or department_head role
-    const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).maybeSingle()
+    if (!user) {
+      console.log("[v0] Staff API - No authenticated user")
+      return NextResponse.json({ error: "No authenticated user" }, { status: 401 })
+    }
 
-    if (!profile || !["admin", "department_head"].includes(profile.role)) {
-      console.log("[v0] Staff API - Insufficient permissions")
+    console.log("[v0] Staff API - User authenticated:", user.id)
+
+    // Check if user has admin or department_head role
+    console.log("[v0] Staff API - Checking user permissions")
+    const { data: profile, error: profileFetchError } = await supabase
+      .from("user_profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if (profileFetchError) {
+      console.error("[v0] Staff API - Profile fetch error:", profileFetchError)
+      return NextResponse.json({ error: "Failed to fetch user profile" }, { status: 500 })
+    }
+
+    if (!profile) {
+      console.log("[v0] Staff API - No user profile found")
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
+    }
+
+    console.log("[v0] Staff API - User role:", profile.role)
+
+    if (!["admin", "department_head"].includes(profile.role)) {
+      console.log("[v0] Staff API - Insufficient permissions for role:", profile.role)
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
@@ -33,10 +67,11 @@ export async function GET(request: NextRequest) {
     const limit = Number.parseInt(searchParams.get("limit") || "10")
     const search = searchParams.get("search") || ""
     const department = searchParams.get("department") || ""
-    const role = searchParams.get("role") || ""
+    const roleParam = searchParams.get("role") || ""
 
-    console.log("[v0] Staff API - Query params:", { page, limit, search, department, role })
+    console.log("[v0] Staff API - Query params:", { page, limit, search, department, roleParam })
 
+    console.log("[v0] Staff API - Building query")
     let query = supabase.from("user_profiles").select("*")
 
     // Apply filters
@@ -44,40 +79,66 @@ export async function GET(request: NextRequest) {
       query = query.or(
         `first_name.ilike.%${search}%,last_name.ilike.%${search}%,employee_id.ilike.%${search}%,email.ilike.%${search}%`,
       )
+      console.log("[v0] Staff API - Applied search filter:", search)
     }
 
     if (department) {
       query = query.eq("department_id", department)
+      console.log("[v0] Staff API - Applied department filter:", department)
     }
 
-    if (role) {
-      query = query.eq("role", role)
+    if (roleParam) {
+      query = query.eq("role", roleParam)
+      console.log("[v0] Staff API - Applied role filter:", roleParam)
     }
 
-    // Get total count
-    const { count } = await supabase.from("user_profiles").select("*", { count: "exact", head: true })
+    console.log("[v0] Staff API - Fetching total count")
+    const { count, error: countError } = await supabase
+      .from("user_profiles")
+      .select("*", { count: "exact", head: true })
+
+    if (countError) {
+      console.error("[v0] Staff API - Count query error:", countError)
+      return NextResponse.json({ error: "Failed to count staff records" }, { status: 500 })
+    }
+
+    console.log("[v0] Staff API - Total count:", count)
 
     // Apply pagination
     const offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1).order("created_at", { ascending: false })
 
-    const { data: staff, error } = await query
+    console.log("[v0] Staff API - Executing main query with pagination:", { offset, limit })
+    const { data: staff, error: staffError } = await query
 
-    if (error) {
-      console.error("[v0] Staff fetch error:", error)
-      return NextResponse.json({ error: "Failed to fetch staff" }, { status: 500 })
+    if (staffError) {
+      console.error("[v0] Staff fetch error:", staffError)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch staff",
+          details: staffError.message,
+          code: staffError.code,
+        },
+        { status: 500 },
+      )
     }
 
     console.log("[v0] Staff API - Successfully fetched", staff?.length, "records")
 
+    console.log("[v0] Staff API - Enriching staff data with departments")
     const staffWithDepartments = await Promise.all(
-      (staff || []).map(async (member) => {
+      (staff || []).map(async (member, index) => {
         if (member.department_id) {
-          const { data: dept } = await supabase
+          console.log(`[v0] Staff API - Fetching department for staff ${index + 1}:`, member.department_id)
+          const { data: dept, error: deptError } = await supabase
             .from("departments")
             .select("name, code")
             .eq("id", member.department_id)
             .maybeSingle()
+
+          if (deptError) {
+            console.error(`[v0] Staff API - Department fetch error for ${member.department_id}:`, deptError)
+          }
 
           return {
             ...member,
@@ -91,6 +152,7 @@ export async function GET(request: NextRequest) {
       }),
     )
 
+    console.log("[v0] Staff API - Returning enriched data")
     return NextResponse.json({
       success: true,
       data: staffWithDepartments,
@@ -102,8 +164,14 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[v0] Staff API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("[v0] Staff API unexpected error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
 
@@ -112,19 +180,39 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
 
     // Get authenticated user and check admin role
+    console.log("[v0] Staff API - Checking user authentication")
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser()
 
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (authError) {
+      console.error("[v0] Staff API - Auth error:", authError)
+      return NextResponse.json({ error: "Authentication failed" }, { status: 401 })
     }
 
+    if (!user) {
+      console.log("[v0] Staff API - No authenticated user")
+      return NextResponse.json({ error: "No authenticated user" }, { status: 401 })
+    }
+
+    console.log("[v0] Staff API - User authenticated:", user.id)
+
     // Check if user has admin role
-    const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
+    console.log("[v0] Staff API - Checking user permissions")
+    const { data: profile, error: profileFetchError } = await supabase
+      .from("user_profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+
+    if (profileFetchError) {
+      console.error("[v0] Staff API - Profile fetch error:", profileFetchError)
+      return NextResponse.json({ error: "Failed to fetch user profile" }, { status: 500 })
+    }
 
     if (!profile || profile.role !== "admin") {
+      console.log("[v0] Staff API - Insufficient permissions for role:", profile.role)
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
@@ -135,7 +223,8 @@ export async function POST(request: NextRequest) {
     const userId = randomUUID()
 
     // Insert user profile directly
-    const { data: newProfile, error: profileError } = await supabase
+    console.log("[v0] Staff API - Inserting new user profile")
+    const { data: newProfile, error: insertProfileError } = await supabase
       .from("user_profiles")
       .insert({
         id: userId,
@@ -153,12 +242,15 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (profileError) {
-      console.error("Profile creation error:", profileError)
+    if (insertProfileError) {
+      console.error("Profile creation error:", insertProfileError)
       return NextResponse.json({ error: "Failed to create user profile" }, { status: 400 })
     }
 
+    console.log("[v0] Staff API - New user profile created:", newProfile)
+
     // Log the action
+    console.log("[v0] Staff API - Logging create staff action")
     await supabase.from("audit_logs").insert({
       user_id: user.id,
       action: "create_staff",
@@ -166,6 +258,7 @@ export async function POST(request: NextRequest) {
       ip_address: request.headers.get("x-forwarded-for") || "unknown",
     })
 
+    console.log("[v0] Staff API - Staff member created successfully")
     return NextResponse.json({
       success: true,
       data: newProfile,
@@ -173,6 +266,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("Create staff error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

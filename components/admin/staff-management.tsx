@@ -18,7 +18,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Users, Plus, Search, Edit, Trash2, UserCheck, UserX } from "lucide-react"
+import { Users, Plus, Search, Edit, Trash2, UserCheck, UserX, Key } from "lucide-react"
+import { PasswordManagement } from "./password-management"
 
 interface StaffMember {
   id: string
@@ -29,6 +30,7 @@ interface StaffMember {
   position: string
   role: string
   is_active: boolean
+  department_id?: string
   departments?: {
     id: string
     name: string
@@ -53,6 +55,7 @@ export function StaffManagement() {
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false)
 
   const [newStaff, setNewStaff] = useState({
     email: "",
@@ -72,6 +75,7 @@ export function StaffManagement() {
 
   const fetchStaff = async () => {
     try {
+      console.log("[v0] Fetching staff with filters:", { searchTerm, selectedDepartment, selectedRole })
       const params = new URLSearchParams()
       if (searchTerm) params.append("search", searchTerm)
       if (selectedDepartment !== "all") params.append("department", selectedDepartment)
@@ -79,13 +83,16 @@ export function StaffManagement() {
 
       const response = await fetch(`/api/admin/staff?${params}`)
       const result = await response.json()
+      console.log("[v0] Staff fetch result:", result)
 
       if (result.success) {
         setStaff(result.data)
       } else {
+        console.error("[v0] Failed to fetch staff:", result.error)
         setError(result.error)
       }
     } catch (error) {
+      console.error("[v0] Staff fetch exception:", error)
       setError("Failed to fetch staff")
     } finally {
       setLoading(false)
@@ -94,19 +101,25 @@ export function StaffManagement() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await fetch("/api/attendance/locations")
+      console.log("[v0] Fetching departments...")
+      const response = await fetch("/api/admin/departments")
       const result = await response.json()
+      console.log("[v0] Departments fetch result:", result)
+
       if (result.success) {
-        setDepartments(result.data)
+        setDepartments(result.departments || result.data || [])
+      } else {
+        console.error("[v0] Failed to fetch departments:", result.error)
       }
     } catch (error) {
-      console.error("Failed to fetch departments:", error)
+      console.error("[v0] Departments fetch exception:", error)
     }
   }
 
   const handleAddStaff = async () => {
     try {
       setError(null)
+      console.log("[v0] Adding new staff:", newStaff)
       const response = await fetch("/api/admin/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -114,6 +127,7 @@ export function StaffManagement() {
       })
 
       const result = await response.json()
+      console.log("[v0] Add staff result:", result)
 
       if (result.success) {
         setSuccess("Staff member added successfully")
@@ -133,6 +147,7 @@ export function StaffManagement() {
         setError(result.error)
       }
     } catch (error) {
+      console.error("[v0] Add staff exception:", error)
       setError("Failed to add staff member")
     }
   }
@@ -140,6 +155,7 @@ export function StaffManagement() {
   const handleUpdateStaff = async (staffId: string, updates: Partial<StaffMember>) => {
     try {
       setError(null)
+      console.log("[v0] Updating staff member:", staffId, updates)
       const response = await fetch(`/api/admin/staff/${staffId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -147,6 +163,7 @@ export function StaffManagement() {
       })
 
       const result = await response.json()
+      console.log("[v0] Update staff result:", result)
 
       if (result.success) {
         setSuccess("Staff member updated successfully")
@@ -156,6 +173,7 @@ export function StaffManagement() {
         setError(result.error)
       }
     } catch (error) {
+      console.error("[v0] Update staff exception:", error)
       setError("Failed to update staff member")
     }
   }
@@ -187,30 +205,23 @@ export function StaffManagement() {
 
     try {
       setError(null)
-      console.log("[v0] Updating staff member:", editingStaff.id, {
+      const updateData = {
         first_name: editingStaff.first_name,
         last_name: editingStaff.last_name,
         email: editingStaff.email,
         employee_id: editingStaff.employee_id,
         position: editingStaff.position,
         role: editingStaff.role,
-        department_id: editingStaff.departments?.id || editingStaff.department_id,
+        department_id: editingStaff.department_id || editingStaff.departments?.id,
         is_active: editingStaff.is_active,
-      })
+      }
+
+      console.log("[v0] Updating staff member:", editingStaff.id, updateData)
 
       const response = await fetch(`/api/admin/staff/${editingStaff.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          first_name: editingStaff.first_name,
-          last_name: editingStaff.last_name,
-          email: editingStaff.email,
-          employee_id: editingStaff.employee_id,
-          position: editingStaff.position,
-          role: editingStaff.role,
-          department_id: editingStaff.departments?.id || editingStaff.department_id,
-          is_active: editingStaff.is_active,
-        }),
+        body: JSON.stringify(updateData),
       })
 
       console.log("[v0] Update response status:", response.status)
@@ -292,111 +303,132 @@ export function StaffManagement() {
               </Select>
             </div>
 
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Staff
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Add New Staff Member</DialogTitle>
-                  <DialogDescription>Create a new staff account for QCC</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="firstName">First Name</Label>
-                      <Input
-                        id="firstName"
-                        value={newStaff.first_name}
-                        onChange={(e) => setNewStaff({ ...newStaff, first_name: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="lastName">Last Name</Label>
-                      <Input
-                        id="lastName"
-                        value={newStaff.last_name}
-                        onChange={(e) => setNewStaff({ ...newStaff, last_name: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={newStaff.email}
-                      onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={newStaff.password}
-                      onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="employeeId">Employee ID</Label>
-                    <Input
-                      id="employeeId"
-                      value={newStaff.employee_id}
-                      onChange={(e) => setNewStaff({ ...newStaff, employee_id: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="position">Position</Label>
-                    <Input
-                      id="position"
-                      value={newStaff.position}
-                      onChange={(e) => setNewStaff({ ...newStaff, position: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="department">Department</Label>
-                    <Select
-                      value={newStaff.department_id}
-                      onValueChange={(value) => setNewStaff({ ...newStaff, department_id: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Department" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departments.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="role">Role</Label>
-                    <Select value={newStaff.role} onValueChange={(value) => setNewStaff({ ...newStaff, role: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="staff">Staff</SelectItem>
-                        <SelectItem value="department_head">Department Head</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                    Cancel
+            <div className="flex gap-2">
+              <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Key className="mr-2 h-4 w-4" />
+                    Reset Passwords
                   </Button>
-                  <Button onClick={handleAddStaff}>Add Staff</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Password Management</DialogTitle>
+                    <DialogDescription>Reset passwords for staff members</DialogDescription>
+                  </DialogHeader>
+                  <PasswordManagement isAdmin={true} />
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Staff
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Add New Staff Member</DialogTitle>
+                    <DialogDescription>Create a new staff account for QCC</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="firstName">First Name</Label>
+                        <Input
+                          id="firstName"
+                          value={newStaff.first_name}
+                          onChange={(e) => setNewStaff({ ...newStaff, first_name: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input
+                          id="lastName"
+                          value={newStaff.last_name}
+                          onChange={(e) => setNewStaff({ ...newStaff, last_name: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={newStaff.email}
+                        onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={newStaff.password}
+                        onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="employeeId">Employee ID</Label>
+                      <Input
+                        id="employeeId"
+                        value={newStaff.employee_id}
+                        onChange={(e) => setNewStaff({ ...newStaff, employee_id: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="position">Position</Label>
+                      <Input
+                        id="position"
+                        value={newStaff.position}
+                        onChange={(e) => setNewStaff({ ...newStaff, position: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="department">Department</Label>
+                      <Select
+                        value={newStaff.department_id}
+                        onValueChange={(value) => setNewStaff({ ...newStaff, department_id: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Department" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {departments.map((dept) => (
+                            <SelectItem key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="role">Role</Label>
+                      <Select
+                        value={newStaff.role}
+                        onValueChange={(value) => setNewStaff({ ...newStaff, role: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="staff">Staff</SelectItem>
+                          <SelectItem value="department_head">Department Head</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleAddStaff}>Add Staff</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           {/* Edit Dialog */}
@@ -454,7 +486,7 @@ export function StaffManagement() {
                   <div>
                     <Label htmlFor="editDepartment">Department</Label>
                     <Select
-                      value={editingStaff.departments?.id || editingStaff.department_id || ""}
+                      value={editingStaff.department_id || editingStaff.departments?.id || ""}
                       onValueChange={(value) =>
                         setEditingStaff({
                           ...editingStaff,
