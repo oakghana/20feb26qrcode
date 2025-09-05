@@ -38,7 +38,6 @@ import {
   AlertTriangle,
   CheckCircle,
   FileSpreadsheet,
-  FileDown,
   MapPin,
   Loader2,
 } from "lucide-react"
@@ -504,15 +503,6 @@ export function AttendanceReports() {
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
               )}
               {exporting ? "Exporting..." : "Export Excel"}
-            </Button>
-            <Button
-              onClick={() => exportReport("pdf")}
-              variant="outline"
-              disabled={exporting || records.length === 0 || loading}
-              className="bg-red-50 hover:bg-red-100 border-red-200 text-red-700"
-            >
-              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-              {exporting ? "Exporting..." : "Export PDF"}
             </Button>
             <Button
               onClick={() => exportReport("csv")}

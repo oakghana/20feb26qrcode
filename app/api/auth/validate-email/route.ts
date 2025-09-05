@@ -3,155 +3,154 @@ import { type NextRequest, NextResponse } from "next/server"
 const JSON_HEADERS = {
   "Content-Type": "application/json",
   "Cache-Control": "no-cache, no-store, must-revalidate",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Accept",
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: JSON_HEADERS,
+  })
 }
 
 export async function POST(request: NextRequest) {
+  const response = NextResponse.json(
+    { error: "Processing request...", exists: false },
+    { status: 200, headers: JSON_HEADERS },
+  )
+
   try {
-    const response = new NextResponse()
-    response.headers.set("Content-Type", "application/json")
-    response.headers.set("Cache-Control", "no-cache, no-store, must-revalidate")
+    console.log("[v0] Email validation API called")
+
+    let email: string
+    try {
+      const body = await request.json()
+      email = body.email?.trim()?.toLowerCase()
+      console.log("[v0] Parsed email from request:", email)
+    } catch (parseError) {
+      console.error("[v0] Failed to parse request body:", parseError)
+      return NextResponse.json({ error: "Invalid request body", exists: false }, { status: 400, headers: JSON_HEADERS })
+    }
+
+    if (!email) {
+      console.log("[v0] No email provided")
+      return NextResponse.json({ error: "Email is required", exists: false }, { status: 400, headers: JSON_HEADERS })
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      console.log("[v0] Invalid email format:", email)
+      return NextResponse.json({ error: "Invalid email format", exists: false }, { status: 400, headers: JSON_HEADERS })
+    }
+
+    console.log("[v0] Validating email:", email)
+
+    let createClient
+    try {
+      const supabaseModule = await import("@/lib/supabase/server")
+      createClient = supabaseModule.createClient
+      console.log("[v0] Supabase module imported successfully")
+    } catch (importError) {
+      console.error("[v0] Failed to import Supabase module:", importError)
+      return NextResponse.json(
+        {
+          error: "Server configuration error",
+          exists: false,
+          details: "Failed to load database module",
+        },
+        { status: 500, headers: JSON_HEADERS },
+      )
+    }
+
+    let supabase
+    try {
+      supabase = await createClient()
+      console.log("[v0] Supabase client created successfully")
+    } catch (clientError) {
+      console.error("[v0] Failed to create Supabase client:", clientError)
+      return NextResponse.json(
+        {
+          error: "Database connection failed",
+          exists: false,
+          details: clientError instanceof Error ? clientError.message : "Unknown client error",
+        },
+        { status: 500, headers: JSON_HEADERS },
+      )
+    }
 
     try {
-      console.log("[v0] Email validation API called")
+      console.log("[v0] Querying user_profiles table for email:", email)
+      const { data: user, error: queryError } = await supabase
+        .from("user_profiles")
+        .select("id, email, is_active, first_name, last_name")
+        .ilike("email", email)
+        .maybeSingle()
 
-      let email: string
-      try {
-        const body = await request.json()
-        email = body.email?.trim()?.toLowerCase()
-        console.log("[v0] Parsed email from request:", email)
-      } catch (parseError) {
-        console.error("[v0] Failed to parse request body:", parseError)
-        return NextResponse.json(
-          { error: "Invalid request body", exists: false },
-          { status: 400, headers: JSON_HEADERS },
-        )
-      }
-
-      if (!email) {
-        console.log("[v0] No email provided")
-        return NextResponse.json({ error: "Email is required", exists: false }, { status: 400, headers: JSON_HEADERS })
-      }
-
-      console.log("[v0] Validating email:", email)
-
-      let createClient
-      try {
-        const supabaseModule = await import("@/lib/supabase/server")
-        createClient = supabaseModule.createClient
-        console.log("[v0] Supabase module imported successfully")
-      } catch (importError) {
-        console.error("[v0] Failed to import Supabase module:", importError)
+      if (queryError) {
+        console.error("[v0] Database error during email validation:", queryError)
         return NextResponse.json(
           {
-            error: "Server configuration error",
+            error: "Database error during validation",
             exists: false,
-            details: "Failed to load database module",
+            details: queryError.message || "Unknown database error",
           },
           { status: 500, headers: JSON_HEADERS },
         )
       }
 
-      let supabase
-      try {
-        supabase = await createClient()
-        console.log("[v0] Supabase client created successfully")
-      } catch (clientError) {
-        console.error("[v0] Failed to create Supabase client:", clientError)
+      if (!user) {
+        console.log("[v0] Email not found in user_profiles:", email)
         return NextResponse.json(
           {
-            error: "Database connection failed",
+            error:
+              "This email is not registered in the QCC system. Please contact your administrator or use a registered email address.",
             exists: false,
-            details: clientError instanceof Error ? clientError.message : "Unknown client error",
           },
-          { status: 500, headers: JSON_HEADERS },
+          { status: 404, headers: JSON_HEADERS },
         )
       }
 
-      try {
-        console.log("[v0] Querying user_profiles table for email:", email)
-        const { data: user, error: queryError } = await supabase
-          .from("user_profiles")
-          .select("id, email, is_active, first_name, last_name")
-          .ilike("email", email)
-          .maybeSingle()
-
-        if (queryError) {
-          console.error("[v0] Database error during email validation:", queryError)
-          return NextResponse.json(
-            {
-              error: "Database error during validation",
-              exists: false,
-              details: queryError.message || "Unknown database error",
-            },
-            { status: 500, headers: JSON_HEADERS },
-          )
-        }
-
-        if (!user) {
-          console.log("[v0] Email not found in user_profiles:", email)
-          return NextResponse.json(
-            {
-              error:
-                "This email is not registered in the QCC system. Please contact your administrator or use a registered email address.",
-              exists: false,
-            },
-            { status: 404, headers: JSON_HEADERS },
-          )
-        }
-
-        if (!user.is_active) {
-          console.log("[v0] User account not active but allowing OTP:", email)
-          return NextResponse.json(
-            {
-              exists: true,
-              approved: false,
-              message: "Account pending approval - OTP will be sent but login may be restricted",
-            },
-            { headers: JSON_HEADERS },
-          )
-        }
-
-        console.log("[v0] Email validation successful:", email)
+      if (!user.is_active) {
+        console.log("[v0] User account not active but allowing OTP:", email)
         return NextResponse.json(
           {
             exists: true,
-            approved: true,
-            message: "Email validated successfully",
+            approved: false,
+            message: "Account pending approval - OTP will be sent but login may be restricted",
           },
           { headers: JSON_HEADERS },
         )
-      } catch (dbError) {
-        console.error("[v0] Database operation failed:", dbError)
-        return NextResponse.json(
-          {
-            error: "Database operation failed",
-            exists: false,
-            details: dbError instanceof Error ? dbError.message : "Unknown database error",
-          },
-          { status: 500, headers: JSON_HEADERS },
-        )
       }
-    } catch (topLevelError) {
-      console.error("[v0] Top-level API error:", topLevelError)
-      return new NextResponse(
-        JSON.stringify({
-          error: "Critical server error",
-          exists: false,
-          details: topLevelError instanceof Error ? topLevelError.message : "Unknown critical error",
-        }),
+
+      console.log("[v0] Email validation successful:", email)
+      return NextResponse.json(
         {
-          status: 500,
-          headers: JSON_HEADERS,
+          exists: true,
+          approved: true,
+          message: "Email validated successfully",
         },
+        { headers: JSON_HEADERS },
+      )
+    } catch (dbError) {
+      console.error("[v0] Database operation failed:", dbError)
+      return NextResponse.json(
+        {
+          error: "Database operation failed",
+          exists: false,
+          details: dbError instanceof Error ? dbError.message : "Unknown database error",
+        },
+        { status: 500, headers: JSON_HEADERS },
       )
     }
-  } catch (error) {
-    console.error("[v0] Email validation unexpected error:", error)
+  } catch (topLevelError) {
+    console.error("[v0] Top-level API error:", topLevelError)
     return NextResponse.json(
       {
-        error: "Internal server error",
+        error: "Critical server error",
         exists: false,
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: topLevelError instanceof Error ? topLevelError.message : "Unknown critical error",
       },
       { status: 500, headers: JSON_HEADERS },
     )
