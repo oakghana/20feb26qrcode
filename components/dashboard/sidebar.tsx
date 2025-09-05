@@ -80,7 +80,7 @@ const navigationItems = [
     title: "Locations",
     href: "/dashboard/locations",
     icon: MapPin,
-    roles: ["admin", "department_head"],
+    roles: ["admin"],
   },
   {
     title: "QR Events",
@@ -92,7 +92,7 @@ const navigationItems = [
     title: "Staff Management",
     href: "/dashboard/staff",
     icon: Users,
-    roles: ["admin", "department_head"],
+    roles: ["admin"],
   },
   {
     title: "User Approvals",

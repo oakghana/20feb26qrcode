@@ -12,7 +12,7 @@ export default async function LocationsPage() {
 
   const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
 
-  if (!profile || !["admin", "department_head"].includes(profile.role)) {
+  if (!profile || profile.role !== "admin") {
     redirect("/dashboard")
   }
 

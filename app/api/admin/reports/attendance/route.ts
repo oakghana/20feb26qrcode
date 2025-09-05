@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // Get authenticated user and check admin role
+    // Get authenticated user and check role
     const {
       data: { user },
       error: authError,
@@ -15,14 +15,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Check if user has admin or department_head role
     const { data: profile } = await supabase
       .from("user_profiles")
       .select("role, department_id")
       .eq("id", user.id)
       .single()
 
-    if (!profile || !["admin", "department_head"].includes(profile.role)) {
+    if (!profile || !["admin", "department_head", "staff"].includes(profile.role)) {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
@@ -46,8 +45,9 @@ export async function GET(request: NextRequest) {
       .gte("check_in_time", `${startDate}T00:00:00`)
       .lte("check_in_time", `${endDate}T23:59:59`)
 
-    // Apply user filter if specified
-    if (userId) {
+    if (profile.role === "staff") {
+      query = query.eq("user_id", user.id)
+    } else if (userId) {
       query = query.eq("user_id", userId)
     }
 
@@ -77,11 +77,21 @@ export async function GET(request: NextRequest) {
     const userMap = new Map(userProfiles?.map((user) => [user.id, user]) || [])
 
     let filteredRecords = attendanceRecords
-    if (departmentId || (profile.role === "department_head" && profile.department_id)) {
-      const targetDeptId = departmentId || profile.department_id
+
+    if (profile.role === "department_head") {
+      // Department heads can only see records from their department
       filteredRecords = attendanceRecords.filter((record) => {
         const user = userMap.get(record.user_id)
-        return user?.department_id === targetDeptId
+        return user?.department_id === profile.department_id
+      })
+    } else if (profile.role === "staff") {
+      // Staff can only see their own records (already filtered in query above)
+      filteredRecords = attendanceRecords
+    } else if (departmentId) {
+      // Admins can filter by specific department
+      filteredRecords = attendanceRecords.filter((record) => {
+        const user = userMap.get(record.user_id)
+        return user?.department_id === departmentId
       })
     }
 
