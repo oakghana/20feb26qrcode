@@ -13,7 +13,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { getCurrentLocation, validateAttendanceLocation, type LocationData } from "@/lib/geolocation"
+import {
+  getCurrentLocation,
+  validateAttendanceLocation,
+  requestLocationPermission,
+  type LocationData,
+} from "@/lib/geolocation"
 import { getDeviceInfo } from "@/lib/device-info"
 import { QRScanner } from "@/components/qr/qr-scanner"
 import { validateQRCode, type QRCodeData } from "@/lib/qr-code"
@@ -52,6 +57,11 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
   const [success, setSuccess] = useState<string | null>(null)
   const [showQRScanner, setShowQRScanner] = useState(false)
   const [qrScanMode, setQrScanMode] = useState<"checkin" | "checkout">("checkin")
+  const [locationPermissionStatus, setLocationPermissionStatus] = useState<{
+    granted: boolean | null
+    message: string
+  }>({ granted: null, message: "" })
+  const [showLocationHelp, setShowLocationHelp] = useState(false)
 
   useEffect(() => {
     fetchLocations()
@@ -83,8 +93,16 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     try {
       const location = await getCurrentLocation()
       setUserLocation(location)
+      setLocationPermissionStatus({ granted: true, message: "Location access granted" })
       return location
     } catch (error) {
+      if (error instanceof Error && error.message.includes("Location access denied")) {
+        setLocationPermissionStatus({
+          granted: false,
+          message: error.message,
+        })
+        setShowLocationHelp(true)
+      }
       const message = error instanceof Error ? error.message : "Failed to get location"
       setError(message)
       return null
@@ -281,6 +299,24 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     }
   }
 
+  const handleRequestLocationPermission = async () => {
+    setIsLoading(true)
+    setError(null)
+
+    const result = await requestLocationPermission()
+    setLocationPermissionStatus(result)
+
+    if (result.granted) {
+      setShowLocationHelp(false)
+      await getCurrentLocationData()
+    } else {
+      setError(result.message)
+      setShowLocationHelp(true)
+    }
+
+    setIsLoading(false)
+  }
+
   const isCheckedIn = todayAttendance?.check_in_time && !todayAttendance?.check_out_time
   const isCheckedOut = todayAttendance?.check_out_time
   const canCheckIn = !todayAttendance?.check_in_time
@@ -339,24 +375,49 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         </CardHeader>
         <CardContent className="space-y-4">
           {!userLocation ? (
-            <Button
-              onClick={getCurrentLocationData}
-              disabled={isLoading}
-              variant="outline"
-              className="w-full bg-transparent"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Getting Location...
-                </>
-              ) : (
-                <>
-                  <MapPin className="mr-2 h-4 w-4" />
-                  Get Current Location
-                </>
+            <div className="space-y-3">
+              <Button
+                onClick={getCurrentLocationData}
+                disabled={isLoading}
+                variant="outline"
+                className="w-full bg-transparent"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Getting Location...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="mr-2 h-4 w-4" />
+                    Get Current Location
+                  </>
+                )}
+              </Button>
+
+              {showLocationHelp && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="space-y-2">
+                    <div className="font-medium">Location Access Required</div>
+                    <div className="text-sm whitespace-pre-line">{locationPermissionStatus.message}</div>
+                    <div className="flex gap-2 mt-3">
+                      <Button size="sm" onClick={handleRequestLocationPermission} disabled={isLoading}>
+                        Try Again
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowLocationHelp(false)}
+                        className="bg-transparent"
+                      >
+                        Use QR Code Instead
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
               )}
-            </Button>
+            </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-green-600">
@@ -405,13 +466,16 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       <Card>
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Record your attendance using GPS (20m precision) or QR code</CardDescription>
+          <CardDescription>
+            Record your attendance using GPS (20m precision) or QR code
+            {!userLocation && " - QR code works without location access"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription className="whitespace-pre-line">{error}</AlertDescription>
             </Alert>
           )}
 

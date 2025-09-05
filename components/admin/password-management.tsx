@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Key, Shield } from "lucide-react"
+import { Key, Shield, Search } from "lucide-react"
+
+interface User {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  employee_id: string
+}
 
 interface PasswordManagementProps {
   userId?: string
@@ -32,6 +41,51 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  const [users, setUsers] = useState<User[]>([])
+  const [selectedUserId, setSelectedUserId] = useState<string>("")
+  const [selectedUserEmail, setSelectedUserEmail] = useState<string>("")
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchUsers()
+    }
+  }, [isAdmin])
+
+  const fetchUsers = async () => {
+    setLoadingUsers(true)
+    try {
+      const response = await fetch("/api/admin/users")
+      const result = await response.json()
+
+      if (result.success) {
+        setUsers(result.users || [])
+      } else {
+        console.error("Failed to fetch users:", result.error)
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  const handleUserSelect = (userId: string) => {
+    const user = users.find((u) => u.id === userId)
+    if (user) {
+      setSelectedUserId(userId)
+      setSelectedUserEmail(user.email)
+    }
+  }
+
+  const filteredUsers = users.filter(
+    (user) =>
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.employee_id.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
   const handleUserPasswordChange = async () => {
     if (newPassword !== confirmPassword) {
@@ -76,8 +130,10 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
   }
 
   const handleAdminPasswordReset = async () => {
-    if (!userId || !adminNewPassword) {
-      setError("User ID and new password are required")
+    const targetUserId = selectedUserId || userId
+
+    if (!targetUserId || !adminNewPassword) {
+      setError("Please select a user and enter a new password")
       return
     }
 
@@ -94,7 +150,7 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId,
+          userId: targetUserId,
           newPassword: adminNewPassword,
         }),
       })
@@ -102,8 +158,10 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
       const result = await response.json()
 
       if (result.success) {
-        setSuccess("Password reset successfully")
+        setSuccess(`Password reset successfully for ${selectedUserEmail || userEmail}`)
         setAdminNewPassword("")
+        setSelectedUserId("")
+        setSelectedUserEmail("")
         setIsChangePasswordOpen(false)
       } else {
         setError(result.error || "Failed to reset password")
@@ -139,11 +197,63 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
           </Alert>
         )}
 
+        {isAdmin && (
+          <div className="space-y-4 mb-4">
+            <div>
+              <Label htmlFor="userSearch">Search Users</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="userSearch"
+                  placeholder="Search by name, email, or employee ID..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="userSelect">Select User</Label>
+              <Select value={selectedUserId} onValueChange={handleUserSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a user to reset password" />
+                </SelectTrigger>
+                <SelectContent>
+                  {loadingUsers ? (
+                    <SelectItem value="loading" disabled>
+                      Loading users...
+                    </SelectItem>
+                  ) : filteredUsers.length > 0 ? (
+                    filteredUsers.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.first_name} {user.last_name} ({user.email}) - {user.employee_id}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-users" disabled>
+                      {searchTerm ? "No users found matching search" : "No users available"}
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedUserEmail && (
+              <Alert>
+                <AlertDescription>
+                  Selected user: <strong>{selectedUserEmail}</strong>
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+
         <Dialog open={isChangePasswordOpen} onOpenChange={setIsChangePasswordOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full">
+            <Button className="w-full" disabled={isAdmin && !selectedUserId && !userId}>
               {isAdmin ? <Shield className="mr-2 h-4 w-4" /> : <Key className="mr-2 h-4 w-4" />}
-              {isAdmin ? "Reset User Password" : "Change Password"}
+              {isAdmin ? "Reset Selected User Password" : "Change Password"}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
@@ -151,14 +261,13 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
               <DialogTitle>{isAdmin ? "Reset User Password" : "Change Password"}</DialogTitle>
               <DialogDescription>
                 {isAdmin
-                  ? `Reset password for ${userEmail || "selected user"}`
+                  ? `Reset password for ${selectedUserEmail || userEmail || "selected user"}`
                   : "Enter your current password and choose a new one"}
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
               {isAdmin ? (
-                // Admin password reset form
                 <div>
                   <Label htmlFor="adminNewPassword">New Password</Label>
                   <Input
@@ -166,11 +275,10 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
                     type="password"
                     value={adminNewPassword}
                     onChange={(e) => setAdminNewPassword(e.target.value)}
-                    placeholder="Enter new password"
+                    placeholder="Enter new password (min 6 characters)"
                   />
                 </div>
               ) : (
-                // User password change form
                 <>
                   <div>
                     <Label htmlFor="currentPassword">Current Password</Label>

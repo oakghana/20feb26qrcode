@@ -187,6 +187,17 @@ export function StaffManagement() {
 
     try {
       setError(null)
+      console.log("[v0] Updating staff member:", editingStaff.id, {
+        first_name: editingStaff.first_name,
+        last_name: editingStaff.last_name,
+        email: editingStaff.email,
+        employee_id: editingStaff.employee_id,
+        position: editingStaff.position,
+        role: editingStaff.role,
+        department_id: editingStaff.departments?.id || editingStaff.department_id,
+        is_active: editingStaff.is_active,
+      })
+
       const response = await fetch(`/api/admin/staff/${editingStaff.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -197,20 +208,25 @@ export function StaffManagement() {
           employee_id: editingStaff.employee_id,
           position: editingStaff.position,
           role: editingStaff.role,
-          department_id: editingStaff.department_id,
+          department_id: editingStaff.departments?.id || editingStaff.department_id,
+          is_active: editingStaff.is_active,
         }),
       })
 
+      console.log("[v0] Update response status:", response.status)
       const result = await response.json()
+      console.log("[v0] Update response data:", result)
 
       if (result.success) {
         setSuccess("Staff member updated successfully")
         setEditingStaff(null)
         fetchStaff()
       } else {
-        setError(result.error)
+        console.error("[v0] Update failed:", result.error)
+        setError(result.error || "Failed to update staff member")
       }
     } catch (error) {
+      console.error("[v0] Update exception:", error)
       setError("Failed to update staff member")
     }
   }
@@ -438,8 +454,14 @@ export function StaffManagement() {
                   <div>
                     <Label htmlFor="editDepartment">Department</Label>
                     <Select
-                      value={editingStaff.department_id}
-                      onValueChange={(value) => setEditingStaff({ ...editingStaff, department_id: value })}
+                      value={editingStaff.departments?.id || editingStaff.department_id || ""}
+                      onValueChange={(value) =>
+                        setEditingStaff({
+                          ...editingStaff,
+                          department_id: value,
+                          departments: departments.find((d) => d.id === value),
+                        })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select Department" />

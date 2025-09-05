@@ -41,20 +41,21 @@ export async function getCurrentLocation(): Promise<LocationData> {
         let message = "Unknown error occurred"
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            message = "Location access denied by user"
+            message =
+              "Location access denied. Please enable location permissions in your browser settings and try again, or use the QR code option instead."
             break
           case error.POSITION_UNAVAILABLE:
-            message = "Location information is unavailable"
+            message = "Location information is unavailable. Please check your GPS settings or use the QR code option."
             break
           case error.TIMEOUT:
-            message = "Location request timed out"
+            message = "Location request timed out. Please try again or use the QR code option."
             break
         }
         reject(new GeolocationError(message, error.code))
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 15000, // Increased timeout from 10s to 15s
         maximumAge: 60000,
       },
     )
@@ -168,6 +169,48 @@ export function validateAttendanceLocation(
       distance: validation.distance,
       message: `You are ${validation.distance}m away from ${nearest.location.name}. You must be within 20 meters to check in.`,
       accuracyWarning: validation.accuracyWarning,
+    }
+  }
+}
+
+export async function requestLocationPermission(): Promise<{ granted: boolean; message: string }> {
+  if (!navigator.geolocation) {
+    return {
+      granted: false,
+      message: "Geolocation is not supported by this browser. Please use the QR code option instead.",
+    }
+  }
+
+  try {
+    // Check if permissions API is available
+    if ("permissions" in navigator) {
+      const permission = await navigator.permissions.query({ name: "geolocation" })
+
+      if (permission.state === "granted") {
+        return { granted: true, message: "Location permission already granted" }
+      } else if (permission.state === "denied") {
+        return {
+          granted: false,
+          message:
+            "Location access is blocked. Please enable location permissions in your browser settings:\n\n1. Click the location icon in your address bar\n2. Select 'Allow' for location access\n3. Refresh the page and try again\n\nAlternatively, use the QR code option for attendance.",
+        }
+      }
+    }
+
+    // Try to get location to trigger permission request
+    await getCurrentLocation()
+    return { granted: true, message: "Location permission granted successfully" }
+  } catch (error) {
+    if (error instanceof GeolocationError && error.code === 1) {
+      return {
+        granted: false,
+        message:
+          "Location access denied. To enable:\n\n1. Click the location icon (🔒) in your browser's address bar\n2. Select 'Allow' for location access\n3. Refresh the page and try again\n\nOr use the QR code option for attendance tracking.",
+      }
+    }
+    return {
+      granted: false,
+      message: error instanceof Error ? error.message : "Failed to access location. Please use the QR code option.",
     }
   }
 }
