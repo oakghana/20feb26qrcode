@@ -4,6 +4,8 @@ import { crypto } from "crypto"
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("[v0] Staff API - GET request received")
+
     const supabase = await createClient()
 
     // Get authenticated user and check admin role
@@ -13,13 +15,15 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
+      console.log("[v0] Staff API - Unauthorized")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Check if user has admin or department_head role
-    const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
+    const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).maybeSingle()
 
     if (!profile || !["admin", "department_head"].includes(profile.role)) {
+      console.log("[v0] Staff API - Insufficient permissions")
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
@@ -31,14 +35,9 @@ export async function GET(request: NextRequest) {
     const department = searchParams.get("department") || ""
     const role = searchParams.get("role") || ""
 
-    let query = supabase.from("user_profiles").select(`
-        *,
-        departments (
-          id,
-          name,
-          code
-        )
-      `)
+    console.log("[v0] Staff API - Query params:", { page, limit, search, department, role })
+
+    let query = supabase.from("user_profiles").select("*")
 
     // Apply filters
     if (search) {
@@ -65,13 +64,36 @@ export async function GET(request: NextRequest) {
     const { data: staff, error } = await query
 
     if (error) {
-      console.error("Staff fetch error:", error)
+      console.error("[v0] Staff fetch error:", error)
       return NextResponse.json({ error: "Failed to fetch staff" }, { status: 500 })
     }
 
+    console.log("[v0] Staff API - Successfully fetched", staff?.length, "records")
+
+    const staffWithDepartments = await Promise.all(
+      (staff || []).map(async (member) => {
+        if (member.department_id) {
+          const { data: dept } = await supabase
+            .from("departments")
+            .select("name, code")
+            .eq("id", member.department_id)
+            .maybeSingle()
+
+          return {
+            ...member,
+            departments: dept,
+          }
+        }
+        return {
+          ...member,
+          departments: null,
+        }
+      }),
+    )
+
     return NextResponse.json({
       success: true,
-      data: staff,
+      data: staffWithDepartments,
       pagination: {
         page,
         limit,
@@ -80,7 +102,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Staff API error:", error)
+    console.error("[v0] Staff API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

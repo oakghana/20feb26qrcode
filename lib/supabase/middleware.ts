@@ -2,23 +2,30 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function updateSession(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+
+  console.log("[v0] Middleware env check:", {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseKey,
+    nextPublicUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    regularUrl: !!process.env.SUPABASE_URL,
+    nextPublicKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    regularKey: !!process.env.SUPABASE_ANON_KEY,
+  })
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.log("[v0] Missing Supabase credentials in middleware, skipping auth check")
+    return NextResponse.next({
+      request,
+    })
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("[v0] Missing Supabase environment variables:", {
-      url: !!supabaseUrl,
-      key: !!supabaseAnonKey,
-      availableEnvVars: Object.keys(process.env).filter((key) => key.includes("SUPABASE")),
-    })
-    return supabaseResponse
-  }
-
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll()
@@ -33,24 +40,21 @@ export async function updateSession(request: NextRequest) {
     },
   })
 
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+  // Do not run code between createServerClient and supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-    if (
-      request.nextUrl.pathname !== "/" &&
-      !user &&
-      !request.nextUrl.pathname.startsWith("/auth") &&
-      !request.nextUrl.pathname.startsWith("/_next") &&
-      !request.nextUrl.pathname.startsWith("/favicon")
-    ) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/auth/login"
-      return NextResponse.redirect(url)
-    }
-  } catch (error) {
-    console.error("[v0] Middleware auth error:", error)
+  if (
+    request.nextUrl.pathname !== "/" &&
+    !user &&
+    !request.nextUrl.pathname.startsWith("/auth") &&
+    !request.nextUrl.pathname.startsWith("/_next") &&
+    !request.nextUrl.pathname.startsWith("/favicon")
+  ) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/auth/login"
+    return NextResponse.redirect(url)
   }
 
   return supabaseResponse

@@ -136,11 +136,8 @@ export default function SignupPage() {
             employee_id: formData.employeeId,
             department_id: formData.departmentId || null,
             position: formData.position || null,
-            region: formData.region || null,
             role: "staff",
             is_active: false,
-            approval_status: "pending",
-            created_at: new Date().toISOString(),
           })
 
           if (profileError) {

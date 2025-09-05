@@ -38,17 +38,6 @@ export async function GET(request: NextRequest) {
       .from("attendance_records")
       .select(`
         *,
-        user_profiles!inner (
-          id,
-          first_name,
-          last_name,
-          employee_id,
-          department_id,
-          departments (
-            name,
-            code
-          )
-        ),
         geofence_locations!check_in_location_id (
           name,
           address
@@ -57,16 +46,7 @@ export async function GET(request: NextRequest) {
       .gte("check_in_time", `${startDate}T00:00:00`)
       .lte("check_in_time", `${endDate}T23:59:59`)
 
-    // If department head, only show their department's data
-    if (profile.role === "department_head" && profile.department_id) {
-      query = query.eq("user_profiles.department_id", profile.department_id)
-    }
-
-    // Apply additional filters
-    if (departmentId) {
-      query = query.eq("user_profiles.department_id", departmentId)
-    }
-
+    // Apply user filter if specified
     if (userId) {
       query = query.eq("user_id", userId)
     }
@@ -78,13 +58,45 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch attendance report" }, { status: 500 })
     }
 
+    const userIds = [...new Set(attendanceRecords.map((record) => record.user_id))]
+    const { data: userProfiles } = await supabase
+      .from("user_profiles")
+      .select(`
+        id,
+        first_name,
+        last_name,
+        employee_id,
+        department_id,
+        departments (
+          name,
+          code
+        )
+      `)
+      .in("id", userIds)
+
+    const userMap = new Map(userProfiles?.map((user) => [user.id, user]) || [])
+
+    let filteredRecords = attendanceRecords
+    if (departmentId || (profile.role === "department_head" && profile.department_id)) {
+      const targetDeptId = departmentId || profile.department_id
+      filteredRecords = attendanceRecords.filter((record) => {
+        const user = userMap.get(record.user_id)
+        return user?.department_id === targetDeptId
+      })
+    }
+
+    const enrichedRecords = filteredRecords.map((record) => ({
+      ...record,
+      user_profiles: userMap.get(record.user_id) || null,
+    }))
+
     // Calculate summary statistics
-    const totalRecords = attendanceRecords.length
-    const totalWorkHours = attendanceRecords.reduce((sum, record) => sum + (record.work_hours || 0), 0)
+    const totalRecords = enrichedRecords.length
+    const totalWorkHours = enrichedRecords.reduce((sum, record) => sum + (record.work_hours || 0), 0)
     const averageWorkHours = totalRecords > 0 ? totalWorkHours / totalRecords : 0
 
     // Group by status
-    const statusCounts = attendanceRecords.reduce(
+    const statusCounts = enrichedRecords.reduce(
       (acc, record) => {
         acc[record.status] = (acc[record.status] || 0) + 1
         return acc
@@ -93,7 +105,7 @@ export async function GET(request: NextRequest) {
     )
 
     // Group by department
-    const departmentStats = attendanceRecords.reduce(
+    const departmentStats = enrichedRecords.reduce(
       (acc, record) => {
         const deptName = record.user_profiles?.departments?.name || "Unknown"
         if (!acc[deptName]) {
@@ -109,7 +121,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        records: attendanceRecords,
+        records: enrichedRecords,
         summary: {
           totalRecords,
           totalWorkHours: Math.round(totalWorkHours * 100) / 100,

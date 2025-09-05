@@ -42,6 +42,7 @@ export function UserApprovalsClient() {
 
   const fetchPendingUsers = async () => {
     try {
+      console.log("[v0] Fetching pending users...")
       const supabase = createClient()
 
       const { data, error } = await supabase
@@ -53,27 +54,34 @@ export function UserApprovalsClient() {
           last_name,
           employee_id,
           position,
-          region,
           created_at,
           is_active,
-          departments!inner(name)
+          department_id,
+          departments:department_id(name)
         `)
         .eq("is_active", false)
         .order("created_at", { ascending: false })
 
-      if (error) throw error
+      console.log("[v0] Query result:", { data, error })
+
+      if (error) {
+        console.error("[v0] Supabase error:", error)
+        throw error
+      }
 
       const formattedUsers =
         data?.map((user) => ({
           ...user,
-          department_name: user.departments?.name || "N/A",
+          department_name: user.departments?.name || "No Department",
+          region: "Ghana", // Default region since it's not in user_profiles
           approval_status: "pending" as const,
         })) || []
 
+      console.log("[v0] Formatted users:", formattedUsers)
       setPendingUsers(formattedUsers)
     } catch (error) {
-      console.error("Error fetching pending users:", error)
-      setError("Failed to load pending users")
+      console.error("[v0] Error fetching pending users:", error)
+      setError(`Failed to load pending users: ${error.message || "Unknown error"}`)
     } finally {
       setIsLoading(false)
     }
@@ -101,6 +109,7 @@ export function UserApprovalsClient() {
 
   const handleApproval = async (userId: string, approve: boolean) => {
     try {
+      console.log(`[v0] ${approve ? "Approving" : "Rejecting"} user:`, userId)
       const supabase = createClient()
 
       const { error } = await supabase
@@ -111,24 +120,33 @@ export function UserApprovalsClient() {
         })
         .eq("id", userId)
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Error updating user:", error)
+        throw error
+      }
 
-      // Log the approval action
-      await supabase.from("audit_logs").insert({
-        user_id: userId,
-        action: approve ? "user_approved" : "user_rejected",
-        details: `User account ${approve ? "approved" : "rejected"} by admin`,
-        ip_address: "admin_action",
-        user_agent: "admin_dashboard",
-      })
+      try {
+        await supabase.from("audit_logs").insert({
+          user_id: userId,
+          action: approve ? "user_approved" : "user_rejected",
+          table_name: "user_profiles",
+          new_values: { is_active: approve },
+          ip_address: "admin_action",
+          user_agent: "admin_dashboard",
+        })
+      } catch (auditError) {
+        console.warn("[v0] Failed to log audit entry:", auditError)
+        // Don't fail the main operation if audit logging fails
+      }
 
       // Refresh the list
       await fetchPendingUsers()
 
       setError(null)
+      console.log(`[v0] User ${approve ? "approved" : "rejected"} successfully`)
     } catch (error) {
-      console.error("Error updating user approval:", error)
-      setError(`Failed to ${approve ? "approve" : "reject"} user`)
+      console.error(`[v0] Error ${approve ? "approving" : "rejecting"} user:`, error)
+      setError(`Failed to ${approve ? "approve" : "reject"} user: ${error.message || "Unknown error"}`)
     }
   }
 

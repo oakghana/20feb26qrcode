@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("[v0] Fetching audit logs...")
     const supabase = await createClient()
 
     // Get authenticated user
@@ -12,13 +13,24 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
+      console.log("[v0] Audit logs: Unauthorized access attempt")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Check if user is admin
-    const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
+    const { data: profile, error: profileError } = await supabase
+      .from("user_profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+
+    if (profileError) {
+      console.error("[v0] Error fetching user profile:", profileError)
+      return NextResponse.json({ error: "Failed to verify user permissions" }, { status: 500 })
+    }
 
     if (!profile || profile.role !== "admin") {
+      console.log("[v0] Non-admin user attempted to access audit logs:", user.id)
       return NextResponse.json({ error: "Admin access required" }, { status: 403 })
     }
 
@@ -30,18 +42,9 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("start_date")
     const endDate = searchParams.get("end_date")
 
-    let query = supabase
-      .from("audit_logs")
-      .select(`
-        *,
-        user_profiles!audit_logs_user_id_fkey (
-          first_name,
-          last_name,
-          employee_id,
-          email
-        )
-      `)
-      .order("created_at", { ascending: false })
+    console.log("[v0] Audit logs query params:", { page, limit, action, userId, startDate, endDate })
+
+    let query = supabase.from("audit_logs").select("*").order("created_at", { ascending: false })
 
     // Apply filters
     if (action) {
@@ -65,15 +68,62 @@ export async function GET(request: NextRequest) {
     const { data: auditLogs, error: auditError, count } = await query
 
     if (auditError) {
-      console.error("Audit logs error:", auditError)
+      console.error("[v0] Audit logs query error:", auditError)
       return NextResponse.json({ error: "Failed to fetch audit logs" }, { status: 500 })
+    }
+
+    console.log("[v0] Audit logs fetched successfully:", auditLogs?.length || 0, "records")
+
+    const enrichedLogs = []
+    if (auditLogs && auditLogs.length > 0) {
+      for (const log of auditLogs) {
+        let userDetails = null
+        if (log.user_id) {
+          try {
+            const { data: userProfile, error: userError } = await supabase
+              .from("user_profiles")
+              .select("first_name, last_name, employee_id, email, role")
+              .eq("id", log.user_id)
+              .maybeSingle()
+
+            if (!userError && userProfile) {
+              userDetails = userProfile
+            } else {
+              // If user profile not found, create a placeholder
+              userDetails = {
+                first_name: "Unknown",
+                last_name: "User",
+                employee_id: "N/A",
+                email: "unknown@example.com",
+                role: "unknown",
+              }
+            }
+          } catch (userFetchError) {
+            console.error("[v0] Error fetching user details for log:", log.id, userFetchError)
+            userDetails = {
+              first_name: "Error",
+              last_name: "Loading",
+              employee_id: "N/A",
+              email: "error@example.com",
+              role: "unknown",
+            }
+          }
+        }
+
+        enrichedLogs.push({
+          ...log,
+          user_profiles: userDetails,
+        })
+      }
     }
 
     // Get total count for pagination
     const { count: totalCount } = await supabase.from("audit_logs").select("*", { count: "exact", head: true })
 
+    console.log("[v0] Total audit logs count:", totalCount)
+
     return NextResponse.json({
-      data: auditLogs,
+      data: enrichedLogs,
       pagination: {
         page,
         limit,
@@ -82,7 +132,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Audit logs API error:", error)
+    console.error("[v0] Audit logs API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

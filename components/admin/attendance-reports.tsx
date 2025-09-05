@@ -3,13 +3,15 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { format } from "date-fns"
 import {
   BarChart,
   Bar,
@@ -29,7 +31,7 @@ import {
 import {
   BarChart3,
   Download,
-  Calendar,
+  CalendarIcon,
   Users,
   Clock,
   FileText,
@@ -40,6 +42,7 @@ import {
   MapPin,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { cn } from "@/lib/utils"
 
 interface AttendanceRecord {
   id: string
@@ -79,10 +82,8 @@ export function AttendanceReports() {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [summary, setSummary] = useState<ReportSummary | null>(null)
   const [loading, setLoading] = useState(false)
-  const [startDate, setStartDate] = useState(
-    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-  )
-  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0])
+  const [startDate, setStartDate] = useState<Date>(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+  const [endDate, setEndDate] = useState<Date>(new Date())
   const [selectedDepartment, setSelectedDepartment] = useState("all")
   const [selectedUser, setSelectedUser] = useState("all")
   const [locations, setLocations] = useState([])
@@ -113,10 +114,17 @@ export function AttendanceReports() {
 
   const fetchReport = async () => {
     setLoading(true)
+    setExportError(null)
     try {
+      console.log(
+        "[v0] Fetching report with dates:",
+        startDate.toISOString().split("T")[0],
+        endDate.toISOString().split("T")[0],
+      )
+
       const params = new URLSearchParams({
-        start_date: startDate,
-        end_date: endDate,
+        start_date: startDate.toISOString().split("T")[0],
+        end_date: endDate.toISOString().split("T")[0],
       })
 
       if (selectedDepartment !== "all") params.append("department_id", selectedDepartment)
@@ -124,15 +132,24 @@ export function AttendanceReports() {
       if (selectedLocation !== "all") params.append("location_id", selectedLocation)
       if (selectedDistrict !== "all") params.append("district_id", selectedDistrict)
 
+      console.log("[v0] API call URL:", `/api/admin/reports/attendance?${params}`)
+
       const response = await fetch(`/api/admin/reports/attendance?${params}`)
       const result = await response.json()
 
+      console.log("[v0] API response:", result)
+
       if (result.success) {
-        setRecords(result.data.records)
-        setSummary(result.data.summary)
+        setRecords(result.data.records || [])
+        setSummary(result.data.summary || null)
+        console.log("[v0] Successfully loaded", result.data.records?.length || 0, "records")
+      } else {
+        console.error("[v0] API error:", result.error)
+        setExportError(result.error || "Failed to fetch report data")
       }
     } catch (error) {
-      console.error("Failed to fetch report:", error)
+      console.error("[v0] Failed to fetch report:", error)
+      setExportError("Failed to fetch report data. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -140,25 +157,35 @@ export function AttendanceReports() {
 
   const fetchDepartments = async () => {
     try {
+      console.log("[v0] Fetching departments...")
       const response = await fetch("/api/admin/departments")
       const result = await response.json()
+      console.log("[v0] Departments response:", result)
+
       if (result.success) {
-        setDepartments(result.data)
+        setDepartments(result.data || [])
+      } else {
+        console.error("[v0] Departments error:", result.error)
       }
     } catch (error) {
-      console.error("Failed to fetch departments:", error)
+      console.error("[v0] Failed to fetch departments:", error)
     }
   }
 
   const fetchUsers = async () => {
     try {
+      console.log("[v0] Fetching users...")
       const response = await fetch("/api/admin/users")
       const result = await response.json()
+      console.log("[v0] Users response:", result)
+
       if (result.success) {
-        setUsers(result.data)
+        setUsers(result.data || [])
+      } else {
+        console.error("[v0] Users error:", result.error)
       }
     } catch (error) {
-      console.error("Failed to fetch users:", error)
+      console.error("[v0] Failed to fetch users:", error)
     }
   }
 
@@ -229,7 +256,7 @@ export function AttendanceReports() {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = `qcc-attendance-report-${startDate}-to-${endDate}.csv`
+        a.download = `qcc-attendance-report-${startDate.toISOString().split("T")[0]}-to-${endDate.toISOString().split("T")[0]}.csv`
         a.click()
         window.URL.revokeObjectURL(url)
       } else {
@@ -241,8 +268,8 @@ export function AttendanceReports() {
           body: JSON.stringify({
             format,
             filters: {
-              startDate,
-              endDate,
+              startDate: startDate.toISOString().split("T")[0],
+              endDate: endDate.toISOString().split("T")[0],
               locationId: selectedLocation !== "all" ? selectedLocation : null,
               districtId: selectedDistrict !== "all" ? selectedDistrict : null,
               departmentId: selectedDepartment !== "all" ? selectedDepartment : null,
@@ -259,7 +286,7 @@ export function AttendanceReports() {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = `qcc-attendance-report-${startDate}-to-${endDate}.${format === "excel" ? "xlsx" : "pdf"}`
+        a.download = `qcc-attendance-report-${startDate.toISOString().split("T")[0]}-to-${endDate.toISOString().split("T")[0]}.${format === "excel" ? "xlsx" : "pdf"}`
         a.click()
         window.URL.revokeObjectURL(url)
       }
@@ -309,11 +336,47 @@ export function AttendanceReports() {
           <div className="grid gap-4 md:grid-cols-7">
             <div>
               <Label htmlFor="startDate">Start Date</Label>
-              <Input id="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn("w-full justify-start text-left font-normal", !startDate && "text-muted-foreground")}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={startDate}
+                    onSelect={(date) => date && setStartDate(date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label htmlFor="endDate">End Date</Label>
-              <Input id="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn("w-full justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={(date) => date && setEndDate(date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label htmlFor="location">Location</Label>
@@ -382,9 +445,9 @@ export function AttendanceReports() {
             <div className="flex flex-col gap-2">
               <Label>Actions</Label>
               <div className="flex gap-1">
-                <Button onClick={fetchReport} size="sm" className="flex-1">
+                <Button onClick={fetchReport} size="sm" className="flex-1" disabled={loading}>
                   <FileText className="mr-1 h-3 w-3" />
-                  Generate
+                  {loading ? "Loading..." : "Generate"}
                 </Button>
               </div>
             </div>
@@ -394,7 +457,7 @@ export function AttendanceReports() {
             <Button
               onClick={() => exportReport("excel")}
               variant="outline"
-              disabled={exporting || records.length === 0}
+              disabled={exporting || records.length === 0 || loading}
               className="bg-green-50 hover:bg-green-100 border-green-200"
             >
               <FileSpreadsheet className="mr-2 h-4 w-4 text-green-600" />
@@ -403,17 +466,30 @@ export function AttendanceReports() {
             <Button
               onClick={() => exportReport("pdf")}
               variant="outline"
-              disabled={exporting || records.length === 0}
+              disabled={exporting || records.length === 0 || loading}
               className="bg-red-50 hover:bg-red-100 border-red-200"
             >
               <FileDown className="mr-2 h-4 w-4 text-red-600" />
               {exporting ? "Exporting..." : "Export PDF"}
             </Button>
-            <Button onClick={() => exportReport("csv")} variant="outline" disabled={exporting || records.length === 0}>
+            <Button
+              onClick={() => exportReport("csv")}
+              variant="outline"
+              disabled={exporting || records.length === 0 || loading}
+            >
               <Download className="mr-2 h-4 w-4" />
               {exporting ? "Exporting..." : "Export CSV"}
             </Button>
           </div>
+
+          {!loading && records.length === 0 && (
+            <Alert className="mt-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                No attendance records found for the selected criteria. Try adjusting your filters or date range.
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 

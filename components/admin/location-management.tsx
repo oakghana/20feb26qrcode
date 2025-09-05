@@ -103,6 +103,8 @@ export function LocationManagement() {
     setLoading(true)
     setError(null)
 
+    console.log("[v0] Updating location:", editingLocation)
+
     try {
       const response = await fetch(`/api/admin/locations/${editingLocation.id}`, {
         method: "PUT",
@@ -117,13 +119,23 @@ export function LocationManagement() {
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to update location")
+      console.log("[v0] Location update response status:", response.status)
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("[v0] Location update failed:", errorData)
+        throw new Error(errorData.error || "Failed to update location")
+      }
+
+      const result = await response.json()
+      console.log("[v0] Location update successful:", result)
 
       setSuccess("Location updated successfully")
       await fetchLocations()
       setEditingLocation(null)
     } catch (err) {
-      setError("Failed to update location")
+      console.error("[v0] Location update error:", err)
+      setError(err instanceof Error ? err.message : "Failed to update location")
     } finally {
       setLoading(false)
     }

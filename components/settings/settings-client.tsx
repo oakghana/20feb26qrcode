@@ -70,6 +70,27 @@ export function SettingsClient({ profile }: SettingsClientProps) {
 
   const loadSettings = async () => {
     try {
+      const response = await fetch("/api/settings")
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Settings loaded from API:", data)
+
+        if (data.userSettings) {
+          setAppSettings({ ...appSettings, ...data.userSettings.app_settings })
+          setNotificationSettings({ ...notificationSettings, ...data.userSettings.notification_settings })
+        }
+
+        if (data.systemSettings && data.isAdmin) {
+          setSystemSettings({ ...systemSettings, ...data.systemSettings.settings })
+          setGeoSettings({ ...geoSettings, ...data.systemSettings.geo_settings })
+        }
+      } else {
+        throw new Error("Failed to load settings from API")
+      }
+    } catch (error) {
+      console.error("[v0] Failed to load settings from API:", error)
+
       const supabase = createClient()
       const {
         data: { user },
@@ -94,8 +115,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
           }
         }
       }
-    } catch (error) {
-      console.error("Failed to load settings:", error)
+
       const savedSettings = localStorage.getItem("qcc-app-settings")
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings)
@@ -121,53 +141,40 @@ export function SettingsClient({ profile }: SettingsClientProps) {
     setError(null)
 
     try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userSettings: {
+            app_settings: appSettings,
+            notification_settings: notificationSettings,
+          },
+          systemSettings:
+            profile?.role === "admin"
+              ? {
+                  settings: systemSettings,
+                  geo_settings: geoSettings,
+                }
+              : null,
+        }),
+      })
 
-      if (user) {
-        // Save user settings
-        const { error: userSettingsError } = await supabase.from("user_settings").upsert({
-          user_id: user.id,
-          app_settings: appSettings,
-          notification_settings: notificationSettings,
-          updated_at: new Date().toISOString(),
-        })
-
-        if (userSettingsError) throw userSettingsError
-
-        // Save system settings if admin
-        if (profile?.role === "admin") {
-          const validatedRadius = Math.max(20, Number.parseInt(geoSettings.defaultRadius))
-          const validatedGeoSettings = { ...geoSettings, defaultRadius: validatedRadius.toString() }
-
-          const { error: systemSettingsError } = await supabase.from("system_settings").upsert({
-            id: 1, // Single row for system settings
-            settings: systemSettings,
-            geo_settings: validatedGeoSettings,
-            updated_at: new Date().toISOString(),
-          })
-
-          if (systemSettingsError) throw systemSettingsError
-
-          // Update geofence locations with new default radius
-          const { error: locationUpdateError } = await supabase
-            .from("geofence_locations")
-            .update({ radius_meters: validatedRadius })
-            .eq("radius_meters", 20) // Update locations with default radius
-
-          if (locationUpdateError) console.warn("Failed to update location radius:", locationUpdateError)
-        }
-
-        setSuccess("Settings saved successfully")
-        setTimeout(() => setSuccess(null), 3000)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to save settings")
       }
-    } catch (error) {
-      console.error("Failed to save settings:", error)
-      setError("Failed to save settings. Please try again.")
 
-      // Fallback to localStorage
+      const result = await response.json()
+      console.log("[v0] Settings saved successfully:", result)
+
+      setSuccess("Settings saved successfully")
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (error) {
+      console.error("[v0] Failed to save settings:", error)
+      setError(`Failed to save settings: ${error instanceof Error ? error.message : "Unknown error"}`)
+
       localStorage.setItem("qcc-app-settings", JSON.stringify(appSettings))
       localStorage.setItem("qcc-notification-settings", JSON.stringify(notificationSettings))
 
