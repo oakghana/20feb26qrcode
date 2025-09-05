@@ -35,9 +35,9 @@ export default function SignupPage() {
               <AlertDescription className="text-center">
                 <strong>Self-registration is no longer available.</strong>
                 <br />
-                Please contact your administrator to have an account created for you.
+                Please contact the IT Manager or Your Regional IT Head to have an account created for you.
                 <br />
-                All user accounts are now managed by system administrators.
+               Application Powered and managed by the IT Department.
               </AlertDescription>
             </Alert>
 

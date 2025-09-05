@@ -25,49 +25,72 @@ export async function POST(request: NextRequest) {
     const { format, filters } = await request.json()
     const { startDate, endDate, locationId, districtId, reportType } = filters
 
-    // Build query based on report type
-    let query = supabase.from("attendance_records").select(`
-        *,
-        user_profiles!inner(
-          first_name,
-          last_name,
-          employee_id,
-          departments(name),
-          districts(name)
-        ),
-        geofence_locations(name, address)
-      `)
+    let attendanceQuery = supabase.from("attendance_records").select("*")
 
     if (startDate) {
-      query = query.gte("check_in_time", startDate)
+      attendanceQuery = attendanceQuery.gte("check_in_time", startDate)
     }
     if (endDate) {
-      query = query.lte("check_in_time", endDate)
+      attendanceQuery = attendanceQuery.lte("check_in_time", endDate)
     }
     if (locationId) {
-      query = query.eq("location_id", locationId)
+      attendanceQuery = attendanceQuery.eq("check_in_location_id", locationId)
     }
 
-    const { data: attendanceData, error } = await query.order("check_in_time", { ascending: false })
+    const { data: attendanceRecords, error: attendanceError } = await attendanceQuery.order("check_in_time", {
+      ascending: false,
+    })
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (attendanceError) {
+      console.error("Attendance fetch error:", attendanceError)
+      return NextResponse.json({ error: attendanceError.message }, { status: 500 })
     }
 
-    // Process data for export
-    const exportData =
-      attendanceData?.map((record) => ({
-        "Employee ID": record.user_profiles.employee_id,
-        Name: `${record.user_profiles.first_name} ${record.user_profiles.last_name}`,
-        Department: record.user_profiles.departments?.name || "N/A",
-        District: record.user_profiles.districts?.name || "N/A",
-        Location: record.geofence_locations?.name || "N/A",
+    if (!attendanceRecords || attendanceRecords.length === 0) {
+      return NextResponse.json({ error: "No attendance records found" }, { status: 404 })
+    }
+
+    const userIds = [...new Set(attendanceRecords.map((record) => record.user_id))]
+    const locationIds = [...new Set(attendanceRecords.map((record) => record.check_in_location_id).filter(Boolean))]
+
+    // Fetch user profiles
+    const { data: userProfiles } = await supabase
+      .from("user_profiles")
+      .select("id, first_name, last_name, employee_id, department_id")
+      .in("id", userIds)
+
+    // Fetch departments
+    const departmentIds = [...new Set(userProfiles?.map((profile) => profile.department_id).filter(Boolean) || [])]
+    const { data: departments } = await supabase.from("departments").select("id, name").in("id", departmentIds)
+
+    // Fetch locations
+    const { data: locations } = await supabase
+      .from("geofence_locations")
+      .select("id, name, address")
+      .in("id", locationIds)
+
+    const userProfileMap = new Map(userProfiles?.map((profile) => [profile.id, profile]) || [])
+    const departmentMap = new Map(departments?.map((dept) => [dept.id, dept]) || [])
+    const locationMap = new Map(locations?.map((loc) => [loc.id, loc]) || [])
+
+    const exportData = attendanceRecords.map((record) => {
+      const userProfile = userProfileMap.get(record.user_id)
+      const department = userProfile ? departmentMap.get(userProfile.department_id) : null
+      const location = locationMap.get(record.check_in_location_id)
+
+      return {
+        "Employee ID": userProfile?.employee_id || "N/A",
+        Name: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : "N/A",
+        Department: department?.name || "N/A",
+        District: "N/A", // District info not available in current schema
+        Location: location?.name || "N/A",
         "Check In": new Date(record.check_in_time).toLocaleString(),
         "Check Out": record.check_out_time ? new Date(record.check_out_time).toLocaleString() : "Not checked out",
         Status: record.status,
         "Work Hours": record.work_hours || "0",
         Date: new Date(record.check_in_time).toLocaleDateString(),
-      })) || []
+      }
+    })
 
     if (format === "excel") {
       // Generate Excel file
