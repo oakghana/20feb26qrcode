@@ -56,17 +56,35 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
 
   const fetchUsers = async () => {
     setLoadingUsers(true)
+    setError(null)
     try {
+      console.log("[v0] Password Management: Fetching users")
       const response = await fetch("/api/admin/users")
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text()
+        console.error("[v0] Password Management: Non-JSON response:", text.substring(0, 200))
+        throw new Error("Server returned non-JSON response")
+      }
+
       const result = await response.json()
+      console.log("[v0] Password Management: API response:", result)
 
       if (result.success) {
         setUsers(result.users || [])
+        console.log("[v0] Password Management: Loaded", result.users?.length || 0, "users")
       } else {
-        console.error("Failed to fetch users:", result.error)
+        console.error("[v0] Password Management: API error:", result.error)
+        setError(result.error || "Failed to fetch users")
       }
     } catch (error) {
-      console.error("Error fetching users:", error)
+      console.error("[v0] Password Management: Fetch error:", error)
+      setError("Failed to load users. Please try again.")
     } finally {
       setLoadingUsers(false)
     }
@@ -77,6 +95,8 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
     if (user) {
       setSelectedUserId(userId)
       setSelectedUserEmail(user.email)
+      console.log("[v0] Password Management: Selected user:", user.email)
+      setError(null) // Clear any previous errors
     }
   }
 
@@ -230,9 +250,13 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
                         {user.first_name} {user.last_name} ({user.email}) - {user.employee_id}
                       </SelectItem>
                     ))
-                  ) : (
+                  ) : users.length === 0 ? (
                     <SelectItem value="no-users" disabled>
-                      {searchTerm ? "No users found matching search" : "No users available"}
+                      {error ? "Error loading users" : "No users available"}
+                    </SelectItem>
+                  ) : (
+                    <SelectItem value="no-match" disabled>
+                      No users found matching "{searchTerm}"
                     </SelectItem>
                   )}
                 </SelectContent>

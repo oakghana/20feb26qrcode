@@ -1,19 +1,33 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-cache, no-store, must-revalidate",
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log("[v0] Email validation API called")
 
-    const { email } = await request.json()
+    // Parse request body with error handling
+    let email: string
+    try {
+      const body = await request.json()
+      email = body.email?.trim()?.toLowerCase()
+    } catch (parseError) {
+      console.error("[v0] Failed to parse request body:", parseError)
+      return NextResponse.json({ error: "Invalid request body", exists: false }, { status: 400, headers: JSON_HEADERS })
+    }
 
     if (!email) {
       console.log("[v0] No email provided")
-      return NextResponse.json({ error: "Email is required" }, { status: 400 })
+      return NextResponse.json({ error: "Email is required", exists: false }, { status: 400, headers: JSON_HEADERS })
     }
 
     console.log("[v0] Validating email:", email)
 
+    // Create Supabase client with error handling
     let supabase
     try {
       supabase = await createClient()
@@ -24,95 +38,85 @@ export async function POST(request: NextRequest) {
         {
           error: "Database connection failed",
           exists: false,
+          details: clientError instanceof Error ? clientError.message : "Unknown client error",
         },
-        { status: 500 },
+        { status: 500, headers: JSON_HEADERS },
       )
     }
 
-    const { data: allUsers, error: allUsersError } = await supabase
-      .from("user_profiles")
-      .select("id, email, is_active, first_name, last_name")
-      .limit(10)
-
-    console.log("[v0] All users in database (first 10):", allUsers)
-    console.log("[v0] All users query error:", allUsersError)
-
-    let data, error
-    const { data: caseInsensitiveMatch, error: caseInsensitiveError } = await supabase
-      .from("user_profiles")
-      .select("id, email, is_active, first_name, last_name")
-      .ilike("email", email) // Case-insensitive search
-      .maybeSingle()
-
-    console.log("[v0] Email validation query result:", { caseInsensitiveMatch, caseInsensitiveError })
-    console.log("[v0] Searching for email (case-insensitive):", email)
-
-    if (caseInsensitiveError) {
-      console.error("[v0] Database error during email validation:", caseInsensitiveError)
-      return NextResponse.json(
-        {
-          error: "Database error during validation",
-          exists: false,
-        },
-        { status: 500 },
-      )
-    }
-
-    if (!caseInsensitiveMatch) {
-      console.log("[v0] Email not found in user_profiles:", email)
-      const { data: exactMatch, error: exactError } = await supabase
+    // Query user profiles with comprehensive error handling
+    try {
+      const { data: user, error: queryError } = await supabase
         .from("user_profiles")
         .select("id, email, is_active, first_name, last_name")
-        .eq("email", email.toLowerCase())
+        .ilike("email", email)
         .maybeSingle()
 
-      console.log("[v0] Exact match fallback result:", { exactMatch, exactError })
+      if (queryError) {
+        console.error("[v0] Database error during email validation:", queryError)
+        return NextResponse.json(
+          {
+            error: "Database error during validation",
+            exists: false,
+            details: queryError.message || "Unknown database error",
+          },
+          { status: 500, headers: JSON_HEADERS },
+        )
+      }
 
-      if (!exactMatch) {
+      if (!user) {
+        console.log("[v0] Email not found in user_profiles:", email)
         return NextResponse.json(
           {
             error:
               "This email is not registered in the QCC system. Please contact your administrator or use a registered email address.",
             exists: false,
           },
-          { status: 404 },
+          { status: 404, headers: JSON_HEADERS },
         )
       }
-      // Use exact match data if found
-      data = exactMatch
-    } else {
-      data = caseInsensitiveMatch
-    }
 
-    if (!data.is_active) {
-      console.log("[v0] User account not active but allowing OTP:", email)
-      return NextResponse.json({
-        exists: true,
-        approved: false,
-        message: "Account pending approval - OTP will be sent but login may be restricted",
-      })
-    }
+      if (!user.is_active) {
+        console.log("[v0] User account not active but allowing OTP:", email)
+        return NextResponse.json(
+          {
+            exists: true,
+            approved: false,
+            message: "Account pending approval - OTP will be sent but login may be restricted",
+          },
+          { headers: JSON_HEADERS },
+        )
+      }
 
-    console.log("[v0] Email validation successful:", email)
-    return NextResponse.json({
-      exists: true,
-      approved: true,
-      message: "Email validated successfully",
-    })
+      console.log("[v0] Email validation successful:", email)
+      return NextResponse.json(
+        {
+          exists: true,
+          approved: true,
+          message: "Email validated successfully",
+        },
+        { headers: JSON_HEADERS },
+      )
+    } catch (dbError) {
+      console.error("[v0] Database operation failed:", dbError)
+      return NextResponse.json(
+        {
+          error: "Database operation failed",
+          exists: false,
+          details: dbError instanceof Error ? dbError.message : "Unknown database error",
+        },
+        { status: 500, headers: JSON_HEADERS },
+      )
+    }
   } catch (error) {
-    console.error("[v0] Email validation error:", error)
+    console.error("[v0] Email validation unexpected error:", error)
     return NextResponse.json(
       {
-        error: "Failed to validate email",
+        error: "Internal server error",
         exists: false,
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
+      { status: 500, headers: JSON_HEADERS },
     )
   }
 }

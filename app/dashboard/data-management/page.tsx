@@ -1,15 +1,32 @@
 import { BulkUpload } from "@/components/admin/bulk-upload"
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
+import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
 
-export default function DataManagementPage() {
+export default async function DataManagementPage() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+
+  // Check if user has admin role - data management is admin-only
+  const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
+
+  if (!profile || profile.role !== "admin") {
+    redirect("/dashboard")
+  }
+
   return (
-    <div className="container mx-auto py-6">
+    <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">Data Management</h1>
+          <h1 className="text-3xl font-bold text-primary">Data Management</h1>
           <p className="text-muted-foreground">Bulk upload and manage organizational data for QCC</p>
         </div>
         <BulkUpload />
       </div>
-    </div>
+    </DashboardLayout>
   )
 }

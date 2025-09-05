@@ -34,6 +34,7 @@ export function ScheduleClient() {
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
 
@@ -52,7 +53,22 @@ export function ScheduleClient() {
 
   const fetchSchedules = async () => {
     try {
-      // Mock data for now - replace with actual API call
+      console.log("[v0] Fetching schedules for date:", selectedDate)
+
+      const response = await fetch(`/api/admin/schedules?date=${selectedDate}`)
+      const result = await response.json()
+
+      if (result.success) {
+        setSchedules(result.data)
+        console.log("[v0] Schedules loaded:", result.data.length)
+      } else {
+        throw new Error(result.error || "Failed to fetch schedules")
+      }
+    } catch (error) {
+      console.error("[v0] Schedule fetch error:", error)
+      setError("Failed to fetch schedules")
+
+      // Fallback to mock data for demo
       const mockSchedules: Schedule[] = [
         {
           id: "1",
@@ -76,8 +92,6 @@ export function ScheduleClient() {
         },
       ]
       setSchedules(mockSchedules)
-    } catch (error) {
-      setError("Failed to fetch schedules")
     } finally {
       setLoading(false)
     }
@@ -85,7 +99,39 @@ export function ScheduleClient() {
 
   const handleAddSchedule = async () => {
     try {
-      // Mock add - replace with actual API call
+      console.log("[v0] Adding new schedule:", newSchedule)
+
+      const response = await fetch("/api/admin/schedules", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newSchedule),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setSchedules([...schedules, result.data])
+        setSuccess("Schedule added successfully")
+        setIsAddDialogOpen(false)
+        setNewSchedule({
+          title: "",
+          description: "",
+          start_time: "",
+          end_time: "",
+          date: new Date().toISOString().split("T")[0],
+          type: "work",
+        })
+        setTimeout(() => setSuccess(null), 3000)
+      } else {
+        throw new Error(result.error || "Failed to add schedule")
+      }
+    } catch (error) {
+      console.error("[v0] Schedule add error:", error)
+      setError("Failed to add schedule")
+
+      // Fallback to local add for demo
       const newId = Date.now().toString()
       const schedule: Schedule = {
         ...newSchedule,
@@ -102,8 +148,6 @@ export function ScheduleClient() {
         date: new Date().toISOString().split("T")[0],
         type: "work",
       })
-    } catch (error) {
-      setError("Failed to add schedule")
     }
   }
 
@@ -221,6 +265,12 @@ export function ScheduleClient() {
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {success && (
+        <Alert>
+          <AlertDescription>{success}</AlertDescription>
         </Alert>
       )}
 
