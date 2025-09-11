@@ -29,6 +29,7 @@ import {
   Upload,
   Shield,
   UserCheck,
+  History,
 } from "lucide-react"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
@@ -62,6 +63,12 @@ const navigationItems = [
     title: "Attendance",
     href: "/dashboard/attendance",
     icon: Clock,
+    roles: ["admin", "department_head", "staff"],
+  },
+  {
+    title: "My Attendance History",
+    href: "/dashboard/my-attendance",
+    icon: History,
     roles: ["admin", "department_head", "staff"],
   },
   {

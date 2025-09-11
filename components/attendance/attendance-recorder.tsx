@@ -371,7 +371,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             <MapPin className="h-5 w-5" />
             Location Status
           </CardTitle>
-          <CardDescription>Your current location relative to QCC campuses (20m precision required)</CardDescription>
+          <CardDescription>Your current location relative to QCC campuses (50m precision required)</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!userLocation ? (
@@ -445,12 +445,12 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                     {locationValidation.canCheckIn ? (
                       <>
                         <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-green-600">Within 20m - Can check in/out</span>
+                        <span className="text-sm text-green-600">Within 50m - Can check in/out</span>
                       </>
                     ) : (
                       <>
                         <XCircle className="h-4 w-4 text-red-600" />
-                        <span className="text-sm text-red-600">Outside 20m range</span>
+                        <span className="text-sm text-red-600">Outside 50m range</span>
                       </>
                     )}
                   </div>
@@ -467,7 +467,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>
-            Record your attendance using GPS (20m precision) or QR code
+            Record your attendance using GPS (50m precision) or QR code
             {!userLocation && " - QR code works without location access"}
           </CardDescription>
         </CardHeader>

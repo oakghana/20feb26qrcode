@@ -189,6 +189,7 @@ export function QREventsClient() {
                 type="datetime-local"
                 value={newEvent.event_date}
                 onChange={(e) => setNewEvent({ ...newEvent, event_date: e.target.value })}
+                className="w-full"
               />
             </div>
             <div className="flex gap-2">
