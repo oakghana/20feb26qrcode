@@ -281,7 +281,6 @@ export function AuditLogsClient() {
                 type="date"
                 value={filters.start_date}
                 onChange={(e) => handleFilterChange("start_date", e.target.value)}
-                className="w-full"
               />
             </div>
 
@@ -292,7 +291,6 @@ export function AuditLogsClient() {
                 type="date"
                 value={filters.end_date}
                 onChange={(e) => handleFilterChange("end_date", e.target.value)}
-                className="w-full"
               />
             </div>
 

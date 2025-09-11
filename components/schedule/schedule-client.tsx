@@ -232,7 +232,6 @@ export function ScheduleClient() {
                   type="date"
                   value={newSchedule.date}
                   onChange={(e) => setNewSchedule({ ...newSchedule, date: e.target.value })}
-                  className="w-full"
                 />
               </div>
               <div>

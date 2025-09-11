@@ -20,22 +20,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       }
 
+      // Check admin role
       const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
 
-      if (!profile || !["admin", "department_head", "staff"].includes(profile.role)) {
+      if (!profile || !["admin", "department_head"].includes(profile.role)) {
         return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
       }
 
       const { format, filters } = await request.json()
-      const { startDate, endDate, locationId, districtId, reportType, userId } = filters
+      const { startDate, endDate, locationId, districtId, reportType } = filters
 
       let attendanceQuery = supabase.from("attendance_records").select("*")
-
-      if (profile.role === "staff") {
-        attendanceQuery = attendanceQuery.eq("user_id", user.id)
-      } else if (userId) {
-        attendanceQuery = attendanceQuery.eq("user_id", userId)
-      }
 
       if (startDate) {
         attendanceQuery = attendanceQuery.gte("check_in_time", startDate)
@@ -62,10 +57,6 @@ export async function POST(request: NextRequest) {
 
       const userIds = [...new Set(attendanceRecords.map((record) => record.user_id))]
       const locationIds = [...new Set(attendanceRecords.map((record) => record.check_in_location_id).filter(Boolean))]
-      const checkoutLocationIds = [
-        ...new Set(attendanceRecords.map((record) => record.check_out_location_id).filter(Boolean)),
-      ]
-      const allLocationIds = [...new Set([...locationIds, ...checkoutLocationIds])]
 
       // Fetch user profiles
       const { data: userProfiles } = await supabase
@@ -81,7 +72,7 @@ export async function POST(request: NextRequest) {
       const { data: locations } = await supabase
         .from("geofence_locations")
         .select("id, name, address")
-        .in("id", allLocationIds)
+        .in("id", locationIds)
 
       const userProfileMap = new Map(userProfiles?.map((profile) => [profile.id, profile]) || [])
       const departmentMap = new Map(departments?.map((dept) => [dept.id, dept]) || [])
@@ -90,36 +81,19 @@ export async function POST(request: NextRequest) {
       const exportData = attendanceRecords.map((record) => {
         const userProfile = userProfileMap.get(record.user_id)
         const department = userProfile ? departmentMap.get(userProfile.department_id) : null
-        const checkinLocation = locationMap.get(record.check_in_location_id)
-        const checkoutLocation = locationMap.get(record.check_out_location_id)
+        const location = locationMap.get(record.check_in_location_id)
 
-        if (profile.role === "staff" || reportType === "personal_attendance") {
-          return {
-            Date: new Date(record.check_in_time).toLocaleDateString(),
-            "Check In": new Date(record.check_in_time).toLocaleTimeString(),
-            "Check Out": record.check_out_time
-              ? new Date(record.check_out_time).toLocaleTimeString()
-              : "Not checked out",
-            "Work Hours": record.work_hours?.toFixed(2) || "0",
-            Status: record.status,
-            "Check-in Location": checkinLocation?.name || "N/A",
-            "Check-out Location": checkoutLocation?.name || checkinLocation?.name || "N/A",
-          }
-        } else {
-          return {
-            "Employee ID": userProfile?.employee_id || "N/A",
-            Name: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : "N/A",
-            Department: department?.name || "N/A",
-            Date: new Date(record.check_in_time).toLocaleDateString(),
-            "Check In": new Date(record.check_in_time).toLocaleTimeString(),
-            "Check Out": record.check_out_time
-              ? new Date(record.check_out_time).toLocaleTimeString()
-              : "Not checked out",
-            "Work Hours": record.work_hours?.toFixed(2) || "0",
-            Status: record.status,
-            "Check-in Location": checkinLocation?.name || "N/A",
-            "Check-out Location": checkoutLocation?.name || checkinLocation?.name || "N/A",
-          }
+        return {
+          "Employee ID": userProfile?.employee_id || "N/A",
+          Name: userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : "N/A",
+          Department: department?.name || "N/A",
+          District: "N/A", // District info not available in current schema
+          Location: location?.name || "N/A",
+          "Check In": new Date(record.check_in_time).toLocaleString(),
+          "Check Out": record.check_out_time ? new Date(record.check_out_time).toLocaleString() : "Not checked out",
+          Status: record.status,
+          "Work Hours": record.work_hours || "0",
+          Date: new Date(record.check_in_time).toLocaleDateString(),
         }
       })
 
@@ -127,24 +101,14 @@ export async function POST(request: NextRequest) {
         try {
           const worksheet = XLSX.utils.json_to_sheet(exportData)
           const workbook = XLSX.utils.book_new()
-
-          const sheetName =
-            profile.role === "staff" || reportType === "personal_attendance"
-              ? "My Attendance Report"
-              : "Attendance Report"
-          XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance Report")
 
           const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" })
-
-          const filename =
-            profile.role === "staff" || reportType === "personal_attendance"
-              ? `my-attendance-report-${new Date().toISOString().split("T")[0]}.xlsx`
-              : `attendance-report-${new Date().toISOString().split("T")[0]}.xlsx`
 
           return new NextResponse(excelBuffer, {
             headers: {
               "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-              "Content-Disposition": `attachment; filename="${filename}"`,
+              "Content-Disposition": `attachment; filename="attendance-report-${new Date().toISOString().split("T")[0]}.xlsx"`,
               "Content-Length": excelBuffer.byteLength.toString(),
             },
           })
@@ -156,13 +120,9 @@ export async function POST(request: NextRequest) {
         try {
           const doc = new jsPDF()
 
-          const title =
-            profile.role === "staff" || reportType === "personal_attendance"
-              ? "My Attendance Report"
-              : "QCC Attendance Report"
-
+          // Add title
           doc.setFontSize(16)
-          doc.text(title, 20, 20)
+          doc.text("QCC Attendance Report", 20, 20)
           doc.setFontSize(10)
           doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30)
 
@@ -180,15 +140,10 @@ export async function POST(request: NextRequest) {
 
           const pdfBuffer = doc.output("arraybuffer")
 
-          const filename =
-            profile.role === "staff" || reportType === "personal_attendance"
-              ? `my-attendance-report-${new Date().toISOString().split("T")[0]}.pdf`
-              : `attendance-report-${new Date().toISOString().split("T")[0]}.pdf`
-
           return new NextResponse(pdfBuffer, {
             headers: {
               "Content-Type": "application/pdf",
-              "Content-Disposition": `attachment; filename="${filename}"`,
+              "Content-Disposition": `attachment; filename="attendance-report-${new Date().toISOString().split("T")[0]}.pdf"`,
               "Content-Length": pdfBuffer.byteLength.toString(),
             },
           })
@@ -215,15 +170,10 @@ export async function POST(request: NextRequest) {
           const csvContent = [csvHeaders.join(","), ...csvRows].join("\n")
           const csvBuffer = Buffer.from(csvContent, "utf-8")
 
-          const filename =
-            profile.role === "staff" || reportType === "personal_attendance"
-              ? `my-attendance-report-${new Date().toISOString().split("T")[0]}.csv`
-              : `attendance-report-${new Date().toISOString().split("T")[0]}.csv`
-
           return new NextResponse(csvBuffer, {
             headers: {
               "Content-Type": "text/csv",
-              "Content-Disposition": `attachment; filename="${filename}"`,
+              "Content-Disposition": `attachment; filename="attendance-report-${new Date().toISOString().split("T")[0]}.csv"`,
               "Content-Length": csvBuffer.byteLength.toString(),
             },
           })

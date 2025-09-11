@@ -23,7 +23,6 @@ import { getDeviceInfo } from "@/lib/device-info"
 import { QRScanner } from "@/components/qr/qr-scanner"
 import { validateQRCode, type QRCodeData } from "@/lib/qr-code"
 import { MapPin, Clock, CheckCircle, XCircle, Loader2, AlertTriangle, QrCode } from "lucide-react"
-import { createAbortController, safeAsyncOperation, isBrowserAPIAvailable } from "@/lib/safe-utils"
 
 interface GeofenceLocation {
   id: string
@@ -91,12 +90,6 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     setIsLoading(true)
     setError(null)
 
-    if (!isBrowserAPIAvailable("geolocation")) {
-      setError("Geolocation is not supported by this browser")
-      setIsLoading(false)
-      return null
-    }
-
     try {
       const location = await getCurrentLocation()
       setUserLocation(location)
@@ -123,8 +116,6 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     setError(null)
     setSuccess(null)
 
-    const controller = createAbortController(15000) // 15 second timeout
-
     try {
       const location = await getCurrentLocation()
       setUserLocation(location)
@@ -133,12 +124,6 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
 
       if (!validation.canCheckIn) {
         setError(validation.message)
-        return
-      }
-
-      const nearestLocation = validation.nearestLocation
-      if (!nearestLocation) {
-        setError("No valid location found for check-in")
         return
       }
 
@@ -152,35 +137,22 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         body: JSON.stringify({
           latitude: location.latitude,
           longitude: location.longitude,
-          location_id: nearestLocation.id,
+          location_id: validation.nearestLocation!.id,
           device_info: deviceInfo,
         }),
-        signal: controller.signal,
       })
 
       const result = await response.json()
 
       if (result.success) {
-        setSuccess(`Successfully checked in at ${nearestLocation.name}`)
-        await safeAsyncOperation(
-          () =>
-            new Promise<void>((resolve) => {
-              window.location.reload()
-              resolve()
-            }),
-          undefined,
-          (error) => console.error("[v0] Page reload failed:", error),
-        )
+        setSuccess(`Successfully checked in at ${validation.nearestLocation!.name}`)
+        window.location.reload()
       } else {
         setError(result.error || "Failed to check in")
       }
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        setError("Request timed out. Please try again.")
-      } else {
-        const message = error instanceof Error ? error.message : "Failed to check in"
-        setError(message)
-      }
+      const message = error instanceof Error ? error.message : "Failed to check in"
+      setError(message)
     } finally {
       setIsLoading(false)
     }
@@ -190,8 +162,6 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     setIsLoading(true)
     setError(null)
     setSuccess(null)
-
-    const controller = createAbortController(15000)
 
     try {
       const location = await getCurrentLocation()
@@ -204,12 +174,6 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         return
       }
 
-      const nearestLocation = validation.nearestLocation
-      if (!nearestLocation) {
-        setError("No valid location found for check-out")
-        return
-      }
-
       const response = await fetch("/api/attendance/check-out", {
         method: "POST",
         headers: {
@@ -218,34 +182,21 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         body: JSON.stringify({
           latitude: location.latitude,
           longitude: location.longitude,
-          location_id: nearestLocation.id,
+          location_id: validation.nearestLocation!.id,
         }),
-        signal: controller.signal,
       })
 
       const result = await response.json()
 
       if (result.success) {
-        setSuccess(`Successfully checked out from ${nearestLocation.name}`)
-        await safeAsyncOperation(
-          () =>
-            new Promise<void>((resolve) => {
-              window.location.reload()
-              resolve()
-            }),
-          undefined,
-          (error) => console.error("[v0] Page reload failed:", error),
-        )
+        setSuccess(`Successfully checked out from ${validation.nearestLocation!.name}`)
+        window.location.reload()
       } else {
         setError(result.error || "Failed to check out")
       }
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        setError("Request timed out. Please try again.")
-      } else {
-        const message = error instanceof Error ? error.message : "Failed to check out"
-        setError(message)
-      }
+      const message = error instanceof Error ? error.message : "Failed to check out"
+      setError(message)
     } finally {
       setIsLoading(false)
     }
@@ -420,7 +371,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             <MapPin className="h-5 w-5" />
             Location Status
           </CardTitle>
-          <CardDescription>Your current location relative to QCC campuses (50m precision required)</CardDescription>
+          <CardDescription>Your current location relative to QCC campuses (20m precision required)</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!userLocation ? (
@@ -488,18 +439,18 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                     <div className="text-sm text-muted-foreground">{locationValidation.nearestLocation.address}</div>
                   )}
                   <div className="text-sm mt-1">
-                    Distance: <span className="font-medium">{locationValidation.distance ?? "Unknown"}m</span>
+                    Distance: <span className="font-medium">{locationValidation.distance}m</span>
                   </div>
                   <div className="flex items-center gap-2 mt-2">
                     {locationValidation.canCheckIn ? (
                       <>
                         <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-green-600">Within 50m - Can check in/out</span>
+                        <span className="text-sm text-green-600">Within 20m - Can check in/out</span>
                       </>
                     ) : (
                       <>
                         <XCircle className="h-4 w-4 text-red-600" />
-                        <span className="text-sm text-red-600">Outside 50m range</span>
+                        <span className="text-sm text-red-600">Outside 20m range</span>
                       </>
                     )}
                   </div>
@@ -516,7 +467,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>
-            Record your attendance using GPS (50m precision) or QR code
+            Record your attendance using GPS (20m precision) or QR code
             {!userLocation && " - QR code works without location access"}
           </CardDescription>
         </CardHeader>

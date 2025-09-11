@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Camera, X, CheckCircle } from "lucide-react"
 import { parseQRCode, validateQRCode, type QRCodeData } from "@/lib/qr-code"
-import { isBrowserAPIAvailable, safeAsyncOperation } from "@/lib/safe-utils"
 
 interface QRScannerProps {
   onScanSuccess: (data: QRCodeData) => void
@@ -27,10 +26,6 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
       setError(null)
       setIsScanning(true)
 
-      if (!isBrowserAPIAvailable("mediaDevices")) {
-        throw new Error("Camera access is not supported by this browser")
-      }
-
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
       })
@@ -40,8 +35,7 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
         videoRef.current.srcObject = stream
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Camera access denied or not available"
-      setError(message)
+      setError("Camera access denied or not available")
       setIsScanning(false)
     }
   }
@@ -58,43 +52,28 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
     const file = event.target.files?.[0]
     if (!file) return
 
-    if (!isBrowserAPIAvailable("fileReader")) {
-      setError("File reading is not supported by this browser")
-      return
-    }
-
     const reader = new FileReader()
     reader.onload = (e) => {
       const result = e.target?.result as string
-      if (!result) {
-        setError("Failed to read file")
-        return
-      }
-
-      safeAsyncOperation(
-        async () => {
-          const qrData = parseQRCode(result)
-          if (qrData) {
-            const validation = validateQRCode(qrData)
-            if (validation.isValid) {
-              setSuccess("QR code scanned successfully!")
-              onScanSuccess(qrData)
-            } else {
-              setError(validation.reason || "Invalid QR code")
-            }
+      // In a real implementation, you'd use a QR code reading library here
+      // For now, we'll simulate QR code reading
+      try {
+        const qrData = parseQRCode(result)
+        if (qrData) {
+          const validation = validateQRCode(qrData)
+          if (validation.isValid) {
+            setSuccess("QR code scanned successfully!")
+            onScanSuccess(qrData)
           } else {
-            setError("Invalid QR code format")
+            setError(validation.reason || "Invalid QR code")
           }
-        },
-        undefined,
-        (error) => setError("Failed to read QR code"),
-      )
+        } else {
+          setError("Invalid QR code format")
+        }
+      } catch {
+        setError("Failed to read QR code")
+      }
     }
-
-    reader.onerror = () => {
-      setError("Failed to read file")
-    }
-
     reader.readAsDataURL(file)
   }
 

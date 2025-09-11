@@ -84,7 +84,7 @@ export async function PUT(request: NextRequest) {
     // Update system settings if admin
     if (systemSettings && profile?.role === "admin") {
       if (systemSettings.geo_settings?.defaultRadius) {
-        const validatedRadius = Math.max(50, Number.parseInt(systemSettings.geo_settings.defaultRadius))
+        const validatedRadius = Math.max(20, Number.parseInt(systemSettings.geo_settings.defaultRadius))
         systemSettings.geo_settings.defaultRadius = validatedRadius.toString()
       }
 
@@ -102,7 +102,7 @@ export async function PUT(request: NextRequest) {
 
       if (systemSettings.geo_settings?.defaultRadius) {
         const newRadius = Number.parseInt(systemSettings.geo_settings.defaultRadius)
-        await supabase.from("geofence_locations").update({ radius_meters: newRadius }).eq("radius_meters", 50) // Update locations with default radius
+        await supabase.from("geofence_locations").update({ radius_meters: newRadius }).eq("radius_meters", 20) // Update locations with default radius
       }
 
       await supabase.from("audit_logs").insert({

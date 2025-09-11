@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { User, Mail, Phone, MapPin, Building, Save, Camera, Lock, Key } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { safeObjectAccess, createAbortController } from "@/lib/safe-utils"
 
 interface UserProfile {
   id: string
@@ -59,8 +58,6 @@ export function ProfileClient() {
   }, [])
 
   const fetchProfile = async () => {
-    const controller = createAbortController(15000)
-
     try {
       const supabase = createClient()
       const {
@@ -84,23 +81,17 @@ export function ProfileClient() {
           `)
           .eq("id", user.id)
           .single()
-          .abortSignal(controller.signal)
 
         if (error) throw error
 
         setProfile(profileData)
         setEditForm({
-          first_name: profileData?.first_name || "",
-          last_name: profileData?.last_name || "",
+          first_name: profileData.first_name || "",
+          last_name: profileData.last_name || "",
         })
       }
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        setError("Request timed out. Please refresh the page.")
-      } else {
-        const message = error instanceof Error ? error.message : "Failed to load profile"
-        setError(message)
-      }
+      setError("Failed to load profile")
     } finally {
       setLoading(false)
     }
@@ -109,76 +100,46 @@ export function ProfileClient() {
   const handleSave = async () => {
     if (!profile) return
 
-    if (!editForm.first_name.trim() || !editForm.last_name.trim()) {
-      setError("First name and last name are required")
-      return
-    }
-
-    if (editForm.first_name.length > 50 || editForm.last_name.length > 50) {
-      setError("Names must be 50 characters or less")
-      return
-    }
-
     setSaving(true)
     setError(null)
-
-    const controller = createAbortController(10000)
 
     try {
       const supabase = createClient()
       const { error } = await supabase
         .from("user_profiles")
         .update({
-          first_name: editForm.first_name.trim(),
-          last_name: editForm.last_name.trim(),
+          first_name: editForm.first_name,
+          last_name: editForm.last_name,
           updated_at: new Date().toISOString(),
         })
         .eq("id", profile.id)
-        .abortSignal(controller.signal)
 
       if (error) throw error
 
       setSuccess("Profile updated successfully")
       setIsEditing(false)
-      await fetchProfile() // Refresh profile data
+      fetchProfile() // Refresh profile data
       setTimeout(() => setSuccess(null), 3000)
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        setError("Request timed out. Please try again.")
-      } else {
-        const message = error instanceof Error ? error.message : "Failed to update profile"
-        setError(message)
-      }
+      setError("Failed to update profile")
     } finally {
       setSaving(false)
     }
   }
 
   const handlePasswordChange = async () => {
-    if (!passwordForm.newPassword || !passwordForm.confirmPassword) {
-      setError("Please fill in all password fields")
-      return
-    }
-
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setError("New passwords do not match")
       return
     }
 
-    if (passwordForm.newPassword.length < 8) {
-      setError("Password must be at least 8 characters long")
-      return
-    }
-
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(passwordForm.newPassword)) {
-      setError("Password must contain at least one uppercase letter, one lowercase letter, and one number")
+    if (passwordForm.newPassword.length < 6) {
+      setError("Password must be at least 6 characters long")
       return
     }
 
     setSaving(true)
     setError(null)
-
-    const controller = createAbortController(10000)
 
     try {
       const supabase = createClient()
@@ -193,12 +154,7 @@ export function ProfileClient() {
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
       setTimeout(() => setSuccess(null), 3000)
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        setError("Request timed out. Please try again.")
-      } else {
-        const message = error instanceof Error ? error.message : "Failed to update password"
-        setError(message)
-      }
+      setError("Failed to update password")
     } finally {
       setSaving(false)
     }
@@ -216,9 +172,7 @@ export function ProfileClient() {
     )
   }
 
-  const firstName = profile.first_name || "Unknown"
-  const lastName = profile.last_name || "User"
-  const userInitials = `${firstName.charAt(0)}${lastName.charAt(0)}`
+  const userInitials = `${profile.first_name[0]}${profile.last_name[0]}`
 
   return (
     <div className="space-y-6">
@@ -274,10 +228,9 @@ export function ProfileClient() {
                   id="firstName"
                   value={editForm.first_name}
                   onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
-                  maxLength={50}
                 />
               ) : (
-                <div className="p-2 bg-muted rounded-md">{firstName}</div>
+                <div className="p-2 bg-muted rounded-md">{profile.first_name}</div>
               )}
             </div>
             <div>
@@ -287,10 +240,9 @@ export function ProfileClient() {
                   id="lastName"
                   value={editForm.last_name}
                   onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
-                  maxLength={50}
                 />
               ) : (
-                <div className="p-2 bg-muted rounded-md">{lastName}</div>
+                <div className="p-2 bg-muted rounded-md">{profile.last_name}</div>
               )}
             </div>
           </div>
@@ -336,14 +288,14 @@ export function ProfileClient() {
               <Label>Department</Label>
               <div className="p-2 bg-muted rounded-md flex items-center gap-2">
                 <Building className="h-4 w-4 text-muted-foreground" />
-                {safeObjectAccess(profile, "departments.name") || "No department assigned"}
+                {profile.departments?.name || "No department assigned"}
               </div>
             </div>
             <div>
               <Label>Location</Label>
               <div className="p-2 bg-muted rounded-md flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
-                {safeObjectAccess(profile, "districts.name") || "No location assigned"}
+                {profile.districts?.name || "No location assigned"}
               </div>
             </div>
           </div>
@@ -353,7 +305,7 @@ export function ProfileClient() {
               <Label>Role</Label>
               <div className="p-2">
                 <Badge variant={profile.role === "admin" ? "default" : "secondary"}>
-                  {profile.role?.replace("_", " ").toUpperCase() || "UNKNOWN"}
+                  {profile.role.replace("_", " ").toUpperCase()}
                 </Badge>
               </div>
             </div>
@@ -407,12 +359,7 @@ export function ProfileClient() {
                     value={passwordForm.newPassword}
                     onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                     placeholder="Enter new password"
-                    minLength={8}
-                    maxLength={128}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Must be at least 8 characters with uppercase, lowercase, and number
-                  </p>
                 </div>
                 <div>
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
@@ -422,8 +369,6 @@ export function ProfileClient() {
                     value={passwordForm.confirmPassword}
                     onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                     placeholder="Confirm new password"
-                    minLength={8}
-                    maxLength={128}
                   />
                 </div>
                 <div className="flex gap-2">

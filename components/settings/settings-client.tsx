@@ -33,7 +33,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
   const router = useRouter()
 
   const [geoSettings, setGeoSettings] = useState({
-    defaultRadius: "50",
+    defaultRadius: "20",
     allowManualOverride: false,
     requireHighAccuracy: true,
     maxLocationAge: "300000", // 5 minutes
@@ -51,7 +51,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
   })
 
   const [systemSettings, setSystemSettings] = useState({
-    maxAttendanceRadius: "50",
+    maxAttendanceRadius: "20",
     sessionTimeout: "480", // 8 hours in minutes
     allowOfflineMode: false,
     requirePhotoVerification: false,
@@ -571,13 +571,13 @@ export function SettingsClient({ profile }: SettingsClientProps) {
                   <Input
                     id="defaultRadius"
                     type="number"
-                    min="50"
+                    min="20"
                     max="500"
                     value={geoSettings.defaultRadius}
                     onChange={(e) => setGeoSettings({ ...geoSettings, defaultRadius: e.target.value })}
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Minimum distance for attendance scanning (minimum 50m)
+                    Minimum distance for attendance scanning (minimum 20m)
                   </p>
                 </div>
                 <div>

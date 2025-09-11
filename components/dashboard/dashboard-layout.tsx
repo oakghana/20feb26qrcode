@@ -2,29 +2,9 @@ import type React from "react"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { Sidebar } from "./sidebar"
-import { ErrorBoundary } from "@/components/ui/error-boundary"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertTriangle } from "lucide-react"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
-}
-
-function DashboardErrorFallback({ error, resetError }: { error?: Error; resetError: () => void }) {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <Alert variant="destructive" className="max-w-md">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription className="space-y-2">
-          <div className="font-medium">Dashboard Error</div>
-          <div className="text-sm">{error?.message || "Failed to load dashboard. Please try refreshing the page."}</div>
-          <a href="/dashboard" className="text-sm underline hover:no-underline">
-            Refresh Page
-          </a>
-        </AlertDescription>
-      </Alert>
-    </div>
-  )
 }
 
 export async function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -50,13 +30,9 @@ export async function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <ErrorBoundary>
-        <Sidebar user={data.user} profile={profile} />
-      </ErrorBoundary>
+      <Sidebar user={data.user} profile={profile} />
       <div className="lg:pl-64">
-        <ErrorBoundary fallback={DashboardErrorFallback}>
-          <main className="p-6 lg:p-8">{children}</main>
-        </ErrorBoundary>
+        <main className="p-6 lg:p-8">{children}</main>
       </div>
     </div>
   )
