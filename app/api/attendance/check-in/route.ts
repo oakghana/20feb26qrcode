@@ -38,12 +38,23 @@ export async function POST(request: NextRequest) {
 
     const { data: locationData, error: locationError } = await supabase
       .from("geofence_locations")
-      .select("name, address, district_id, districts(name)")
+      .select("name, address, district_id")
       .eq("id", location_id)
       .single()
 
     if (locationError) {
       console.error("Location lookup error:", locationError)
+    }
+
+    // Get district name separately if needed
+    let districtName = null
+    if (locationData?.district_id) {
+      const { data: district } = await supabase
+        .from("districts")
+        .select("name")
+        .eq("id", locationData.district_id)
+        .single()
+      districtName = district?.name
     }
 
     // Create or update device session
@@ -104,20 +115,10 @@ export async function POST(request: NextRequest) {
       attendanceData.is_remote_location = true
     }
 
-    // Create attendance record
     const { data: attendanceRecord, error: attendanceError } = await supabase
       .from("attendance_records")
       .insert(attendanceData)
-      .select(`
-        *,
-        geofence_locations (
-          name,
-          address,
-          districts (
-            name
-          )
-        )
-      `)
+      .select("*")
       .single()
 
     if (attendanceError) {
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
       new_values: {
         ...attendanceRecord,
         location_name: locationData?.name,
-        district_name: locationData?.districts?.name,
+        district_name: districtName,
         check_in_method: attendanceData.check_in_method,
         is_remote_location: attendanceData.is_remote_location,
       },
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
         ...attendanceRecord,
         location_tracking: {
           location_name: locationData?.name,
-          district_name: locationData?.districts?.name,
+          district_name: districtName,
           is_remote_location: attendanceData.is_remote_location,
           check_in_method: attendanceData.check_in_method,
         },

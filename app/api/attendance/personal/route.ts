@@ -27,7 +27,6 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate")
     const status = searchParams.get("status")
 
-    // Build query for attendance records
     let query = supabase
       .from("attendance_records")
       .select(`
@@ -39,8 +38,15 @@ export async function GET(request: NextRequest) {
         notes,
         check_in_method,
         check_out_method,
-        check_in_location:geofence_locations!check_in_location_id(name, address),
-        check_out_location:geofence_locations!check_out_location_id(name, address)
+        check_in_location_name,
+        check_out_location_name,
+        is_remote_location,
+        check_in_latitude,
+        check_in_longitude,
+        check_out_latitude,
+        check_out_longitude,
+        check_in_location_id,
+        check_out_location_id
       `)
       .eq("user_id", user.id)
       .order("check_in_time", { ascending: false })
@@ -63,30 +69,58 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch attendance records" }, { status: 500 })
     }
 
+    const locationIds = new Set()
+    records?.forEach((record) => {
+      if (record.check_in_location_id) locationIds.add(record.check_in_location_id)
+      if (record.check_out_location_id) locationIds.add(record.check_out_location_id)
+    })
+
+    const locationMap = {}
+    if (locationIds.size > 0) {
+      const { data: locations } = await supabase
+        .from("geofence_locations")
+        .select("id, name, address")
+        .in("id", Array.from(locationIds))
+
+      locations?.forEach((loc) => {
+        locationMap[loc.id] = { name: loc.name, address: loc.address }
+      })
+    }
+
+    const enhancedRecords = records?.map((record) => ({
+      ...record,
+      check_in_location: record.check_in_location_name
+        ? { name: record.check_in_location_name }
+        : locationMap[record.check_in_location_id] || null,
+      check_out_location: record.check_out_location_name
+        ? { name: record.check_out_location_name }
+        : locationMap[record.check_out_location_id] || null,
+    }))
+
     // Calculate summary statistics
     const summary = {
-      totalDays: records?.length || 0,
-      presentDays: records?.filter((r) => r.status === "present").length || 0,
-      absentDays: records?.filter((r) => r.status === "absent").length || 0,
-      lateDays: records?.filter((r) => r.status === "late").length || 0,
-      totalHours: records?.reduce((sum, r) => sum + (r.work_hours || 0), 0) || 0,
+      totalDays: enhancedRecords?.length || 0,
+      presentDays: enhancedRecords?.filter((r) => r.status === "present").length || 0,
+      absentDays: enhancedRecords?.filter((r) => r.status === "absent").length || 0,
+      lateDays: enhancedRecords?.filter((r) => r.status === "late").length || 0,
+      totalHours: enhancedRecords?.reduce((sum, r) => sum + (r.work_hours || 0), 0) || 0,
       averageHours: 0,
       statusCounts: {},
       monthlyStats: {},
     }
 
     // Calculate average hours
-    const workingDays = records?.filter((r) => r.work_hours && r.work_hours > 0).length || 0
+    const workingDays = enhancedRecords?.filter((r) => r.work_hours && r.work_hours > 0).length || 0
     summary.averageHours = workingDays > 0 ? summary.totalHours / workingDays : 0
 
     // Calculate status counts
-    records?.forEach((record) => {
+    enhancedRecords?.forEach((record) => {
       const status = record.status || "unknown"
       summary.statusCounts[status] = (summary.statusCounts[status] || 0) + 1
     })
 
     // Calculate monthly stats
-    records?.forEach((record) => {
+    enhancedRecords?.forEach((record) => {
       const month = new Date(record.check_in_time).toISOString().slice(0, 7) // YYYY-MM
       if (!summary.monthlyStats[month]) {
         summary.monthlyStats[month] = { days: 0, hours: 0 }
@@ -96,7 +130,7 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.json({
-      records: records || [],
+      records: enhancedRecords || [],
       summary,
     })
   } catch (error) {

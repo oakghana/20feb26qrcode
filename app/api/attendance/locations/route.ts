@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
+    console.log("[v0] Locations API - Starting request")
     const supabase = await createClient()
 
     // Get authenticated user
@@ -12,10 +13,12 @@ export async function GET() {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
+      console.log("[v0] Locations API - Auth error:", authError)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get all active geofence locations
+    console.log("[v0] Locations API - User authenticated:", user.id)
+
     const { data: locations, error } = await supabase
       .from("geofence_locations")
       .select(`
@@ -25,27 +28,24 @@ export async function GET() {
         latitude,
         longitude,
         radius_meters,
-        districts (
-          name,
-          regions (
-            name
-          )
-        )
+        district_id
       `)
       .eq("is_active", true)
       .order("name")
 
     if (error) {
-      console.error("Locations error:", error)
+      console.error("[v0] Locations API - Database error:", error)
       return NextResponse.json({ error: "Failed to fetch locations" }, { status: 500 })
     }
+
+    console.log("[v0] Locations API - Found locations:", locations?.length)
 
     return NextResponse.json({
       success: true,
       data: locations,
     })
   } catch (error) {
-    console.error("Locations API error:", error)
+    console.error("[v0] Locations API - Unexpected error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
