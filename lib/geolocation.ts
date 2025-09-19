@@ -173,6 +173,35 @@ export function validateAttendanceLocation(
   }
 }
 
+export function validateCheckoutLocation(
+  userLocation: LocationData,
+  qccLocations: GeofenceLocation[],
+): {
+  canCheckOut: boolean
+  nearestLocation?: GeofenceLocation
+  distance?: number
+  message: string
+  accuracyWarning?: string
+} {
+  const nearest = findNearestLocation(userLocation, qccLocations)
+
+  if (!nearest) {
+    return {
+      canCheckOut: false,
+      message: "No QCC locations found in the system.",
+    }
+  }
+
+  return {
+    canCheckOut: true,
+    nearestLocation: nearest.location,
+    distance: nearest.distance,
+    message: `Check-out allowed from any location. Nearest QCC location: ${nearest.location.name} (${nearest.distance}m away)`,
+    accuracyWarning:
+      userLocation.accuracy > 10 ? "GPS accuracy is low, but check-out is still allowed from any location." : undefined,
+  }
+}
+
 export async function requestLocationPermission(): Promise<{ granted: boolean; message: string }> {
   if (!navigator.geolocation) {
     return {

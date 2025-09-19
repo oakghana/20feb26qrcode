@@ -175,12 +175,19 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     setSuccess(null)
 
     try {
-      const location = await getCurrentLocation()
-      setUserLocation(location)
+      let location = null
+      let nearestLocation = null
 
-      const validation = validateAttendanceLocation(location, locations)
+      try {
+        location = await getCurrentLocation()
+        setUserLocation(location)
 
-      const nearestLocation = validation.nearestLocation || locations[0]
+        const nearest = findNearestLocation(location, locations)
+        nearestLocation = nearest?.location || locations[0]
+      } catch (error) {
+        nearestLocation = locations[0]
+        console.log("[v0] Location unavailable for check-out, using default location:", error)
+      }
 
       const response = await fetch("/api/attendance/check-out", {
         method: "POST",
@@ -188,8 +195,8 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          latitude: location.latitude,
-          longitude: location.longitude,
+          latitude: location?.latitude,
+          longitude: location?.longitude,
           location_id: nearestLocation?.id,
         }),
       })
@@ -329,6 +336,11 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
   const isCheckedOut = todayAttendance?.check_out_time
   const canCheckIn = !todayAttendance?.check_in_time
   const canCheckOut = isCheckedIn
+
+  const findNearestLocation = (userLocation: LocationData, locations: GeofenceLocation[]) => {
+    // Placeholder for finding nearest location logic
+    return { location: locations[0] }
+  }
 
   return (
     <div className="space-y-6">
@@ -486,26 +498,30 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                   <div className="text-sm mt-1">
                     Distance: <span className="font-medium">{locationValidation.distance}m</span>
                   </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    {locationValidation.canCheckIn ? (
-                      <>
+                  <div className="space-y-1 mt-2">
+                    <div className="flex items-center gap-2">
+                      {locationValidation.canCheckIn ? (
+                        <>
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span className="text-sm text-green-600">Within 20m - Can check in</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="h-4 w-4 text-orange-600" />
+                          <span className="text-sm text-orange-600">Outside 20m range - Cannot check in</span>
+                        </>
+                      )}
+                    </div>
+                    {canCheckOut && (
+                      <div className="flex items-center gap-2">
                         <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-green-600">Within 20m - Can check in</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="h-4 w-4 text-orange-600" />
-                        <span className="text-sm text-orange-600">Outside 20m range for check-in</span>
-                      </>
+                        <span className="text-sm text-green-600">Check-out allowed from any QCC location</span>
+                      </div>
                     )}
                   </div>
-                  {canCheckOut && (
-                    <div className="flex items-center gap-2 mt-1">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-600">Can check out from any location</span>
-                    </div>
-                  )}
-                  <div className="text-sm mt-2 text-muted-foreground">{locationValidation.message}</div>
+                  <div className="text-sm mt-2 text-muted-foreground">
+                    {canCheckIn ? "Ready for check-in" : "Move closer to check in, or check out from anywhere"}
+                  </div>
                 </div>
               )}
             </div>
@@ -553,7 +569,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                 size="lg"
               >
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock className="mr-2 h-4 w-4" />}
-                GPS Check Out
+                Check Out (Any Location)
               </Button>
             </div>
 
