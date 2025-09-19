@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Clock, CheckCircle, Mail } from "lucide-react"
+import { Clock, CheckCircle, Mail, Shield } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 
@@ -30,7 +30,7 @@ export default function PendingApprovalPage() {
                 Account Pending Approval
               </CardTitle>
               <CardDescription className="text-muted-foreground mt-2">
-                Your registration has been submitted successfully
+                Your registration is complete and awaiting admin approval
               </CardDescription>
             </div>
           </CardHeader>
@@ -46,19 +46,25 @@ export default function PendingApprovalPage() {
                 </div>
               </div>
 
-              <Alert className="border-secondary/50 bg-secondary/10">
-                <CheckCircle className="h-4 w-4 text-secondary" />
-                <AlertDescription className="text-secondary font-medium">
-                  Your account has been created successfully and is awaiting admin approval.
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800 font-medium">
+                  ✓ Account created successfully
+                  <br />✓ Email verification skipped
+                  <br />⏳ Awaiting admin approval
                 </AlertDescription>
               </Alert>
 
               <div className="space-y-3 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2 justify-center">
-                  <Mail className="h-4 w-4" />
+                  <Shield className="h-4 w-4 text-blue-600" />
+                  <span>Your account is secure and ready for activation</span>
+                </div>
+                <div className="flex items-center gap-2 justify-center">
+                  <Mail className="h-4 w-4 text-green-600" />
                   <span>You will receive an email notification once approved</span>
                 </div>
-                <p>An administrator will review your registration and activate your account within 24-48 hours.</p>
+                <p>An administrator will review and activate your account within 24-48 hours.</p>
                 <p className="text-xs">If you need immediate access, please contact the IT Department.</p>
               </div>
             </div>

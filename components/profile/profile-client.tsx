@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { User, Mail, Phone, MapPin, Building, Save, Camera, Lock, Key, Calendar } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { PersonalAttendanceHistory } from "@/components/attendance/personal-attendance-history"
+import { SecureInput } from "@/components/ui/secure-input"
+import { validatePassword } from "@/lib/security"
 
 interface UserProfile {
   id: string
@@ -202,8 +203,9 @@ export function ProfileClient() {
       return
     }
 
-    if (passwordForm.newPassword.length < 6) {
-      setError("Password must be at least 6 characters long")
+    const passwordValidation = validatePassword(passwordForm.newPassword)
+    if (!passwordValidation.isValid) {
+      setError(`Password requirements not met: ${passwordValidation.errors.join(", ")}`)
       return
     }
 
@@ -211,19 +213,29 @@ export function ProfileClient() {
     setError(null)
 
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.updateUser({
-        password: passwordForm.newPassword,
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
       })
 
-      if (error) throw error
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update password")
+      }
 
       setSuccess("Password updated successfully")
       setShowPasswordChange(false)
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
       setTimeout(() => setSuccess(null), 3000)
     } catch (error) {
-      setError("Failed to update password")
+      setError(error instanceof Error ? error.message : "Failed to update password")
     } finally {
       setSaving(false)
     }
@@ -303,10 +315,12 @@ export function ProfileClient() {
                 <div>
                   <Label htmlFor="firstName">First Name</Label>
                   {isEditing ? (
-                    <Input
+                    <SecureInput
                       id="firstName"
                       value={editForm.first_name}
                       onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                      maxLength={50}
+                      allowedChars={/^[a-zA-Z\s]*$/}
                     />
                   ) : (
                     <div className="p-2 bg-muted rounded-md">{profile.first_name}</div>
@@ -315,10 +329,12 @@ export function ProfileClient() {
                 <div>
                   <Label htmlFor="lastName">Last Name</Label>
                   {isEditing ? (
-                    <Input
+                    <SecureInput
                       id="lastName"
                       value={editForm.last_name}
                       onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                      maxLength={50}
+                      allowedChars={/^[a-zA-Z\s]*$/}
                     />
                   ) : (
                     <div className="p-2 bg-muted rounded-md">{profile.last_name}</div>
@@ -431,23 +447,39 @@ export function ProfileClient() {
                 {showPasswordChange && (
                   <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
                     <div>
+                      <Label htmlFor="currentPassword">Current Password</Label>
+                      <SecureInput
+                        id="currentPassword"
+                        type="password"
+                        value={passwordForm.currentPassword}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                        placeholder="Enter current password"
+                        sanitize={false} // Don't sanitize passwords
+                      />
+                    </div>
+                    <div>
                       <Label htmlFor="newPassword">New Password</Label>
-                      <Input
+                      <SecureInput
                         id="newPassword"
                         type="password"
                         value={passwordForm.newPassword}
                         onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                         placeholder="Enter new password"
+                        sanitize={false} // Don't sanitize passwords
                       />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Password must be at least 8 characters with uppercase, lowercase, number, and special character
+                      </p>
                     </div>
                     <div>
                       <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                      <Input
+                      <SecureInput
                         id="confirmPassword"
                         type="password"
                         value={passwordForm.confirmPassword}
                         onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                         placeholder="Confirm new password"
+                        sanitize={false} // Don't sanitize passwords
                       />
                     </div>
                     <div className="flex gap-2">

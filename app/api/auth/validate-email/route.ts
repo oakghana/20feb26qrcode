@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { rateLimit, getClientIdentifier, sanitizeInput, createSecurityHeaders } from "@/lib/security"
 
 const JSON_HEADERS = {
+  ...createSecurityHeaders(),
   "Content-Type": "application/json",
-  "Cache-Control": "no-cache, no-store, must-revalidate",
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Accept",
@@ -22,13 +23,26 @@ export async function POST(request: NextRequest) {
   )
 
   try {
+    const clientId = getClientIdentifier(request)
+    const isAllowed = rateLimit(clientId, {
+      windowMs: 5 * 60 * 1000, // 5 minutes
+      maxRequests: 10, // Max 10 email validation attempts per 5 minutes
+    })
+
+    if (!isAllowed) {
+      return NextResponse.json(
+        { error: "Too many validation attempts. Please try again later.", exists: false },
+        { status: 429, headers: JSON_HEADERS },
+      )
+    }
+
     console.log("[v0] Email validation API called")
 
     let email: string
     try {
       const body = await request.json()
-      email = body.email?.trim()?.toLowerCase()
-      console.log("[v0] Parsed email from request:", email)
+      email = sanitizeInput(body.email?.trim()?.toLowerCase())
+      console.log("[v0] Parsed and sanitized email from request:", email)
     } catch (parseError) {
       console.error("[v0] Failed to parse request body:", parseError)
       return NextResponse.json({ error: "Invalid request body", exists: false }, { status: 400, headers: JSON_HEADERS })
@@ -39,7 +53,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email is required", exists: false }, { status: 400, headers: JSON_HEADERS })
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const emailRegex =
+      /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/
     if (!emailRegex.test(email)) {
       console.log("[v0] Invalid email format:", email)
       return NextResponse.json({ error: "Invalid email format", exists: false }, { status: 400, headers: JSON_HEADERS })

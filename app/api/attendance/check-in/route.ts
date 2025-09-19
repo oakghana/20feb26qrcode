@@ -123,7 +123,17 @@ export async function POST(request: NextRequest) {
 
     if (attendanceError) {
       console.error("Attendance error:", attendanceError)
-      return NextResponse.json({ error: "Failed to record attendance" }, { status: 500 })
+      return NextResponse.json(
+        { error: "Failed to record attendance" },
+        {
+          status: 500,
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        },
+      )
     }
 
     await supabase.from("audit_logs").insert({
@@ -142,23 +152,44 @@ export async function POST(request: NextRequest) {
       user_agent: request.headers.get("user-agent"),
     })
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...attendanceRecord,
-        location_tracking: {
-          location_name: locationData?.name,
-          district_name: districtName,
-          is_remote_location: attendanceData.is_remote_location,
-          check_in_method: attendanceData.check_in_method,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          ...attendanceRecord,
+          location_tracking: {
+            location_name: locationData?.name,
+            district_name: districtName,
+            is_remote_location: attendanceData.is_remote_location,
+            check_in_method: attendanceData.check_in_method,
+          },
+        },
+        message: attendanceData.is_remote_location
+          ? `Successfully checked in at ${locationData?.name} (different from your assigned location)`
+          : `Successfully checked in at ${locationData?.name}`,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate, private",
+          Pragma: "no-cache",
+          Expires: "0",
+          "X-Content-Type-Options": "nosniff",
         },
       },
-      message: attendanceData.is_remote_location
-        ? `Successfully checked in at ${locationData?.name} (different from your assigned location)`
-        : `Successfully checked in at ${locationData?.name}`,
-    })
+    )
   } catch (error) {
     console.error("Check-in error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Internal server error" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    )
   }
 }

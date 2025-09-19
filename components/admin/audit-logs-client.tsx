@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,6 +51,14 @@ interface Pagination {
   totalPages: number
 }
 
+const initialFilters = {
+  action: "all",
+  user_id: "",
+  start_date: "",
+  end_date: "",
+  search: "",
+}
+
 export function AuditLogsClient() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,49 +69,42 @@ export function AuditLogsClient() {
     total: 0,
     totalPages: 0,
   })
+  const [filters, setFilters] = useState(initialFilters)
 
-  const [filters, setFilters] = useState({
-    action: "all",
-    user_id: "",
-    start_date: "",
-    end_date: "",
-    search: "",
-  })
+  const actionConfig = useMemo(
+    () => ({
+      icons: {
+        check_in: Clock,
+        check_out: Clock,
+        login: LogIn,
+        logout: LogOut,
+        create_staff: UserPlus,
+        update_staff: User,
+        delete_staff: User,
+        create_location: MapPin,
+        update_location: MapPin,
+        delete_location: MapPin,
+        update_settings: Settings,
+        default: Activity,
+      },
+      colors: {
+        check_in: "bg-green-100 text-green-800 border-green-200",
+        check_out: "bg-blue-100 text-blue-800 border-blue-200",
+        login: "bg-emerald-100 text-emerald-800 border-emerald-200",
+        logout: "bg-gray-100 text-gray-800 border-gray-200",
+        create_staff: "bg-purple-100 text-purple-800 border-purple-200",
+        update_staff: "bg-yellow-100 text-yellow-800 border-yellow-200",
+        delete_staff: "bg-red-100 text-red-800 border-red-200",
+        create_location: "bg-indigo-100 text-indigo-800 border-indigo-200",
+        update_location: "bg-orange-100 text-orange-800 border-orange-200",
+        delete_location: "bg-red-100 text-red-800 border-red-200",
+        update_settings: "bg-cyan-100 text-cyan-800 border-cyan-200",
+      },
+    }),
+    [],
+  )
 
-  const actionIcons: Record<string, any> = {
-    check_in: Clock,
-    check_out: Clock,
-    login: LogIn,
-    logout: LogOut,
-    create_staff: UserPlus,
-    update_staff: User,
-    delete_staff: User,
-    create_location: MapPin,
-    update_location: MapPin,
-    delete_location: MapPin,
-    update_settings: Settings,
-    default: Activity,
-  }
-
-  const actionColors: Record<string, string> = {
-    check_in: "bg-green-100 text-green-800",
-    check_out: "bg-blue-100 text-blue-800",
-    login: "bg-emerald-100 text-emerald-800",
-    logout: "bg-gray-100 text-gray-800",
-    create_staff: "bg-purple-100 text-purple-800",
-    update_staff: "bg-yellow-100 text-yellow-800",
-    delete_staff: "bg-red-100 text-red-800",
-    create_location: "bg-indigo-100 text-indigo-800",
-    update_location: "bg-orange-100 text-orange-800",
-    delete_location: "bg-red-100 text-red-800",
-    update_settings: "bg-cyan-100 text-cyan-800",
-  }
-
-  useEffect(() => {
-    fetchAuditLogs()
-  }, [pagination.page, filters])
-
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams({
@@ -124,30 +125,25 @@ export function AuditLogsClient() {
 
       setAuditLogs(result.data)
       setPagination(result.pagination)
+      setError(null)
     } catch (error) {
       setError(error instanceof Error ? error.message : "Failed to fetch audit logs")
     } finally {
       setLoading(false)
     }
-  }
+  }, [pagination.page, filters])
 
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters({ ...filters, [key]: value })
-    setPagination({ ...pagination, page: 1 })
-  }
+  const handleFilterChange = useCallback((key: string, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+    setPagination((prev) => ({ ...prev, page: 1 }))
+  }, [])
 
-  const clearFilters = () => {
-    setFilters({
-      action: "all",
-      user_id: "",
-      start_date: "",
-      end_date: "",
-      search: "",
-    })
-    setPagination({ ...pagination, page: 1 })
-  }
+  const clearFilters = useCallback(() => {
+    setFilters(initialFilters)
+    setPagination((prev) => ({ ...prev, page: 1 }))
+  }, [])
 
-  const exportAuditLogs = async () => {
+  const exportAuditLogs = useCallback(async () => {
     try {
       const params = new URLSearchParams({
         ...filters,
@@ -168,21 +164,28 @@ export function AuditLogsClient() {
     } catch (error) {
       setError("Failed to export audit logs")
     }
-  }
+  }, [filters])
 
-  const getActionIcon = (action: string) => {
-    const IconComponent = actionIcons[action] || actionIcons.default
-    return <IconComponent className="h-4 w-4" />
-  }
+  const getActionIcon = useCallback(
+    (action: string) => {
+      const IconComponent = actionConfig.icons[action as keyof typeof actionConfig.icons] || actionConfig.icons.default
+      return <IconComponent className="h-4 w-4" />
+    },
+    [actionConfig.icons],
+  )
 
-  const getActionColor = (action: string) => {
-    return actionColors[action] || "bg-gray-100 text-gray-800"
-  }
+  const getActionColor = useCallback(
+    (action: string) => {
+      return (
+        actionConfig.colors[action as keyof typeof actionConfig.colors] || "bg-gray-100 text-gray-800 border-gray-200"
+      )
+    },
+    [actionConfig.colors],
+  )
 
-  const formatUserAgent = (userAgent: string) => {
+  const formatUserAgent = useCallback((userAgent: string) => {
     if (!userAgent) return "Unknown"
 
-    // Extract browser and OS info
     const browser = userAgent.includes("Chrome")
       ? "Chrome"
       : userAgent.includes("Firefox")
@@ -204,14 +207,18 @@ export function AuditLogsClient() {
               : "Unknown"
 
     return `${browser} on ${os}`
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchAuditLogs()
+  }, [fetchAuditLogs])
 
   if (loading && auditLogs.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          Loading audit logs...
+          <p className="text-muted-foreground">Loading audit logs...</p>
         </div>
       </div>
     )
@@ -230,7 +237,7 @@ export function AuditLogsClient() {
             Monitor all system activities and user actions for security and compliance
           </p>
         </div>
-        <Button onClick={exportAuditLogs} variant="outline">
+        <Button onClick={exportAuditLogs} variant="outline" className="shadow-sm bg-transparent">
           <Download className="mr-2 h-4 w-4" />
           Export CSV
         </Button>
@@ -243,9 +250,9 @@ export function AuditLogsClient() {
       )}
 
       {/* Filters */}
-      <Card>
+      <Card className="shadow-sm border-0 bg-gradient-to-br from-white to-gray-50/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-primary">
             <Filter className="h-5 w-5" />
             Filters
           </CardTitle>
@@ -255,7 +262,7 @@ export function AuditLogsClient() {
             <div>
               <Label htmlFor="action">Action Type</Label>
               <Select value={filters.action} onValueChange={(value) => handleFilterChange("action", value)}>
-                <SelectTrigger>
+                <SelectTrigger className="border-0 bg-white shadow-sm">
                   <SelectValue placeholder="All actions" />
                 </SelectTrigger>
                 <SelectContent>
@@ -281,6 +288,7 @@ export function AuditLogsClient() {
                 type="date"
                 value={filters.start_date}
                 onChange={(e) => handleFilterChange("start_date", e.target.value)}
+                className="border-0 bg-white shadow-sm"
               />
             </div>
 
@@ -291,11 +299,12 @@ export function AuditLogsClient() {
                 type="date"
                 value={filters.end_date}
                 onChange={(e) => handleFilterChange("end_date", e.target.value)}
+                className="border-0 bg-white shadow-sm"
               />
             </div>
 
             <div className="flex items-end">
-              <Button onClick={clearFilters} variant="outline" className="w-full bg-transparent">
+              <Button onClick={clearFilters} variant="outline" className="w-full shadow-sm bg-transparent">
                 Clear Filters
               </Button>
             </div>
@@ -304,9 +313,9 @@ export function AuditLogsClient() {
       </Card>
 
       {/* Audit Logs Table */}
-      <Card>
+      <Card className="shadow-sm border-0 bg-white">
         <CardHeader>
-          <CardTitle>Activity Log</CardTitle>
+          <CardTitle className="text-primary">Activity Log</CardTitle>
           <CardDescription>
             Showing {auditLogs.length} of {pagination.total} audit entries
           </CardDescription>
@@ -316,11 +325,11 @@ export function AuditLogsClient() {
             {auditLogs.map((log) => (
               <div
                 key={log.id}
-                className="flex items-start justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                className="flex items-start justify-between p-4 border-0 rounded-lg bg-gray-50/50 hover:bg-gray-100/50 transition-colors shadow-sm"
               >
                 <div className="flex items-start gap-4 flex-1">
                   <div className="flex-shrink-0">
-                    <Badge className={`${getActionColor(log.action)} flex items-center gap-1`}>
+                    <Badge className={`${getActionColor(log.action)} flex items-center gap-1 shadow-sm`}>
                       {getActionIcon(log.action)}
                       {log.action.replace("_", " ").toUpperCase()}
                     </Badge>
@@ -328,7 +337,7 @@ export function AuditLogsClient() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium">
+                      <span className="font-medium text-primary">
                         {log.user_profiles?.first_name} {log.user_profiles?.last_name}
                       </span>
                       <span className="text-sm text-muted-foreground">({log.user_profiles?.employee_id})</span>
@@ -338,7 +347,7 @@ export function AuditLogsClient() {
 
                     {log.table_name && (
                       <p className="text-sm">
-                        Action performed on: <span className="font-medium">{log.table_name}</span>
+                        Action performed on: <span className="font-medium text-primary">{log.table_name}</span>
                       </p>
                     )}
 
@@ -353,20 +362,24 @@ export function AuditLogsClient() {
                   </div>
                 </div>
 
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="hover:bg-white">
                   <Eye className="h-4 w-4" />
                 </Button>
               </div>
             ))}
 
             {auditLogs.length === 0 && !loading && (
-              <div className="text-center py-8 text-muted-foreground">No audit logs found matching your criteria</div>
+              <div className="text-center py-12 text-muted-foreground">
+                <Shield className="h-16 w-16 text-primary/20 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-primary mb-2">No audit logs found</h3>
+                <p>No audit logs match your current filter criteria</p>
+              </div>
             )}
           </div>
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6">
+            <div className="flex items-center justify-between mt-6 pt-4 border-t">
               <div className="text-sm text-muted-foreground">
                 Page {pagination.page} of {pagination.totalPages}
               </div>
@@ -374,16 +387,18 @@ export function AuditLogsClient() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
+                  onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
                   disabled={pagination.page <= 1}
+                  className="shadow-sm"
                 >
                   Previous
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
+                  onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
                   disabled={pagination.page >= pagination.totalPages}
+                  className="shadow-sm"
                 >
                   Next
                 </Button>

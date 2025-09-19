@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 import {
   Home,
   Clock,
@@ -314,6 +315,10 @@ export function Sidebar({ user, profile }: SidebarProps) {
           </nav>
 
           <div className="p-4 border-t border-sidebar-border/50 bg-gradient-to-r from-muted/20 to-transparent">
+            <div className="mb-4 flex justify-center">
+              <ThemeToggle />
+            </div>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

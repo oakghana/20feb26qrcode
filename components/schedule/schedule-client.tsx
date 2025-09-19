@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +30,15 @@ interface Schedule {
   status: "scheduled" | "completed" | "cancelled"
 }
 
+const initialScheduleState = {
+  title: "",
+  description: "",
+  start_time: "",
+  end_time: "",
+  date: new Date().toISOString().split("T")[0],
+  type: "work" as const,
+}
+
 export function ScheduleClient() {
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,38 +46,41 @@ export function ScheduleClient() {
   const [success, setSuccess] = useState<string | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
+  const [newSchedule, setNewSchedule] = useState(initialScheduleState)
 
-  const [newSchedule, setNewSchedule] = useState({
-    title: "",
-    description: "",
-    start_time: "",
-    end_time: "",
-    date: new Date().toISOString().split("T")[0],
-    type: "work" as const,
-  })
+  const typeColors = useMemo(
+    () => ({
+      work: "bg-primary",
+      meeting: "bg-blue-500",
+      training: "bg-green-500",
+      break: "bg-orange-500",
+    }),
+    [],
+  )
 
-  useEffect(() => {
-    fetchSchedules()
-  }, [selectedDate])
+  const daySchedules = useMemo(
+    () =>
+      schedules
+        .filter((schedule) => schedule.date === selectedDate)
+        .sort((a, b) => a.start_time.localeCompare(b.start_time)),
+    [schedules, selectedDate],
+  )
 
-  const fetchSchedules = async () => {
+  const fetchSchedules = useCallback(async () => {
     try {
-      console.log("[v0] Fetching schedules for date:", selectedDate)
-
+      setLoading(true)
       const response = await fetch(`/api/admin/schedules?date=${selectedDate}`)
       const result = await response.json()
 
       if (result.success) {
         setSchedules(result.data)
-        console.log("[v0] Schedules loaded:", result.data.length)
+        setError(null)
       } else {
         throw new Error(result.error || "Failed to fetch schedules")
       }
     } catch (error) {
-      console.error("[v0] Schedule fetch error:", error)
       setError("Failed to fetch schedules")
 
-      // Fallback to mock data for demo
       const mockSchedules: Schedule[] = [
         {
           id: "1",
@@ -95,96 +107,75 @@ export function ScheduleClient() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedDate])
 
-  const handleAddSchedule = async () => {
+  const handleAddSchedule = useCallback(async () => {
     try {
-      console.log("[v0] Adding new schedule:", newSchedule)
-
       const response = await fetch("/api/admin/schedules", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newSchedule),
       })
 
       const result = await response.json()
 
       if (result.success) {
-        setSchedules([...schedules, result.data])
+        const newScheduleWithId: Schedule = {
+          ...newSchedule,
+          id: result.data?.id || Date.now().toString(),
+          status: "scheduled",
+        }
+        setSchedules((prev) => [...prev, newScheduleWithId])
         setSuccess("Schedule added successfully")
         setIsAddDialogOpen(false)
-        setNewSchedule({
-          title: "",
-          description: "",
-          start_time: "",
-          end_time: "",
-          date: new Date().toISOString().split("T")[0],
-          type: "work",
-        })
+        setNewSchedule(initialScheduleState)
+
         setTimeout(() => setSuccess(null), 3000)
       } else {
         throw new Error(result.error || "Failed to add schedule")
       }
     } catch (error) {
-      console.error("[v0] Schedule add error:", error)
       setError("Failed to add schedule")
 
-      // Fallback to local add for demo
-      const newId = Date.now().toString()
-      const schedule: Schedule = {
+      const fallbackSchedule: Schedule = {
         ...newSchedule,
-        id: newId,
+        id: Date.now().toString(),
         status: "scheduled",
       }
-      setSchedules([...schedules, schedule])
+      setSchedules((prev) => [...prev, fallbackSchedule])
       setIsAddDialogOpen(false)
-      setNewSchedule({
-        title: "",
-        description: "",
-        start_time: "",
-        end_time: "",
-        date: new Date().toISOString().split("T")[0],
-        type: "work",
-      })
+      setNewSchedule(initialScheduleState)
     }
-  }
+  }, [newSchedule])
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case "work":
-        return "bg-primary"
-      case "meeting":
-        return "bg-blue-500"
-      case "training":
-        return "bg-green-500"
-      case "break":
-        return "bg-orange-500"
-      default:
-        return "bg-gray-500"
-    }
-  }
+  const getTypeColor = useCallback(
+    (type: string) => typeColors[type as keyof typeof typeColors] || "bg-gray-500",
+    [typeColors],
+  )
+
+  useEffect(() => {
+    fetchSchedules()
+  }, [fetchSchedules])
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-primary">Schedule</h1>
+          <h1 className="text-3xl font-bold text-primary">Schedule Management</h1>
           <p className="text-muted-foreground mt-2">Manage your work schedule and appointments</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="shadow-sm">
               <Plus className="mr-2 h-4 w-4" />
               Add Schedule
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Add New Schedule</DialogTitle>
-              <DialogDescription>Create a new schedule entry</DialogDescription>
+              <DialogDescription>Create a new schedule entry for better time management</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -192,8 +183,9 @@ export function ScheduleClient() {
                 <Input
                   id="title"
                   value={newSchedule.title}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, title: e.target.value })}
+                  onChange={(e) => setNewSchedule((prev) => ({ ...prev, title: e.target.value }))}
                   placeholder="Schedule title"
+                  className="border-0 bg-gray-50 shadow-sm"
                 />
               </div>
               <div>
@@ -201,8 +193,9 @@ export function ScheduleClient() {
                 <Input
                   id="description"
                   value={newSchedule.description}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, description: e.target.value })}
+                  onChange={(e) => setNewSchedule((prev) => ({ ...prev, description: e.target.value }))}
                   placeholder="Schedule description"
+                  className="border-0 bg-gray-50 shadow-sm"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -212,7 +205,8 @@ export function ScheduleClient() {
                     id="startTime"
                     type="time"
                     value={newSchedule.start_time}
-                    onChange={(e) => setNewSchedule({ ...newSchedule, start_time: e.target.value })}
+                    onChange={(e) => setNewSchedule((prev) => ({ ...prev, start_time: e.target.value }))}
+                    className="border-0 bg-gray-50 shadow-sm"
                   />
                 </div>
                 <div>
@@ -221,7 +215,8 @@ export function ScheduleClient() {
                     id="endTime"
                     type="time"
                     value={newSchedule.end_time}
-                    onChange={(e) => setNewSchedule({ ...newSchedule, end_time: e.target.value })}
+                    onChange={(e) => setNewSchedule((prev) => ({ ...prev, end_time: e.target.value }))}
+                    className="border-0 bg-gray-50 shadow-sm"
                   />
                 </div>
               </div>
@@ -231,16 +226,17 @@ export function ScheduleClient() {
                   id="date"
                   type="date"
                   value={newSchedule.date}
-                  onChange={(e) => setNewSchedule({ ...newSchedule, date: e.target.value })}
+                  onChange={(e) => setNewSchedule((prev) => ({ ...prev, date: e.target.value }))}
+                  className="border-0 bg-gray-50 shadow-sm"
                 />
               </div>
               <div>
                 <Label htmlFor="type">Type</Label>
                 <Select
                   value={newSchedule.type}
-                  onValueChange={(value: any) => setNewSchedule({ ...newSchedule, type: value })}
+                  onValueChange={(value: any) => setNewSchedule((prev) => ({ ...prev, type: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="border-0 bg-gray-50 shadow-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -256,7 +252,9 @@ export function ScheduleClient() {
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleAddSchedule}>Add Schedule</Button>
+              <Button onClick={handleAddSchedule} className="bg-primary hover:bg-primary/90">
+                Add Schedule
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -269,28 +267,36 @@ export function ScheduleClient() {
       )}
 
       {success && (
-        <Alert>
-          <AlertDescription>{success}</AlertDescription>
+        <Alert className="border-green-200 bg-green-50">
+          <AlertDescription className="text-green-800">{success}</AlertDescription>
         </Alert>
       )}
 
       {/* Date Selector */}
-      <Card>
+      <Card className="shadow-sm border-0 bg-gradient-to-br from-white to-gray-50/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-primary">
             <Calendar className="h-5 w-5" />
-            Schedule for {new Date(selectedDate).toLocaleDateString()}
+            Schedule for{" "}
+            {new Date(selectedDate).toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4 items-center">
-            <Label htmlFor="scheduleDate">Select Date:</Label>
+            <Label htmlFor="scheduleDate" className="font-medium">
+              Select Date:
+            </Label>
             <Input
               id="scheduleDate"
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-auto"
+              className="w-auto border-0 bg-white shadow-sm"
             />
           </div>
         </CardContent>
@@ -299,46 +305,52 @@ export function ScheduleClient() {
       {/* Schedule List */}
       <div className="grid gap-4">
         {loading ? (
-          <Card>
-            <CardContent className="text-center py-8">Loading schedules...</CardContent>
+          <Card className="shadow-sm border-0">
+            <CardContent className="text-center py-12">
+              <Clock className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading schedules...</p>
+            </CardContent>
           </Card>
-        ) : schedules.length === 0 ? (
-          <Card>
-            <CardContent className="text-center py-8">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No schedules for this date</p>
-              <p className="text-sm text-muted-foreground mt-1">Click "Add Schedule" to create one</p>
+        ) : daySchedules.length === 0 ? (
+          <Card className="shadow-sm border-0">
+            <CardContent className="text-center py-12">
+              <Calendar className="h-16 w-16 text-primary/20 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-primary mb-2">No schedules for this date</h3>
+              <p className="text-muted-foreground">Click "Add Schedule" to create your first entry</p>
             </CardContent>
           </Card>
         ) : (
-          schedules.map((schedule) => (
-            <Card key={schedule.id}>
+          daySchedules.map((schedule) => (
+            <Card key={schedule.id} className="shadow-sm border-0 bg-white hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className={`w-4 h-4 rounded-full ${getTypeColor(schedule.type)}`}></div>
+                    <div className={`w-4 h-4 rounded-full ${getTypeColor(schedule.type)} shadow-sm`}></div>
                     <div>
-                      <h3 className="font-semibold">{schedule.title}</h3>
+                      <h3 className="font-semibold text-primary">{schedule.title}</h3>
                       <p className="text-sm text-muted-foreground">{schedule.description}</p>
                       <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Clock className="h-4 w-4" />
                           {schedule.start_time} - {schedule.end_time}
                         </div>
-                        <Badge variant="outline" className="capitalize">
+                        <Badge variant="outline" className="capitalize bg-blue-50 text-blue-700 border-blue-200">
                           {schedule.type}
                         </Badge>
-                        <Badge variant={schedule.status === "completed" ? "default" : "secondary"}>
+                        <Badge
+                          variant={schedule.status === "completed" ? "default" : "secondary"}
+                          className={schedule.status === "completed" ? "bg-green-100 text-green-800" : ""}
+                        >
                           {schedule.status}
                         </Badge>
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline">
+                    <Button size="sm" variant="outline" className="hover:bg-blue-50 bg-transparent">
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button size="sm" variant="outline">
+                    <Button size="sm" variant="outline" className="hover:bg-red-50 bg-transparent">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

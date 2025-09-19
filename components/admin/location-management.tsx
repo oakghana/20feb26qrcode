@@ -2,13 +2,14 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { MapPin, Plus, QrCode, Edit } from "lucide-react"
+import { MapPin, Plus, QrCode, Edit, AlertTriangle, Loader2, Navigation, Wifi, WifiOff } from "lucide-react"
 import { generateQRCode, generateSignature, type QRCodeData } from "@/lib/qr-code"
 
 interface GeofenceLocation {
@@ -41,6 +42,10 @@ export function LocationManagement() {
   const [editingLocation, setEditingLocation] = useState<GeofenceLocation | null>(null)
   const [selectedLocation, setSelectedLocation] = useState<GeofenceLocation | null>(null)
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [locationPermission, setLocationPermission] = useState<"granted" | "denied" | "prompt" | null>(null)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [retryCount, setRetryCount] = useState(0)
 
   const [newLocation, setNewLocation] = useState({
     name: "",
@@ -52,49 +57,151 @@ export function LocationManagement() {
 
   useEffect(() => {
     fetchLocations()
+    checkLocationPermission()
+
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
   }, [])
 
-  const fetchLocations = async () => {
+  const checkLocationPermission = async () => {
+    if ("permissions" in navigator) {
+      try {
+        const permission = await navigator.permissions.query({ name: "geolocation" })
+        setLocationPermission(permission.state)
+
+        permission.addEventListener("change", () => {
+          setLocationPermission(permission.state)
+        })
+      } catch (error) {
+        console.warn("Permission API not supported")
+      }
+    }
+  }
+
+  const validateLocationForm = useCallback((location: typeof newLocation): boolean => {
+    const errors: Record<string, string> = {}
+
+    if (!location.name.trim()) errors.name = "Location name is required"
+    if (!location.address.trim()) errors.address = "Address is required"
+
+    const lat = Number.parseFloat(location.latitude)
+    const lng = Number.parseFloat(location.longitude)
+    const radius = Number.parseInt(location.radius_meters)
+
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      errors.latitude = "Latitude must be between -90 and 90"
+    }
+    if (isNaN(lng) || lng < -180 || lng > 180) {
+      errors.longitude = "Longitude must be between -180 and 180"
+    }
+    if (isNaN(radius) || radius < 10 || radius > 10000) {
+      errors.radius_meters = "Radius must be between 10 and 10,000 meters"
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }, [])
+
+  const fetchLocations = async (attempt = 1) => {
     try {
+      if (!isOnline && attempt === 1) {
+        throw new Error("No internet connection")
+      }
+
       const response = await fetch("/api/admin/locations")
-      if (!response.ok) throw new Error("Failed to fetch locations")
+      if (!response.ok) {
+        if (response.status >= 500 && attempt < 3) {
+          throw new Error("RETRY")
+        }
+        throw new Error(`Failed to fetch locations (${response.status})`)
+      }
+
       const data = await response.json()
       setLocations(data)
+      setError(null)
+      setRetryCount(0)
     } catch (err) {
-      setError("Failed to load locations")
+      if (err instanceof Error && err.message === "RETRY" && attempt < 3) {
+        console.log(`[v0] Retrying fetch locations, attempt ${attempt + 1}`)
+        setTimeout(() => fetchLocations(attempt + 1), 1000 * attempt)
+        return
+      }
+
+      const errorMessage = err instanceof Error ? err.message : "Failed to load locations"
+      setError(errorMessage)
+      setRetryCount(attempt)
     } finally {
-      setLoading(false)
+      if (attempt === 1) setLoading(false)
     }
   }
 
   const handleAddLocation = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!validateLocationForm(newLocation)) return
+    if (!isOnline) {
+      setError("No internet connection. Please check your network and try again.")
+      return
+    }
+
     setLoading(true)
     setError(null)
 
-    try {
-      const response = await fetch("/api/admin/locations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newLocation,
-          latitude: Number.parseFloat(newLocation.latitude),
-          longitude: Number.parseFloat(newLocation.longitude),
-          radius_meters: Number.parseInt(newLocation.radius_meters),
-        }),
-      })
+    const attemptAdd = async (attempt: number): Promise<void> => {
+      try {
+        const response = await fetch("/api/admin/locations", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+          },
+          body: JSON.stringify({
+            ...newLocation,
+            latitude: Number.parseFloat(newLocation.latitude),
+            longitude: Number.parseFloat(newLocation.longitude),
+            radius_meters: Number.parseInt(newLocation.radius_meters),
+          }),
+        })
 
-      if (!response.ok) throw new Error("Failed to add location")
+        if (!response.ok) {
+          if (response.status >= 500 && attempt < 3) {
+            throw new Error("RETRY")
+          }
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Server error (${response.status})`)
+        }
 
-      setSuccess("Location added successfully")
-      await fetchLocations()
-      setIsAddingLocation(false)
-      setNewLocation({ name: "", address: "", latitude: "", longitude: "", radius_meters: "100" })
-    } catch (err) {
-      setError("Failed to add location")
-    } finally {
-      setLoading(false)
+        setSuccess("Location added successfully")
+        await fetchLocations()
+        setIsAddingLocation(false)
+        setNewLocation({ name: "", address: "", latitude: "", longitude: "", radius_meters: "100" })
+        setFormErrors({})
+        setRetryCount(0)
+
+        setTimeout(() => setSuccess(null), 5000)
+      } catch (error) {
+        if (error instanceof Error && error.message === "RETRY" && attempt < 3) {
+          console.log(`[v0] Retrying add location, attempt ${attempt + 1}`)
+          setTimeout(() => attemptAdd(attempt + 1), 1000 * attempt)
+          return
+        }
+
+        const errorMessage = error instanceof Error ? error.message : "Failed to add location"
+        setError(errorMessage)
+        setRetryCount(attempt)
+      }
     }
+
+    await attemptAdd(1)
+    setLoading(false)
   }
 
   const handleEditLocation = async () => {
@@ -102,8 +209,6 @@ export function LocationManagement() {
 
     setLoading(true)
     setError(null)
-
-    console.log("[v0] Updating location:", editingLocation)
 
     try {
       const response = await fetch(`/api/admin/locations/${editingLocation.id}`, {
@@ -119,23 +224,17 @@ export function LocationManagement() {
         }),
       })
 
-      console.log("[v0] Location update response status:", response.status)
-
       if (!response.ok) {
         const errorData = await response.json()
-        console.error("[v0] Location update failed:", errorData)
         throw new Error(errorData.error || "Failed to update location")
       }
-
-      const result = await response.json()
-      console.log("[v0] Location update successful:", result)
 
       setSuccess("Location updated successfully")
       await fetchLocations()
       setEditingLocation(null)
     } catch (err) {
-      console.error("[v0] Location update error:", err)
-      setError(err instanceof Error ? err.message : "Failed to update location")
+      const errorMessage = err instanceof Error ? err.message : "Failed to update location"
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -160,81 +259,190 @@ export function LocationManagement() {
   }
 
   const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          if (editingLocation) {
-            setEditingLocation((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude,
-                  }
-                : null,
-            )
-          } else {
-            setNewLocation((prev) => ({
-              ...prev,
-              latitude: position.coords.latitude.toString(),
-              longitude: position.coords.longitude.toString(),
-            }))
-          }
-        },
-        () => {
-          setError("Failed to get current location")
-        },
-      )
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by this browser")
+      return
     }
+
+    if (locationPermission === "denied") {
+      setError("Location access denied. Please enable location permissions in your browser settings.")
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000,
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords
+
+        if (editingLocation) {
+          setEditingLocation((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  latitude,
+                  longitude,
+                }
+              : null,
+          )
+        } else {
+          setNewLocation((prev) => ({
+            ...prev,
+            latitude: latitude.toString(),
+            longitude: longitude.toString(),
+          }))
+        }
+
+        setSuccess("Location detected successfully")
+        setTimeout(() => setSuccess(null), 3000)
+        setLoading(false)
+      },
+      (error) => {
+        let errorMessage = "Failed to get current location"
+
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location access denied. Please enable location permissions."
+            setLocationPermission("denied")
+            break
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information unavailable. Please try again."
+            break
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out. Please try again."
+            break
+        }
+
+        setError(errorMessage)
+        setLoading(false)
+      },
+      options,
+    )
   }
 
-  if (loading) {
-    return <div className="flex justify-center p-8">Loading locations...</div>
+  const LocationSkeleton = () => (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {[...Array(6)].map((_, i) => (
+        <Card key={i}>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-5 w-16" />
+            </div>
+            <Skeleton className="h-4 w-full" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+            <div className="flex gap-2 mt-4">
+              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-8 w-8" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+
+  if (loading && locations.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Location Management</h2>
+            <p className="text-muted-foreground">Manage geofence locations and QR codes</p>
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <LocationSkeleton />
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Location Management</h2>
-          <p className="text-muted-foreground">Manage geofence locations and QR codes</p>
+          <h2 className="text-xl sm:text-2xl font-bold">Location Management</h2>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Manage geofence locations and QR codes</span>
+            {!isOnline && (
+              <div className="flex items-center gap-1 text-orange-600">
+                <WifiOff className="h-3 w-3" />
+                <span>Offline</span>
+              </div>
+            )}
+            {isOnline && (
+              <div className="flex items-center gap-1 text-green-600">
+                <Wifi className="h-3 w-3" />
+                <span>Online</span>
+              </div>
+            )}
+          </div>
         </div>
+
         <Dialog open={isAddingLocation} onOpenChange={setIsAddingLocation}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={!isOnline} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Add Location
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add New Location</DialogTitle>
               <DialogDescription>Create a new geofence location for attendance tracking</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddLocation} className="space-y-4">
               <div>
-                <Label htmlFor="name">Location Name</Label>
+                <Label htmlFor="name">Location Name *</Label>
                 <Input
                   id="name"
                   value={newLocation.name}
                   onChange={(e) => setNewLocation((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g., Main Campus"
                   required
+                  className={formErrors.name ? "border-red-500" : ""}
                 />
+                {formErrors.name && (
+                  <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {formErrors.name}
+                  </p>
+                )}
               </div>
+
               <div>
-                <Label htmlFor="address">Address</Label>
+                <Label htmlFor="address">Address *</Label>
                 <Input
                   id="address"
                   value={newLocation.address}
                   onChange={(e) => setNewLocation((prev) => ({ ...prev, address: e.target.value }))}
                   placeholder="Full address"
                   required
+                  className={formErrors.address ? "border-red-500" : ""}
                 />
+                {formErrors.address && (
+                  <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {formErrors.address}
+                  </p>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="latitude">Latitude</Label>
+                  <Label htmlFor="latitude">Latitude *</Label>
                   <Input
                     id="latitude"
                     type="number"
@@ -243,10 +451,17 @@ export function LocationManagement() {
                     onChange={(e) => setNewLocation((prev) => ({ ...prev, latitude: e.target.value }))}
                     placeholder="25.2854"
                     required
+                    className={formErrors.latitude ? "border-red-500" : ""}
                   />
+                  {formErrors.latitude && (
+                    <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {formErrors.latitude}
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <Label htmlFor="longitude">Longitude</Label>
+                  <Label htmlFor="longitude">Longitude *</Label>
                   <Input
                     id="longitude"
                     type="number"
@@ -255,32 +470,88 @@ export function LocationManagement() {
                     onChange={(e) => setNewLocation((prev) => ({ ...prev, longitude: e.target.value }))}
                     placeholder="51.5310"
                     required
+                    className={formErrors.longitude ? "border-red-500" : ""}
                   />
+                  {formErrors.longitude && (
+                    <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {formErrors.longitude}
+                    </p>
+                  )}
                 </div>
               </div>
+
               <div>
-                <Label htmlFor="radius">Radius (meters)</Label>
+                <Label htmlFor="radius">Radius (meters) *</Label>
                 <Input
                   id="radius"
                   type="number"
+                  min="10"
+                  max="10000"
                   value={newLocation.radius_meters}
                   onChange={(e) => setNewLocation((prev) => ({ ...prev, radius_meters: e.target.value }))}
                   placeholder="100"
                   required
+                  className={formErrors.radius_meters ? "border-red-500" : ""}
                 />
+                {formErrors.radius_meters && (
+                  <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {formErrors.radius_meters}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  Recommended: 50-200m for buildings, 10-50m for rooms
+                </p>
               </div>
-              <Button type="button" variant="outline" onClick={getCurrentLocation} className="w-full bg-transparent">
-                <MapPin className="h-4 w-4 mr-2" />
-                Use Current Location
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={getCurrentLocation}
+                className="w-full bg-transparent"
+                disabled={loading || locationPermission === "denied"}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Getting Location...
+                  </>
+                ) : (
+                  <>
+                    <Navigation className="h-4 w-4 mr-2" />
+                    Use Current Location
+                  </>
+                )}
               </Button>
+
+              {locationPermission === "denied" && (
+                <p className="text-sm text-orange-600 text-center">
+                  Location access denied. Please enable in browser settings.
+                </p>
+              )}
+
               <div className="flex gap-2">
-                <Button type="submit" disabled={loading}>
-                  Add Location
+                <Button type="submit" disabled={loading || !isOnline} className="flex-1">
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    "Add Location"
+                  )}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setIsAddingLocation(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsAddingLocation(false)} className="flex-1">
                   Cancel
                 </Button>
               </div>
+
+              {retryCount > 0 && (
+                <p className="text-sm text-orange-600 text-center">
+                  Retried {retryCount} time(s). Please check your connection.
+                </p>
+              )}
             </form>
           </DialogContent>
         </Dialog>
@@ -288,14 +559,70 @@ export function LocationManagement() {
 
       {error && (
         <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>{error}</span>
+            {retryCount > 0 && (
+              <Button variant="outline" size="sm" onClick={() => fetchLocations()} disabled={loading}>
+                Retry
+              </Button>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
       {success && (
-        <Alert>
-          <AlertDescription>{success}</AlertDescription>
+        <Alert className="border-green-500 bg-green-50">
+          <AlertDescription className="text-green-800">{success}</AlertDescription>
         </Alert>
+      )}
+
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        {locations.map((location) => (
+          <Card key={location.id} className="hover:shadow-md transition-shadow">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base sm:text-lg truncate">{location.name}</CardTitle>
+                <Badge variant={location.is_active ? "default" : "secondary"}>
+                  {location.is_active ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+              <CardDescription className="text-sm line-clamp-2">{location.address}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>Lat: {location.latitude.toFixed(4)}</div>
+                  <div>Lng: {location.longitude.toFixed(4)}</div>
+                </div>
+                <div>Radius: {location.radius_meters}m</div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button size="sm" variant="outline" onClick={() => generateLocationQR(location)} className="flex-1">
+                  <QrCode className="h-4 w-4 mr-1" />
+                  QR Code
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setEditingLocation(location)}>
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {locations.length === 0 && !loading && (
+        <div className="text-center py-12">
+          <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium mb-2">No locations found</h3>
+          <p className="text-muted-foreground mb-4">
+            Create your first geofence location to start tracking attendance.
+          </p>
+          <Button onClick={() => setIsAddingLocation(true)} disabled={!isOnline}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Your First Location
+          </Button>
+        </div>
       )}
 
       {editingLocation && (
@@ -386,39 +713,6 @@ export function LocationManagement() {
         </Dialog>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {locations.map((location) => (
-          <Card key={location.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{location.name}</CardTitle>
-                <Badge variant={location.is_active ? "default" : "secondary"}>
-                  {location.is_active ? "Active" : "Inactive"}
-                </Badge>
-              </div>
-              <CardDescription>{location.address}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <div>Lat: {location.latitude}</div>
-                <div>Lng: {location.longitude}</div>
-                <div>Radius: {location.radius_meters}m</div>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <Button size="sm" variant="outline" onClick={() => generateLocationQR(location)}>
-                  <QrCode className="h-4 w-4 mr-1" />
-                  QR Code
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setEditingLocation(location)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* QR Code Display Dialog */}
       <Dialog open={!!qrCodeUrl} onOpenChange={() => setQrCodeUrl(null)}>
         <DialogContent>
           <DialogHeader>

@@ -46,14 +46,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Already checked out today" }, { status: 400 })
     }
 
-    const { data: checkoutLocationData, error: checkoutLocationError } = await supabase
-      .from("geofence_locations")
-      .select("name, address, district_id, districts(name)")
-      .eq("id", location_id)
-      .single()
+    let checkoutLocationData = null
+    let isRemoteCheckout = false
 
-    if (checkoutLocationError) {
-      console.error("Checkout location lookup error:", checkoutLocationError)
+    if (location_id) {
+      const { data: locationData, error: locationError } = await supabase
+        .from("geofence_locations")
+        .select("name, address, district_id, districts(name)")
+        .eq("id", location_id)
+        .single()
+
+      if (!locationError && locationData) {
+        checkoutLocationData = locationData
+      }
+    }
+
+    if (!checkoutLocationData && latitude && longitude) {
+      // Find nearest location for reference (but don't enforce distance limits)
+      const { data: nearestLocation } = await supabase
+        .from("geofence_locations")
+        .select("id, name, address, latitude, longitude, district_id, districts(name)")
+        .order("id")
+        .limit(1)
+
+      if (nearestLocation && nearestLocation.length > 0) {
+        checkoutLocationData = nearestLocation[0]
+        isRemoteCheckout = true
+      }
     }
 
     // Calculate work hours
@@ -63,11 +82,12 @@ export async function POST(request: NextRequest) {
 
     const checkoutData = {
       check_out_time: checkOutTime.toISOString(),
-      check_out_location_id: location_id,
-      work_hours: Math.round(workHours * 100) / 100, // Round to 2 decimal places
+      check_out_location_id: checkoutLocationData?.id || location_id,
+      work_hours: Math.round(workHours * 100) / 100,
       updated_at: new Date().toISOString(),
       check_out_method: qr_code_used ? "qr_code" : "gps",
-      check_out_location_name: checkoutLocationData?.name || null,
+      check_out_location_name: checkoutLocationData?.name || "Remote Location",
+      is_remote_checkout: isRemoteCheckout,
     }
 
     // Add GPS coordinates only if available
@@ -81,7 +101,7 @@ export async function POST(request: NextRequest) {
       checkoutData.qr_check_out_timestamp = qr_timestamp
     }
 
-    const isDifferentLocation = attendanceRecord.check_in_location_id !== location_id
+    const isDifferentLocation = attendanceRecord.check_in_location_id !== (checkoutLocationData?.id || location_id)
 
     // Update attendance record
     const { data: updatedRecord, error: updateError } = await supabase
@@ -103,7 +123,17 @@ export async function POST(request: NextRequest) {
 
     if (updateError) {
       console.error("Update error:", updateError)
-      return NextResponse.json({ error: "Failed to record check-out" }, { status: 500 })
+      return NextResponse.json(
+        { error: "Failed to record check-out" },
+        {
+          status: 500,
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        },
+      )
     }
 
     await supabase.from("audit_logs").insert({
@@ -118,32 +148,60 @@ export async function POST(request: NextRequest) {
         checkout_district_name: checkoutLocationData?.districts?.name,
         check_out_method: checkoutData.check_out_method,
         different_checkout_location: isDifferentLocation,
+        is_remote_checkout: isRemoteCheckout,
         work_hours_calculated: workHours,
       },
       ip_address: request.ip || null,
       user_agent: request.headers.get("user-agent"),
     })
 
-    const locationMessage = isDifferentLocation
-      ? `Checked out at ${checkoutLocationData?.name} (different from check-in location: ${attendanceRecord.geofence_locations?.name})`
-      : `Checked out at ${checkoutLocationData?.name}`
+    let locationMessage = ""
+    if (isRemoteCheckout) {
+      locationMessage = `Checked out remotely (nearest reference: ${checkoutLocationData?.name})`
+    } else if (isDifferentLocation) {
+      locationMessage = `Checked out at ${checkoutLocationData?.name} (different from check-in location: ${attendanceRecord.geofence_locations?.name})`
+    } else {
+      locationMessage = `Checked out at ${checkoutLocationData?.name}`
+    }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...updatedRecord,
-        location_tracking: {
-          check_in_location: attendanceRecord.geofence_locations?.name,
-          check_out_location: checkoutLocationData?.name,
-          different_locations: isDifferentLocation,
-          check_out_method: checkoutData.check_out_method,
-          work_hours: workHours,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          ...updatedRecord,
+          location_tracking: {
+            check_in_location: attendanceRecord.geofence_locations?.name,
+            check_out_location: checkoutLocationData?.name,
+            different_locations: isDifferentLocation,
+            is_remote_checkout: isRemoteCheckout,
+            check_out_method: checkoutData.check_out_method,
+            work_hours: workHours,
+          },
+        },
+        message: `Successfully checked out. ${locationMessage}. Work hours: ${workHours.toFixed(2)}`,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate, private",
+          Pragma: "no-cache",
+          Expires: "0",
+          "X-Content-Type-Options": "nosniff",
         },
       },
-      message: `Successfully checked out. ${locationMessage}. Work hours: ${workHours.toFixed(2)}`,
-    })
+    )
   } catch (error) {
     console.error("Check-out error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Internal server error" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    )
   }
 }

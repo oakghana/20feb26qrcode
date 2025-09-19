@@ -4,7 +4,6 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -64,45 +63,18 @@ export default function StaffRequestPage() {
         return
       }
 
-      const supabase = createClient()
-
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/auth/login`,
-          data: {
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            employee_id: formData.employeeId,
-            position: formData.position,
-            phone: formData.phone,
-            department_id: formData.departmentId,
-            is_active: false, // Set as inactive by default
-          },
-        },
-      })
-
-      if (authError) {
-        addNotification(`Registration failed: ${authError.message}`, "error")
-        return
-      }
-
       const response = await fetch("/api/auth/staff-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: authData.user?.id,
-          ...formData,
-        }),
+        body: JSON.stringify(formData),
       })
 
       if (response.ok) {
-        addNotification("Staff request submitted successfully! Please wait for admin approval.", "success")
-        router.push("/auth/login")
+        addNotification("Registration successful! Please wait for admin approval to access your account.", "success")
+        router.push("/auth/pending-approval")
       } else {
         const errorData = await response.json()
-        addNotification(`Request failed: ${errorData.error}`, "error")
+        addNotification(`Registration failed: ${errorData.error}`, "error")
       }
     } catch (error) {
       addNotification("An unexpected error occurred. Please try again.", "error")

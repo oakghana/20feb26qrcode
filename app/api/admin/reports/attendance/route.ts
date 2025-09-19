@@ -155,21 +155,43 @@ export async function GET(request: NextRequest) {
       {} as Record<string, { count: number; totalHours: number }>,
     )
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        records: enrichedRecords,
-        summary: {
-          totalRecords,
-          totalWorkHours: Math.round(totalWorkHours * 100) / 100,
-          averageWorkHours: Math.round(averageWorkHours * 100) / 100,
-          statusCounts,
-          departmentStats,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          records: enrichedRecords,
+          summary: {
+            totalRecords,
+            totalWorkHours: Math.round(totalWorkHours * 100) / 100,
+            averageWorkHours: Math.round(averageWorkHours * 100) / 100,
+            statusCounts,
+            departmentStats,
+          },
         },
       },
-    })
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate, private",
+          Pragma: "no-cache",
+          Expires: "0",
+          "X-Content-Type-Options": "nosniff",
+          "X-Frame-Options": "DENY",
+        },
+      },
+    )
   } catch (error) {
     console.error("Attendance report API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Internal server error" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    )
   }
 }

@@ -20,9 +20,6 @@ export default async function DashboardPage() {
     redirect("/auth/login")
   }
 
-  console.log("[v0] Dashboard - User ID:", user.id)
-  console.log("[v0] Dashboard - User email:", user.email)
-
   // Get user profile with error handling
   const { data: profile, error: profileError } = await supabase
     .from("user_profiles")
@@ -35,9 +32,6 @@ export default async function DashboardPage() {
     `)
     .eq("id", user.id)
     .maybeSingle() // Use maybeSingle instead of single to handle missing records
-
-  console.log("[v0] Dashboard - Profile data:", profile)
-  console.log("[v0] Dashboard - Profile error:", profileError)
 
   // If no profile exists, show a message to contact admin
   if (!profile && !profileError) {
@@ -93,9 +87,6 @@ export default async function DashboardPage() {
     .lt("check_in_time", `${today}T23:59:59`)
     .maybeSingle()
 
-  console.log("[v0] Dashboard - Today's attendance:", todayAttendance)
-  console.log("[v0] Dashboard - Attendance error:", attendanceError)
-
   // Get this month's attendance count with error handling
   const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
   const { count: monthlyAttendance, error: monthlyError } = await supabase
@@ -104,17 +95,11 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .gte("check_in_time", startOfMonth)
 
-  console.log("[v0] Dashboard - Monthly attendance:", monthlyAttendance)
-  console.log("[v0] Dashboard - Monthly error:", monthlyError)
-
   // Get total locations with error handling
   const { count: totalLocations, error: locationsError } = await supabase
     .from("geofence_locations")
     .select("*", { count: "exact", head: true })
     .eq("is_active", true)
-
-  console.log("[v0] Dashboard - Total locations:", totalLocations)
-  console.log("[v0] Dashboard - Locations error:", locationsError)
 
   return (
     <DashboardLayout>

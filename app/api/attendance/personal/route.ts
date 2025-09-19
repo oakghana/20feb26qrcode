@@ -125,12 +125,33 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Personal attendance API - Returning data with summary:", summary)
 
-    return NextResponse.json({
-      records: enhancedRecords || [],
-      summary,
-    })
+    return NextResponse.json(
+      {
+        records: enhancedRecords || [],
+        summary,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate, private",
+          Pragma: "no-cache",
+          Expires: "0",
+          "X-Content-Type-Options": "nosniff",
+        },
+      },
+    )
   } catch (error) {
     console.error("[v0] Personal attendance API - Unexpected error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Internal server error" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    )
   }
 }

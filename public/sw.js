@@ -1,0 +1,258 @@
+const CACHE_NAME = "qcc-attendance-v1"
+const STATIC_CACHE = "qcc-static-v1"
+const DYNAMIC_CACHE = "qcc-dynamic-v1"
+
+const STATIC_ASSETS = [
+  "/",
+  "/dashboard",
+  "/dashboard/attendance",
+  "/dashboard/reports",
+  "/auth/login",
+  "/images/qcc-logo.png",
+  "/manifest.json",
+]
+
+self.addEventListener("install", (event) => {
+  console.log("[SW] Installing service worker")
+  event.waitUntil(
+    caches
+      .open(STATIC_CACHE)
+      .then((cache) => {
+        console.log("[SW] Caching static assets")
+        return cache.addAll(STATIC_ASSETS)
+      })
+      .then(() => {
+        console.log("[SW] Static assets cached successfully")
+        return self.skipWaiting()
+      })
+      .catch((error) => {
+        console.error("[SW] Failed to cache static assets:", error)
+      }),
+  )
+})
+
+self.addEventListener("activate", (event) => {
+  console.log("[SW] Activating service worker")
+  event.waitUntil(
+    caches
+      .keys()
+      .then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE) {
+              console.log("[SW] Deleting old cache:", cacheName)
+              return caches.delete(cacheName)
+            }
+          }),
+        )
+      })
+      .then(() => {
+        console.log("[SW] Service worker activated")
+        return self.clients.claim()
+      }),
+  )
+})
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event
+  const url = new URL(request.url)
+
+  // Skip non-GET requests and external URLs
+  if (request.method !== "GET" || !url.origin.includes(self.location.origin)) {
+    return
+  }
+
+  // Handle API requests with network-first strategy
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          // Cache successful API responses for offline access
+          if (response.ok) {
+            const responseClone = response.clone()
+            caches.open(DYNAMIC_CACHE).then((cache) => {
+              cache.put(request, responseClone)
+            })
+          }
+          return response
+        })
+        .catch(() => {
+          // Return cached response if network fails
+          return caches.match(request).then((cachedResponse) => {
+            if (cachedResponse) {
+              return cachedResponse
+            }
+            // Return offline fallback for critical API endpoints
+            if (url.pathname.includes("/attendance") || url.pathname.includes("/profile")) {
+              return new Response(
+                JSON.stringify({
+                  error: "Offline",
+                  message: "You are currently offline. Please try again when connected.",
+                }),
+                {
+                  status: 503,
+                  statusText: "Service Unavailable",
+                  headers: { "Content-Type": "application/json" },
+                },
+              )
+            }
+            throw new Error("Network error and no cached response available")
+          })
+        }),
+    )
+    return
+  }
+
+  // Handle static assets with cache-first strategy
+  event.respondWith(
+    caches.match(request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse
+      }
+
+      return fetch(request)
+        .then((response) => {
+          // Cache successful responses
+          if (response.ok) {
+            const responseClone = response.clone()
+            caches.open(DYNAMIC_CACHE).then((cache) => {
+              cache.put(request, responseClone)
+            })
+          }
+          return response
+        })
+        .catch(() => {
+          // Return offline page for navigation requests
+          if (request.mode === "navigate") {
+            return caches.match("/dashboard").then((dashboardResponse) => {
+              return (
+                dashboardResponse ||
+                new Response("<html><body><h1>Offline</h1><p>You are currently offline.</p></body></html>", {
+                  headers: { "Content-Type": "text/html" },
+                })
+              )
+            })
+          }
+          throw new Error("Network error and no cached response available")
+        })
+    }),
+  )
+})
+
+self.addEventListener("sync", (event) => {
+  console.log("[SW] Background sync triggered:", event.tag)
+
+  if (event.tag === "attendance-sync") {
+    event.waitUntil(syncAttendanceData())
+  }
+})
+
+self.addEventListener("push", (event) => {
+  console.log("[SW] Push notification received")
+
+  const options = {
+    body: event.data ? event.data.text() : "New notification from QCC Attendance",
+    icon: "/images/qcc-logo.png",
+    badge: "/images/qcc-logo.png",
+    vibrate: [200, 100, 200],
+    data: {
+      dateOfArrival: Date.now(),
+      primaryKey: 1,
+    },
+    actions: [
+      {
+        action: "view",
+        title: "View",
+        icon: "/images/qcc-logo.png",
+      },
+      {
+        action: "close",
+        title: "Close",
+        icon: "/images/qcc-logo.png",
+      },
+    ],
+  }
+
+  event.waitUntil(self.registration.showNotification("QCC Attendance", options))
+})
+
+self.addEventListener("notificationclick", (event) => {
+  console.log("[SW] Notification clicked:", event.action)
+
+  event.notification.close()
+
+  if (event.action === "view") {
+    event.waitUntil(clients.openWindow("/dashboard"))
+  }
+})
+
+async function syncAttendanceData() {
+  try {
+    console.log("[SW] Syncing attendance data...")
+
+    // Get pending attendance records from IndexedDB
+    const pendingRecords = await getPendingAttendanceRecords()
+
+    for (const record of pendingRecords) {
+      try {
+        const response = await fetch("/api/attendance/sync", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(record),
+        })
+
+        if (response.ok) {
+          await removePendingAttendanceRecord(record.id)
+          console.log("[SW] Synced attendance record:", record.id)
+        }
+      } catch (error) {
+        console.error("[SW] Failed to sync attendance record:", error)
+      }
+    }
+  } catch (error) {
+    console.error("[SW] Background sync failed:", error)
+  }
+}
+
+async function getPendingAttendanceRecords() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("QCCAttendance", 1)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const db = request.result
+      const transaction = db.transaction(["pendingAttendance"], "readonly")
+      const store = transaction.objectStore("pendingAttendance")
+      const getAllRequest = store.getAll()
+
+      getAllRequest.onsuccess = () => resolve(getAllRequest.result)
+      getAllRequest.onerror = () => reject(getAllRequest.error)
+    }
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result
+      if (!db.objectStoreNames.contains("pendingAttendance")) {
+        db.createObjectStore("pendingAttendance", { keyPath: "id" })
+      }
+    }
+  })
+}
+
+async function removePendingAttendanceRecord(id) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("QCCAttendance", 1)
+
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const db = request.result
+      const transaction = db.transaction(["pendingAttendance"], "readwrite")
+      const store = transaction.objectStore("pendingAttendance")
+      const deleteRequest = store.delete(id)
+
+      deleteRequest.onsuccess = () => resolve()
+      deleteRequest.onerror = () => reject(deleteRequest.error)
+    }
+  })
+}

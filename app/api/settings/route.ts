@@ -28,14 +28,35 @@ export async function GET(request: NextRequest) {
       systemSettings = sysSettings
     }
 
-    return NextResponse.json({
-      userSettings,
-      systemSettings,
-      isAdmin: profile?.role === "admin",
-    })
+    return NextResponse.json(
+      {
+        userSettings,
+        systemSettings,
+        isAdmin: profile?.role === "admin",
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate, private",
+          Pragma: "no-cache",
+          Expires: "0",
+          "X-Content-Type-Options": "nosniff",
+        },
+      },
+    )
   } catch (error) {
     console.error("[v0] Settings GET error:", error)
-    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to fetch settings" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    )
   }
 }
 
@@ -114,9 +135,30 @@ export async function PUT(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ success: true, message: "Settings updated successfully" })
+    return NextResponse.json(
+      { success: true, message: "Settings updated successfully" },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate, private",
+          Pragma: "no-cache",
+          Expires: "0",
+          "X-Content-Type-Options": "nosniff",
+        },
+      },
+    )
   } catch (error) {
     console.error("[v0] Settings PUT error:", error)
-    return NextResponse.json({ error: "Failed to update settings" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to update settings" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    )
   }
 }

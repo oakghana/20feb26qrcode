@@ -38,10 +38,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch pending users" }, { status: 500 })
     }
 
-    return NextResponse.json({ data: pendingUsers })
+    return NextResponse.json(
+      { data: pendingUsers },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate, private",
+          Pragma: "no-cache",
+          Expires: "0",
+          "X-Content-Type-Options": "nosniff",
+          "X-Frame-Options": "DENY",
+        },
+      },
+    )
   } catch (error) {
     console.error("User approvals API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Internal server error" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    )
   }
 }
 
@@ -84,7 +106,16 @@ export async function POST(request: NextRequest) {
         ip_address: request.headers.get("x-forwarded-for") || "unknown",
       })
 
-      return NextResponse.json({ message: "User approved successfully" })
+      return NextResponse.json(
+        { message: "User approved successfully" },
+        {
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate, private",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        },
+      )
     } else if (action === "reject") {
       // Reject user (delete profile)
       const { error } = await supabase.from("user_profiles").delete().eq("id", userId)
@@ -102,12 +133,31 @@ export async function POST(request: NextRequest) {
         ip_address: request.headers.get("x-forwarded-for") || "unknown",
       })
 
-      return NextResponse.json({ message: "User rejected successfully" })
+      return NextResponse.json(
+        { message: "User rejected successfully" },
+        {
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate, private",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        },
+      )
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error) {
     console.error("User approval action error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Internal server error" },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    )
   }
 }

@@ -5,7 +5,11 @@ function createJsonResponse(data: any, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-cache, no-store, must-revalidate, private",
+      Pragma: "no-cache",
+      Expires: "0",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
     },
   })
 }
@@ -55,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     if (authError || !user) {
       console.error("[v0] Staff API - Auth error:", authError)
-      return createJsonResponse({ success: false, error: "Authentication required", data: [] }, { status: 401 })
+      return createJsonResponse({ success: false, error: "Authentication required", data: [] }, 401)
     }
 
     console.log("[v0] Staff API - User authenticated:", user.id)
@@ -83,7 +87,7 @@ export async function GET(request: NextRequest) {
 
     if (staffError) {
       console.error("[v0] Staff API - Query error:", staffError)
-      return createJsonResponse({ success: false, error: "Failed to fetch staff", data: [] }, { status: 500 })
+      return createJsonResponse({ success: false, error: "Failed to fetch staff", data: [] }, 500)
     }
 
     const departmentIds = [...new Set(staff?.map((s) => s.department_id).filter(Boolean))]

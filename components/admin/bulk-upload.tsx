@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { LiveRegion } from "@/components/ui/accessibility-helpers"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +27,7 @@ export function BulkUpload() {
   const [previewData, setPreviewData] = useState<any[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [activeTab, setActiveTab] = useState("staff")
+  const [announceMessage, setAnnounceMessage] = useState("")
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const file = event.target.files?.[0]
@@ -35,6 +36,7 @@ export function BulkUpload() {
     setSelectedFile(file)
     setResults(null)
     setPreviewData([])
+    setAnnounceMessage(`Selected file: ${file.name}, ${(file.size / 1024).toFixed(1)} KB`)
 
     // Parse CSV/Excel file for preview
     const reader = new FileReader()
@@ -50,7 +52,9 @@ export function BulkUpload() {
         })
         return row
       })
-      setPreviewData(data.filter((row) => Object.values(row).some((val) => val)))
+      const filteredData = data.filter((row) => Object.values(row).some((val) => val))
+      setPreviewData(filteredData)
+      setAnnounceMessage(`File parsed successfully. Preview shows ${filteredData.length} rows.`)
     }
     reader.readAsText(file)
   }
@@ -60,6 +64,7 @@ export function BulkUpload() {
 
     setUploading(true)
     setProgress(0)
+    setAnnounceMessage("Starting upload...")
 
     const formData = new FormData()
     formData.append("file", selectedFile)
@@ -76,8 +81,12 @@ export function BulkUpload() {
       const result = await response.json()
       setResults(result)
       setProgress(100)
+
+      const successMsg = `Upload completed: ${result.success} successful, ${result.failed} failed`
+      setAnnounceMessage(successMsg)
     } catch (error) {
       console.error("Upload error:", error)
+      setAnnounceMessage("Upload failed. Please try again.")
     } finally {
       setUploading(false)
     }
@@ -113,6 +122,8 @@ export function BulkUpload() {
 
   return (
     <div className="space-y-6">
+      <LiveRegion message={announceMessage} priority="polite" />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -123,52 +134,73 @@ export function BulkUpload() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="staff" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
+            <TabsList className="grid w-full grid-cols-5" role="tablist" aria-label="Upload data types">
+              <TabsTrigger value="staff" className="flex items-center gap-2" role="tab" aria-controls="staff-panel">
+                <Users className="h-4 w-4" aria-hidden="true" />
                 Staff
               </TabsTrigger>
-              <TabsTrigger value="departments" className="flex items-center gap-2">
-                <Building className="h-4 w-4" />
+              <TabsTrigger
+                value="departments"
+                className="flex items-center gap-2"
+                role="tab"
+                aria-controls="departments-panel"
+              >
+                <Building className="h-4 w-4" aria-hidden="true" />
                 Departments
               </TabsTrigger>
-              <TabsTrigger value="locations" className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
+              <TabsTrigger
+                value="locations"
+                className="flex items-center gap-2"
+                role="tab"
+                aria-controls="locations-panel"
+              >
+                <MapPin className="h-4 w-4" aria-hidden="true" />
                 Locations
               </TabsTrigger>
-              <TabsTrigger value="regions" className="flex items-center gap-2">
-                <Globe className="h-4 w-4" />
+              <TabsTrigger value="regions" className="flex items-center gap-2" role="tab" aria-controls="regions-panel">
+                <Globe className="h-4 w-4" aria-hidden="true" />
                 Regions
               </TabsTrigger>
-              <TabsTrigger value="districts" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
+              <TabsTrigger
+                value="districts"
+                className="flex items-center gap-2"
+                role="tab"
+                aria-controls="districts-panel"
+              >
+                <FileText className="h-4 w-4" aria-hidden="true" />
                 Districts
               </TabsTrigger>
             </TabsList>
 
             {["staff", "departments", "locations", "regions", "districts"].map((type) => (
-              <TabsContent key={type} value={type} className="space-y-4">
+              <TabsContent key={type} value={type} className="space-y-4" role="tabpanel" id={`${type}-panel`}>
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold capitalize">{type} Upload</h3>
                     <p className="text-sm text-muted-foreground">Upload {type} data in CSV or Excel format</p>
                     {type === "staff" && (
-                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <h4 className="font-medium text-blue-900 mb-2">Format Requirements:</h4>
-                        <ul className="text-sm text-blue-800 space-y-1">
-                          <li>
+                      <div
+                        className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg"
+                        role="region"
+                        aria-labelledby="format-requirements"
+                      >
+                        <h4 id="format-requirements" className="font-medium text-blue-900 mb-2">
+                          Format Requirements:
+                        </h4>
+                        <ul className="text-sm text-blue-800 space-y-1" role="list">
+                          <li role="listitem">
                             <strong>Email:</strong> Valid format (e.g., user@qccgh.com)
                           </li>
-                          <li>
+                          <li role="listitem">
                             <strong>Phone:</strong> Ghana format with country code (e.g., +233241234567)
                           </li>
-                          <li>
+                          <li role="listitem">
                             <strong>Employee ID:</strong> Unique alphanumeric code (e.g., EMP001, 1151908)
                           </li>
-                          <li>
+                          <li role="listitem">
                             <strong>Department Code:</strong> 2-4 letter code (e.g., IT, HR, FIN, ADM)
                           </li>
-                          <li>
+                          <li role="listitem">
                             <strong>Hire Date:</strong> YYYY-MM-DD format (e.g., 2024-01-15)
                           </li>
                         </ul>
@@ -179,10 +211,18 @@ export function BulkUpload() {
                       </div>
                     )}
                   </div>
-                  <Button variant="outline" onClick={() => downloadTemplate(type)} className="flex items-center gap-2">
-                    <Download className="h-4 w-4" />
+                  <Button
+                    variant="outline"
+                    onClick={() => downloadTemplate(type)}
+                    className="flex items-center gap-2"
+                    aria-describedby={`template-${type}-desc`}
+                  >
+                    <Download className="h-4 w-4" aria-hidden="true" />
                     Download Template
                   </Button>
+                  <p id={`template-${type}-desc`} className="sr-only">
+                    Download CSV template for {type} data import
+                  </p>
                 </div>
 
                 <div className="space-y-4">
@@ -194,12 +234,16 @@ export function BulkUpload() {
                       accept=".csv,.xlsx,.xls"
                       onChange={(e) => handleFileSelect(e, type)}
                       className="mt-1"
+                      aria-describedby={`file-${type}-help`}
                     />
+                    <p id={`file-${type}-help`} className="text-xs text-muted-foreground mt-1">
+                      Supported formats: CSV, Excel (.xlsx, .xls)
+                    </p>
                   </div>
 
                   {selectedFile && (
-                    <Alert>
-                      <FileText className="h-4 w-4" />
+                    <Alert role="status">
+                      <FileText className="h-4 w-4" aria-hidden="true" />
                       <AlertDescription>
                         Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
                       </AlertDescription>
@@ -210,23 +254,27 @@ export function BulkUpload() {
                     <div className="space-y-2">
                       <h4 className="font-medium">Preview (First 5 rows)</h4>
                       <div className="border rounded-lg overflow-hidden">
-                        <Table>
+                        <Table role="table" aria-label={`Preview of ${type} data`}>
                           <TableHeader>
-                            <TableRow>
+                            <TableRow role="row">
                               {Object.keys(previewData[0] || {})
                                 .filter((key) => key !== "row")
                                 .map((header) => (
-                                  <TableHead key={header}>{header}</TableHead>
+                                  <TableHead key={header} role="columnheader" scope="col">
+                                    {header}
+                                  </TableHead>
                                 ))}
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {previewData.map((row, index) => (
-                              <TableRow key={index}>
+                              <TableRow key={index} role="row">
                                 {Object.entries(row)
                                   .filter(([key]) => key !== "row")
                                   .map(([key, value]) => (
-                                    <TableCell key={key}>{value as string}</TableCell>
+                                    <TableCell key={key} role="gridcell">
+                                      {value as string}
+                                    </TableCell>
                                   ))}
                               </TableRow>
                             ))}
@@ -237,38 +285,38 @@ export function BulkUpload() {
                   )}
 
                   {uploading && (
-                    <div className="space-y-2">
+                    <div className="space-y-2" role="status" aria-live="polite">
                       <div className="flex items-center justify-between">
                         <span className="text-sm">Uploading...</span>
                         <span className="text-sm">{progress}%</span>
                       </div>
-                      <Progress value={progress} />
+                      <Progress value={progress} aria-label={`Upload progress: ${progress}%`} />
                     </div>
                   )}
 
                   {results && (
-                    <Alert>
+                    <Alert role="status">
                       <AlertDescription>
                         <div className="space-y-2">
                           <div className="flex gap-4">
                             <Badge variant="default">{results.success} Successful</Badge>
                             {results.failed > 0 && <Badge variant="destructive">{results.failed} Failed</Badge>}
                           </div>
-                          {results.success > 0 && (
-                            <div className="p-2 bg-blue-50 border border-blue-200 rounded">
-                              <p className="text-sm text-blue-800">
-                                <strong>Note:</strong> Records with validation warnings have been imported successfully.
-                                You can edit these records in the Staff Management section to correct any issues like
-                                invalid emails, phone numbers, or missing department assignments.
-                              </p>
-                            </div>
-                          )}
+
                           {results.errors.length > 0 && (
                             <div className="mt-2">
                               <p className="font-medium">Errors (Critical Issues Only):</p>
-                              <div className="text-sm space-y-2 max-h-60 overflow-y-auto">
+                              <div
+                                className="text-sm space-y-2 max-h-60 overflow-y-auto"
+                                role="list"
+                                aria-label="Upload errors"
+                              >
                                 {results.errors.slice(0, 10).map((error, index) => (
-                                  <div key={index} className="p-2 bg-red-50 border border-red-200 rounded">
+                                  <div
+                                    key={index}
+                                    className="p-2 bg-red-50 border border-red-200 rounded"
+                                    role="listitem"
+                                  >
                                     <div className="font-medium text-red-800">Row {error.row}:</div>
                                     <div className="text-red-700">{error.error}</div>
                                     {error.field && (
@@ -296,9 +344,17 @@ export function BulkUpload() {
                     </Alert>
                   )}
 
-                  <Button onClick={() => handleUpload(type)} disabled={!selectedFile || uploading} className="w-full">
+                  <Button
+                    onClick={() => handleUpload(type)}
+                    disabled={!selectedFile || uploading}
+                    className="w-full"
+                    aria-describedby={`upload-${type}-status`}
+                  >
                     {uploading ? "Uploading..." : `Upload ${type.charAt(0).toUpperCase() + type.slice(1)}`}
                   </Button>
+                  <p id={`upload-${type}-status`} className="sr-only">
+                    {uploading ? "Upload in progress" : selectedFile ? "Ready to upload" : "Please select a file first"}
+                  </p>
                 </div>
               </TabsContent>
             ))}

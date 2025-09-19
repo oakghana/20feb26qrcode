@@ -180,10 +180,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
 
       const validation = validateAttendanceLocation(location, locations)
 
-      if (!validation.canCheckIn) {
-        setError(validation.message)
-        return
-      }
+      const nearestLocation = validation.nearestLocation || locations[0]
 
       const response = await fetch("/api/attendance/check-out", {
         method: "POST",
@@ -193,7 +190,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         body: JSON.stringify({
           latitude: location.latitude,
           longitude: location.longitude,
-          location_id: validation.nearestLocation!.id,
+          location_id: nearestLocation?.id,
         }),
       })
 
@@ -413,10 +410,11 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             Location Status
           </CardTitle>
           <CardDescription>
-            Your current location relative to QCC Stations/Locations (20m precision required)
+            Your current location relative to QCC Stations/Locations (20m precision required for check-in)
             <br />
             <span className="text-sm text-muted-foreground">
-              You can check in/out at any QCC location, not just your assigned one
+              Check-in requires being within 20m of a QCC location. Check-out can be done from anywhere within the
+              company.
             </span>
           </CardDescription>
         </CardHeader>
@@ -492,15 +490,21 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                     {locationValidation.canCheckIn ? (
                       <>
                         <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-green-600">Within 20m - Can check in/out</span>
+                        <span className="text-sm text-green-600">Within 20m - Can check in</span>
                       </>
                     ) : (
                       <>
-                        <XCircle className="h-4 w-4 text-red-600" />
-                        <span className="text-sm text-red-600">Outside 20m range</span>
+                        <XCircle className="h-4 w-4 text-orange-600" />
+                        <span className="text-sm text-orange-600">Outside 20m range for check-in</span>
                       </>
                     )}
                   </div>
+                  {canCheckOut && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-sm text-green-600">Can check out from any location</span>
+                    </div>
+                  )}
                   <div className="text-sm mt-2 text-muted-foreground">{locationValidation.message}</div>
                 </div>
               )}
