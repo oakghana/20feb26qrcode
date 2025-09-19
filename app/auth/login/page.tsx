@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -478,6 +479,13 @@ export default function LoginPage() {
         return
       }
 
+      if (!/^\d{6}$/.test(otp)) {
+        showFieldError("OTP Code", "OTP code must contain only numbers")
+        return
+      }
+
+      console.log("[v0] Verifying OTP:", otp.substring(0, 2) + "****") // Log first 2 digits only for security
+
       const { data, error } = await supabase.auth.verifyOtp({
         email: otpEmail,
         token: otp,
@@ -485,10 +493,18 @@ export default function LoginPage() {
       })
 
       if (error) {
+        console.error("[v0] OTP verification error:", error.message)
         if (data?.user?.id) {
           await logLoginActivity(data.user.id, "otp_login_failed", false, "otp")
         }
-        showFieldError("OTP Code", "Invalid or expired OTP code. Please try again.")
+
+        if (error.message.includes("expired")) {
+          showFieldError("OTP Code", "OTP code has expired. Please request a new one.")
+        } else if (error.message.includes("invalid")) {
+          showFieldError("OTP Code", "Invalid OTP code. Please check and try again.")
+        } else {
+          showFieldError("OTP Code", "Invalid or expired OTP code. Please try again.")
+        }
         return
       }
 
@@ -508,9 +524,11 @@ export default function LoginPage() {
         await logLoginActivity(data.user.id, "otp_login_success", true, "otp")
       }
 
+      console.log("[v0] OTP verification successful")
       showSuccess("OTP verified successfully! Redirecting to dashboard...", "Login Successful")
       router.push("/dashboard")
     } catch (error: unknown) {
+      console.error("[v0] OTP verification exception:", error)
       showFieldError("OTP Code", error instanceof Error ? error.message : "Invalid OTP code")
     } finally {
       setIsLoading(false)
@@ -631,40 +649,72 @@ export default function LoginPage() {
                   </form>
                 ) : (
                   <form onSubmit={handleVerifyOtp} className="space-y-6">
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                       <Label htmlFor="otp" className="text-sm font-medium text-gray-700">
                         Enter OTP Code
                       </Label>
-                      <Input
-                        id="otp"
-                        type="text"
-                        placeholder="Enter 6-digit code"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        required
-                        maxLength={6}
-                        className="h-12 text-center text-lg tracking-widest border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59] bg-gray-50"
-                      />
+                      <div className="flex justify-center">
+                        <InputOTP maxLength={6} value={otp} onChange={(value) => setOtp(value)} className="gap-2">
+                          <InputOTPGroup>
+                            <InputOTPSlot
+                              index={0}
+                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                            />
+                            <InputOTPSlot
+                              index={1}
+                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                            />
+                            <InputOTPSlot
+                              index={2}
+                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                            />
+                            <InputOTPSlot
+                              index={3}
+                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                            />
+                            <InputOTPSlot
+                              index={4}
+                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                            />
+                            <InputOTPSlot
+                              index={5}
+                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                            />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </div>
+                      <p className="text-xs text-gray-500 text-center">Enter the 6-digit code sent to {otpEmail}</p>
                     </div>
                     <Button
                       type="submit"
                       className="w-full h-12 bg-[#4A7C59] hover:bg-[#3d6b4a] text-white font-medium rounded-lg"
-                      disabled={isLoading}
+                      disabled={isLoading || otp.length !== 6}
                     >
                       {isLoading ? "Verifying..." : "Verify OTP"}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full h-12 border-gray-300 text-gray-700 hover:bg-gray-50 bg-transparent"
-                      onClick={() => {
-                        setOtpSent(false)
-                        setOtp("")
-                        setSuccessMessage(null)
-                      }}
-                    >
-                      Back to Email Entry
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 h-12 border-gray-300 text-gray-700 hover:bg-gray-50 bg-transparent"
+                        onClick={() => {
+                          setOtpSent(false)
+                          setOtp("")
+                          setSuccessMessage(null)
+                        }}
+                      >
+                        Back to Email
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 h-12 border-[#4A7C59] text-[#4A7C59] hover:bg-[#4A7C59] hover:text-white bg-transparent"
+                        onClick={handleSendOtp}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? "Sending..." : "Resend OTP"}
+                      </Button>
+                    </div>
                   </form>
                 )}
               </TabsContent>

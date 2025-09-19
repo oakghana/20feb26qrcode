@@ -181,35 +181,46 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       try {
         location = await getCurrentLocation()
         setUserLocation(location)
+        console.log("[v0] Location acquired for check-out:", location)
 
         const nearest = findNearestLocation(location, locations)
         nearestLocation = nearest?.location || locations[0]
-      } catch (error) {
-        nearestLocation = locations[0]
-        console.log("[v0] Location unavailable for check-out, using default location:", error)
+      } catch (locationError) {
+        console.log("[v0] Location unavailable for check-out, proceeding without GPS:", locationError)
+        nearestLocation = locations[0] // Use first available location as fallback
       }
+
+      console.log("[v0] Attempting check-out with location:", nearestLocation?.name)
+
+      const requestBody = {
+        latitude: location?.latitude || null,
+        longitude: location?.longitude || null,
+        location_id: nearestLocation?.id || null,
+      }
+
+      console.log("[v0] Check-out request body:", requestBody)
 
       const response = await fetch("/api/attendance/check-out", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          latitude: location?.latitude,
-          longitude: location?.longitude,
-          location_id: nearestLocation?.id,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       const result = await response.json()
+      console.log("[v0] Check-out response:", result)
 
       if (result.success) {
         setSuccess(result.message)
-        window.location.reload()
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
       } else {
         setError(result.error || "Failed to check out")
       }
     } catch (error) {
+      console.error("[v0] Check-out error:", error)
       const message = error instanceof Error ? error.message : "Failed to check out"
       setError(message)
     } finally {
@@ -307,7 +318,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         setError(result.error || "Failed to check out")
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to check out with QR code"
+      const message = error instanceof Error ? error.message : "Failed to check out"
       setError(message)
     } finally {
       setIsLoading(false)

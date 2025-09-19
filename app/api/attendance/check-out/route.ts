@@ -18,9 +18,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { latitude, longitude, location_id, qr_code_used, qr_timestamp } = body
 
-    if (!qr_code_used && (!latitude || !longitude)) {
-      return NextResponse.json({ error: "Location coordinates are required for GPS check-out" }, { status: 400 })
-    }
+    console.log("[v0] Check-out request:", { latitude, longitude, location_id, qr_code_used })
 
     // Find today's attendance record
     const today = new Date().toISOString().split("T")[0]
@@ -39,10 +37,12 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (findError || !attendanceRecord) {
+      console.log("[v0] No attendance record found:", findError)
       return NextResponse.json({ error: "No check-in record found for today" }, { status: 400 })
     }
 
     if (attendanceRecord.check_out_time) {
+      console.log("[v0] Already checked out:", attendanceRecord.check_out_time)
       return NextResponse.json({ error: "Already checked out today" }, { status: 400 })
     }
 
@@ -52,26 +52,27 @@ export async function POST(request: NextRequest) {
     if (location_id) {
       const { data: locationData, error: locationError } = await supabase
         .from("geofence_locations")
-        .select("name, address, district_id, districts(name)")
+        .select("id, name, address, district_id, districts(name)")
         .eq("id", location_id)
         .single()
 
       if (!locationError && locationData) {
         checkoutLocationData = locationData
+        console.log("[v0] Using provided location:", locationData.name)
       }
     }
 
-    if (!checkoutLocationData && latitude && longitude) {
-      // Find nearest location for reference (but don't enforce distance limits)
-      const { data: nearestLocation } = await supabase
+    if (!checkoutLocationData) {
+      const { data: defaultLocation } = await supabase
         .from("geofence_locations")
         .select("id, name, address, latitude, longitude, district_id, districts(name)")
         .order("id")
         .limit(1)
 
-      if (nearestLocation && nearestLocation.length > 0) {
-        checkoutLocationData = nearestLocation[0]
+      if (defaultLocation && defaultLocation.length > 0) {
+        checkoutLocationData = defaultLocation[0]
         isRemoteCheckout = true
+        console.log("[v0] Using default location:", checkoutLocationData.name)
       }
     }
 
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     const checkoutData = {
       check_out_time: checkOutTime.toISOString(),
-      check_out_location_id: checkoutLocationData?.id || location_id,
+      check_out_location_id: checkoutLocationData?.id || null,
       work_hours: Math.round(workHours * 100) / 100,
       updated_at: new Date().toISOString(),
       check_out_method: qr_code_used ? "qr_code" : "gps",
@@ -94,6 +95,9 @@ export async function POST(request: NextRequest) {
     if (latitude && longitude) {
       checkoutData.check_out_latitude = latitude
       checkoutData.check_out_longitude = longitude
+      console.log("[v0] GPS coordinates recorded")
+    } else {
+      console.log("[v0] No GPS coordinates available")
     }
 
     // Add QR code timestamp if used
@@ -101,7 +105,9 @@ export async function POST(request: NextRequest) {
       checkoutData.qr_check_out_timestamp = qr_timestamp
     }
 
-    const isDifferentLocation = attendanceRecord.check_in_location_id !== (checkoutLocationData?.id || location_id)
+    const isDifferentLocation = attendanceRecord.check_in_location_id !== (checkoutLocationData?.id || null)
+
+    console.log("[v0] Updating attendance record with:", checkoutData)
 
     // Update attendance record
     const { data: updatedRecord, error: updateError } = await supabase
@@ -122,9 +128,9 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (updateError) {
-      console.error("Update error:", updateError)
+      console.error("[v0] Update error:", updateError)
       return NextResponse.json(
-        { error: "Failed to record check-out" },
+        { error: `Failed to record check-out: ${updateError.message}` },
         {
           status: 500,
           headers: {
@@ -136,33 +142,42 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    await supabase.from("audit_logs").insert({
-      user_id: user.id,
-      action: "check_out",
-      table_name: "attendance_records",
-      record_id: attendanceRecord.id,
-      old_values: attendanceRecord,
-      new_values: {
-        ...updatedRecord,
-        checkout_location_name: checkoutLocationData?.name,
-        checkout_district_name: checkoutLocationData?.districts?.name,
-        check_out_method: checkoutData.check_out_method,
-        different_checkout_location: isDifferentLocation,
-        is_remote_checkout: isRemoteCheckout,
-        work_hours_calculated: workHours,
-      },
-      ip_address: request.ip || null,
-      user_agent: request.headers.get("user-agent"),
-    })
+    console.log("[v0] Successfully updated attendance record")
+
+    try {
+      await supabase.from("audit_logs").insert({
+        user_id: user.id,
+        action: "check_out",
+        table_name: "attendance_records",
+        record_id: attendanceRecord.id,
+        old_values: attendanceRecord,
+        new_values: {
+          ...updatedRecord,
+          checkout_location_name: checkoutLocationData?.name,
+          checkout_district_name: checkoutLocationData?.districts?.name,
+          check_out_method: checkoutData.check_out_method,
+          different_checkout_location: isDifferentLocation,
+          is_remote_checkout: isRemoteCheckout,
+          work_hours_calculated: workHours,
+        },
+        ip_address: request.ip || null,
+        user_agent: request.headers.get("user-agent"),
+      })
+      console.log("[v0] Audit log created successfully")
+    } catch (auditError) {
+      console.error("[v0] Audit log error (non-critical):", auditError)
+    }
 
     let locationMessage = ""
     if (isRemoteCheckout) {
-      locationMessage = `Checked out remotely (nearest reference: ${checkoutLocationData?.name})`
+      locationMessage = `Checked out remotely (reference: ${checkoutLocationData?.name || "Unknown"})`
     } else if (isDifferentLocation) {
       locationMessage = `Checked out at ${checkoutLocationData?.name} (different from check-in location: ${attendanceRecord.geofence_locations?.name})`
     } else {
-      locationMessage = `Checked out at ${checkoutLocationData?.name}`
+      locationMessage = `Checked out at ${checkoutLocationData?.name || "Unknown Location"}`
     }
+
+    console.log("[v0] Check-out successful:", locationMessage)
 
     return NextResponse.json(
       {
@@ -191,9 +206,9 @@ export async function POST(request: NextRequest) {
       },
     )
   } catch (error) {
-    console.error("Check-out error:", error)
+    console.error("[v0] Check-out error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: `Internal server error: ${error instanceof Error ? error.message : "Unknown error"}` },
       {
         status: 500,
         headers: {
