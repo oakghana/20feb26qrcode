@@ -29,9 +29,14 @@ export default function LoginPage() {
 
   const logLoginActivity = async (userId: string, action: string, success: boolean, method: string) => {
     try {
-      await fetch("/api/auth/login-log", {
+      console.log("[v0] Logging login activity:", { userId, action, success, method })
+
+      const response = await fetch("/api/auth/login-log", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify({
           user_id: userId,
           action,
@@ -41,8 +46,23 @@ export default function LoginPage() {
           user_agent: navigator.userAgent,
         }),
       })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+        console.error("[v0] Login activity logging failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+        })
+        // Don't throw error - login should continue even if logging fails
+        return
+      }
+
+      const result = await response.json()
+      console.log("[v0] Login activity logged successfully:", result)
     } catch (error) {
-      console.error("Failed to log login activity:", error)
+      console.error("[v0] Failed to log login activity:", error)
+      // Don't throw error - login should continue even if logging fails
     }
   }
 

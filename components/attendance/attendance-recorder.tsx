@@ -24,8 +24,20 @@ import {
 import { getDeviceInfo } from "@/lib/device-info"
 import { QRScanner } from "@/components/qr/qr-scanner"
 import { validateQRCode, type QRCodeData } from "@/lib/qr-code"
-import { MapPin, Clock, CheckCircle, Loader2, AlertTriangle, QrCode, Navigation, Wifi, WifiOff } from "lucide-react"
+import {
+  MapPin,
+  Clock,
+  CheckCircle,
+  Loader2,
+  AlertTriangle,
+  QrCode,
+  Navigation,
+  Wifi,
+  WifiOff,
+  Building,
+} from "lucide-react"
 import { useRealTimeLocations } from "@/hooks/use-real-time-locations"
+import { createClient } from "@/lib/supabase/client"
 
 interface GeofenceLocation {
   id: string
@@ -34,6 +46,25 @@ interface GeofenceLocation {
   latitude: number
   longitude: number
   radius_meters: number
+}
+
+interface UserProfile {
+  id: string
+  first_name: string
+  last_name: string
+  employee_id: string
+  position: string
+  assigned_location_id?: string
+  departments?: {
+    name: string
+    code: string
+  }
+}
+
+interface AssignedLocationInfo {
+  location: GeofenceLocation
+  distance?: number
+  isAtAssignedLocation: boolean
 }
 
 interface AttendanceRecorderProps {
@@ -52,6 +83,8 @@ interface AttendanceRecorderProps {
 export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [userLocation, setUserLocation] = useState<LocationData | null>(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [assignedLocationInfo, setAssignedLocationInfo] = useState<AssignedLocationInfo | null>(null)
   const { locations, loading: locationsLoading, error: locationsError, isConnected } = useRealTimeLocations()
   const [locationValidation, setLocationValidation] = useState<{
     canCheckIn: boolean
@@ -73,6 +106,38 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
   const [showLocationHelp, setShowLocationHelp] = useState(false)
   const [selectedLocationId, setSelectedLocationId] = useState<string>("")
   const [showLocationSelector, setShowLocationSelector] = useState(false)
+
+  useEffect(() => {
+    fetchUserProfile()
+  }, [])
+
+  useEffect(() => {
+    if (userLocation && locations.length > 0 && userProfile?.assigned_location_id) {
+      const assignedLocation = locations.find((loc) => loc.id === userProfile.assigned_location_id)
+      if (assignedLocation) {
+        const distance = calculateDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          assignedLocation.latitude,
+          assignedLocation.longitude,
+        )
+        const isAtAssignedLocation = distance <= assignedLocation.radius_meters
+
+        setAssignedLocationInfo({
+          location: assignedLocation,
+          distance: Math.round(distance),
+          isAtAssignedLocation,
+        })
+
+        console.log("[v0] Assigned location info:", {
+          name: assignedLocation.name,
+          distance: Math.round(distance),
+          isAtAssignedLocation,
+          radius: assignedLocation.radius_meters,
+        })
+      }
+    }
+  }, [userLocation, locations, userProfile])
 
   useEffect(() => {
     if (userLocation && locations.length > 0) {
@@ -129,6 +194,50 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       setError(`Location data error: ${locationsError}`)
     }
   }, [locationsError])
+
+  const fetchUserProfile = async () => {
+    try {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        const { data: profileData, error } = await supabase
+          .from("user_profiles")
+          .select(`
+            id,
+            first_name,
+            last_name,
+            employee_id,
+            position,
+            assigned_location_id,
+            departments (
+              name,
+              code
+            )
+          `)
+          .eq("id", user.id)
+          .single()
+
+        if (error) {
+          console.error("[v0] Failed to fetch user profile:", error)
+          return
+        }
+
+        setUserProfile(profileData)
+        console.log("[v0] User profile loaded:", {
+          name: `${profileData.first_name} ${profileData.last_name}`,
+          employee_id: profileData.employee_id,
+          position: profileData.position,
+          assigned_location_id: profileData.assigned_location_id,
+          department: profileData.departments?.name,
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching user profile:", error)
+    }
+  }
 
   const getCurrentLocationData = async () => {
     setIsLoading(true)
@@ -538,15 +647,75 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             </div>
           </CardTitle>
           <CardDescription>
-            You can check in at any registered QCC location. Check-out can be done from anywhere within the company.
+            Your current location relative to QCC Stations/Locations (50m proximity required for check-in)
             <br />
-            <span className="text-sm text-muted-foreground">
-              Select your location from the available QCC stations/offices.
-              {isConnected && " Location data updates automatically when admins make changes."}
-            </span>
+            Check-in requires being within 50m of any QCC location. Check-out can be done from anywhere within the
+            company. Location data updates automatically when admins make changes.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {userProfile && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="font-medium text-blue-900 mb-2 flex items-center gap-2">
+                <Building className="h-4 w-4" />
+                Your Assignment Information
+              </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-blue-700">Employee:</span>
+                  <span className="font-medium text-blue-900">
+                    {userProfile.first_name} {userProfile.last_name} ({userProfile.employee_id})
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-700">Position:</span>
+                  <span className="font-medium text-blue-900">{userProfile.position}</span>
+                </div>
+                {userProfile.departments && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-700">Department:</span>
+                    <span className="font-medium text-blue-900">{userProfile.departments.name}</span>
+                  </div>
+                )}
+                {assignedLocationInfo ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700">Assigned Location:</span>
+                      <span className="font-medium text-blue-900">{assignedLocationInfo.location.name}</span>
+                    </div>
+                    {assignedLocationInfo.distance !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Distance to Assignment:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-blue-900">{assignedLocationInfo.distance}m</span>
+                          {assignedLocationInfo.isAtAssignedLocation ? (
+                            <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
+                              At Assigned Location
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800">
+                              Remote Location
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : userProfile.assigned_location_id ? (
+                  <div className="flex justify-between">
+                    <span className="text-blue-700">Assigned Location:</span>
+                    <span className="font-medium text-blue-900">Loading...</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-blue-700">Assigned Location:</span>
+                    <span className="font-medium text-orange-600">Not assigned</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {locationsLoading && locations.length === 0 ? (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
