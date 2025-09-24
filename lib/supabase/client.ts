@@ -8,24 +8,41 @@ const supabaseAnonKey =
 export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      // Disable automatic token refresh in preview environments to prevent network errors
       autoRefreshToken: !window.location.hostname.includes("vusercontent.net"),
-      // Reduce session persistence issues in preview environments
       persistSession: !window.location.hostname.includes("vusercontent.net"),
-      // Add retry configuration for network issues
       detectSessionInUrl: false,
+      // Add error handling for refresh token failures
+      onAuthStateChange: (event, session) => {
+        if (event === "TOKEN_REFRESHED" && !session) {
+          console.log("[v0] Token refresh failed, redirecting to login")
+          // Clear any stale session data
+          localStorage.removeItem("supabase.auth.token")
+          // Redirect to login if we're not already there
+          if (!window.location.pathname.startsWith("/auth")) {
+            window.location.href = "/auth/login"
+          }
+        }
+      },
     },
     global: {
-      // Add custom fetch with error handling
       fetch: (url, options = {}) => {
         console.log("[v0] Supabase client fetch:", url)
         return fetch(url, {
           ...options,
-          // Add timeout to prevent hanging requests
           signal: AbortSignal.timeout(10000),
         }).catch((error) => {
           console.error("[v0] Supabase client fetch error:", error)
-          // Return a rejected promise to maintain error handling flow
+
+          // Handle specific auth errors
+          if (error.message?.includes("refresh_token_not_found") || error.message?.includes("Invalid Refresh Token")) {
+            console.log("[v0] Refresh token error detected, clearing session")
+            // Clear local storage and redirect to login
+            localStorage.removeItem("supabase.auth.token")
+            if (!window.location.pathname.startsWith("/auth")) {
+              window.location.href = "/auth/login"
+            }
+          }
+
           throw error
         })
       },

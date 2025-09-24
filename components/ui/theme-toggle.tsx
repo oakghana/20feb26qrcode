@@ -1,12 +1,12 @@
 "use client"
-import { Moon, Sun } from "lucide-react"
+import { Moon, Sun, Palette } from "lucide-react"
 import { useTheme } from "next-themes"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export function ThemeToggle() {
-  const { setTheme } = useTheme()
+  const { setTheme, theme } = useTheme()
 
   return (
     <DropdownMenu>
@@ -18,16 +18,25 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[140px]">
-        <DropdownMenuItem onClick={() => setTheme("light")} className="cursor-pointer">
+        <DropdownMenuItem
+          onClick={() => setTheme("light")}
+          className={`cursor-pointer ${theme === "light" ? "bg-accent" : ""}`}
+        >
           <Sun className="mr-2 h-4 w-4" />
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")} className="cursor-pointer">
+        <DropdownMenuItem
+          onClick={() => setTheme("dark")}
+          className={`cursor-pointer ${theme === "dark" ? "bg-accent" : ""}`}
+        >
           <Moon className="mr-2 h-4 w-4" />
           Dark Orange
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")} className="cursor-pointer">
-          <div className="mr-2 h-4 w-4 rounded-full bg-gradient-to-r from-orange-400 to-orange-600" />
+        <DropdownMenuItem
+          onClick={() => setTheme("system")}
+          className={`cursor-pointer ${theme === "system" ? "bg-accent" : ""}`}
+        >
+          <Palette className="mr-2 h-4 w-4" />
           System
         </DropdownMenuItem>
       </DropdownMenuContent>

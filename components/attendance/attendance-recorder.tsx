@@ -550,9 +550,8 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     setError(null)
 
     try {
-      // Force refresh location data by adding cache-busting parameter
       const timestamp = Date.now()
-      const response = await fetch(`/api/attendance/locations?refresh=${timestamp}`, {
+      const response = await fetch(`/api/attendance/user-location?refresh=${timestamp}`, {
         cache: "no-store",
       })
 
@@ -560,7 +559,12 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         // Trigger a page reload to ensure all data is fresh
         window.location.reload()
       } else {
-        setError("Failed to refresh location data")
+        const result = await response.json()
+        if (response.status === 403) {
+          setError("Location access restricted. Please contact your administrator.")
+        } else {
+          setError(result.error || "Failed to refresh location data")
+        }
       }
     } catch (error) {
       setError("Failed to refresh location data")

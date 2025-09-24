@@ -47,6 +47,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const getValidIpAddress = () => {
+      const possibleIps = [
+        request.ip,
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
+        request.headers.get("x-real-ip"),
+        request.headers.get("cf-connecting-ip"),
+        request.headers.get("x-client-ip"),
+      ]
+
+      for (const ip of possibleIps) {
+        if (ip && ip !== "unknown" && ip !== "::1" && ip !== "127.0.0.1") {
+          // Validate IP format (basic check)
+          if (/^(\d{1,3}\.){3}\d{1,3}$/.test(ip) || /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/.test(ip)) {
+            return ip
+          }
+        }
+      }
+
+      // Return null instead of "unknown" to avoid PostgreSQL inet type error
+      return null
+    }
+
+    const validIpAddress = getValidIpAddress()
+
     const auditLogData = {
       user_id,
       action,
@@ -57,12 +81,7 @@ export async function POST(request: NextRequest) {
         timestamp: new Date().toISOString(),
         user_agent: user_agent || request.headers.get("user-agent") || "unknown",
       },
-      ip_address:
-        request.ip ||
-        request.headers.get("x-forwarded-for") ||
-        request.headers.get("x-real-ip") ||
-        request.headers.get("cf-connecting-ip") ||
-        "unknown",
+      ip_address: validIpAddress, // This will be null if no valid IP is found
       user_agent: user_agent || request.headers.get("user-agent") || "unknown",
     }
 

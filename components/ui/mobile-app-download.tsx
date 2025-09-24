@@ -40,37 +40,35 @@ export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppD
       setIsInstalled(standalone)
     }
 
-    const handlePWAInstallAvailable = (event: CustomEvent) => {
-      console.log("[PWA] Install available event received")
-      setDeferredPrompt(event.detail as BeforeInstallPromptEvent)
+    const handleBeforeInstallPrompt = (e: Event) => {
+      console.log("[PWA] Install prompt available")
+      e.preventDefault()
+      setDeferredPrompt(e as BeforeInstallPromptEvent)
     }
 
-    const handlePWAInstalled = () => {
-      console.log("[PWA] App installed event received")
+    const handleAppInstalled = () => {
+      console.log("[PWA] App installed successfully")
       setIsInstalled(true)
       setDeferredPrompt(null)
+      setIsInstalling(false)
     }
 
     checkInstalled()
 
-    window.addEventListener("pwa-install-available", handlePWAInstallAvailable as EventListener)
-    window.addEventListener("pwa-installed", handlePWAInstalled)
-
-    if ((window as any).deferredPrompt) {
-      setDeferredPrompt((window as any).deferredPrompt)
-    }
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+    window.addEventListener("appinstalled", handleAppInstalled)
 
     return () => {
-      window.removeEventListener("pwa-install-available", handlePWAInstallAvailable as EventListener)
-      window.removeEventListener("pwa-installed", handlePWAInstalled)
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+      window.removeEventListener("appinstalled", handleAppInstalled)
     }
   }, [])
 
   const handlePWAInstall = async () => {
     setIsInstalling(true)
 
-    if (deferredPrompt) {
-      try {
+    try {
+      if (deferredPrompt) {
         console.log("[PWA] Showing install prompt")
         await deferredPrompt.prompt()
         const { outcome } = await deferredPrompt.userChoice
@@ -78,44 +76,48 @@ export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppD
 
         if (outcome === "accepted") {
           console.log("[PWA] User accepted the install prompt")
+          // Don't reset deferredPrompt here - let the appinstalled event handle it
         } else {
           console.log("[PWA] User dismissed the install prompt")
+          setDeferredPrompt(null)
+          setIsInstalling(false)
+        }
+      } else {
+        // Provide manual installation instructions
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        const isAndroid = /Android/.test(navigator.userAgent)
+        const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
+
+        let instructions = "📱 Install QCC Attendance App:\n\n"
+
+        if (isIOS && isSafari) {
+          instructions += "1. Tap the Share button (⬆️) at the bottom\n"
+          instructions += "2. Scroll down and tap 'Add to Home Screen'\n"
+          instructions += "3. Tap 'Add' to install the app\n\n"
+        } else if (isAndroid) {
+          instructions += "1. Tap the menu (⋮) in your browser\n"
+          instructions += "2. Select 'Add to Home screen' or 'Install app'\n"
+          instructions += "3. Tap 'Add' or 'Install' to confirm\n\n"
+        } else {
+          instructions += "1. Look for an install icon (⬇️) in your browser's address bar\n"
+          instructions += "2. Click it and select 'Install'\n"
+          instructions += "3. Or use your browser's menu to 'Install app'\n\n"
         }
 
-        setDeferredPrompt(null)
-      } catch (error) {
-        console.error("[PWA] Error during installation:", error)
+        instructions += "✅ App Features:\n"
+        instructions += "• Real-time GPS location tracking\n"
+        instructions += "• Offline attendance recording\n"
+        instructions += "• Push notifications\n"
+        instructions += "• Native mobile experience\n"
+        instructions += "• Instant proximity updates"
+
+        alert(instructions)
+        setIsInstalling(false)
       }
-    } else {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-      const isAndroid = /Android/.test(navigator.userAgent)
-
-      let instructions = "To install the QCC Attendance app:\n\n"
-
-      if (isIOS) {
-        instructions += "1. Tap the Share button (⬆️) at the bottom of Safari\n"
-        instructions += "2. Scroll down and tap 'Add to Home Screen'\n"
-        instructions += "3. Tap 'Add' to install the app\n\n"
-      } else if (isAndroid) {
-        instructions += "1. Tap the menu (⋮) in your browser\n"
-        instructions += "2. Select 'Add to Home screen' or 'Install app'\n"
-        instructions += "3. Tap 'Add' or 'Install' to confirm\n\n"
-      } else {
-        instructions += "1. Look for an install icon in your browser's address bar\n"
-        instructions += "2. Click it and select 'Install'\n"
-        instructions += "3. Or use your browser's menu to 'Install app'\n\n"
-      }
-
-      instructions += "✅ Features included:\n"
-      instructions += "• Real-time GPS location tracking\n"
-      instructions += "• Offline attendance recording\n"
-      instructions += "• Push notifications\n"
-      instructions += "• Native mobile experience"
-
-      alert(instructions)
+    } catch (error) {
+      console.error("[PWA] Installation error:", error)
+      setIsInstalling(false)
     }
-
-    setIsInstalling(false)
   }
 
   const canInstall = deferredPrompt !== null && !isInstalled

@@ -5,6 +5,22 @@ export async function GET() {
   try {
     const supabase = await createClient()
 
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Check if user has admin or department_head role
+    const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
+
+    if (!profile || !["admin", "department_head"].includes(profile.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
     const { data: locations, error } = await supabase.from("geofence_locations").select("*").order("name")
 
     if (error) throw error

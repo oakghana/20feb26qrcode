@@ -33,6 +33,16 @@ export function PWAServiceWorker() {
         const handleOnline = () => {
           console.log("[PWA] App is online")
           window.dispatchEvent(new CustomEvent("pwa-online"))
+
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.ready
+              .then((registration) => {
+                return registration.sync.register("location-sync")
+              })
+              .catch((error) => {
+                console.error("[PWA] Failed to register location sync on online:", error)
+              })
+          }
         }
 
         const handleOffline = () => {
@@ -81,18 +91,47 @@ export function PWAServiceWorker() {
             }
           })
 
-          // Handle service worker messages
           navigator.serviceWorker.addEventListener("message", (event) => {
             console.log("[PWA] Message from service worker:", event.data)
 
             if (event.data.type === "LOCATION_UPDATE") {
-              console.log("[PWA] Location data updated:", event.data.data)
+              console.log("[PWA] Location data updated:", event.data.data?.length, "locations")
+              // Dispatch custom event for components to listen to
+              window.dispatchEvent(
+                new CustomEvent("location-updated", {
+                  detail: {
+                    locations: event.data.data,
+                    timestamp: event.data.timestamp,
+                    userRole: event.data.user_role,
+                  },
+                }),
+              )
+            }
+
+            if (event.data.type === "PROXIMITY_UPDATE") {
+              console.log("[PWA] Proximity settings updated")
+              // Dispatch custom event for components to listen to
+              window.dispatchEvent(
+                new CustomEvent("proximity-updated", {
+                  detail: {
+                    settings: event.data.data,
+                    timestamp: event.data.timestamp,
+                  },
+                }),
+              )
             }
           })
 
           // Register for background sync if supported
           if ("sync" in window.ServiceWorkerRegistration.prototype) {
             console.log("[PWA] Background sync supported")
+
+            try {
+              await registration.sync.register("location-sync")
+              console.log("[PWA] Initial location sync registered")
+            } catch (error) {
+              console.error("[PWA] Failed to register initial location sync:", error)
+            }
           }
 
           // Request persistent storage for offline functionality

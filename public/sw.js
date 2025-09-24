@@ -149,6 +149,10 @@ self.addEventListener("sync", (event) => {
   if (event.tag === "location-sync") {
     event.waitUntil(syncLocationData())
   }
+
+  if (event.tag === "proximity-sync") {
+    event.waitUntil(syncProximitySettings())
+  }
 })
 
 self.addEventListener("push", (event) => {
@@ -265,32 +269,72 @@ async function syncLocationData() {
   try {
     console.log("[v0] [SW] Syncing location data...")
 
-    // Fetch latest location data and cache it
-    const response = await fetch("/api/attendance/locations")
+    const response = await fetch("/api/attendance/user-location")
     if (response.ok) {
-      const locations = await response.json()
+      const result = await response.json()
 
-      // Cache the location data for offline access
+      if (result.success && result.data) {
+        const locations = result.data
+
+        // Cache the location data for offline access
+        const cache = await caches.open(DYNAMIC_CACHE)
+        await cache.put(
+          "/api/attendance/user-location",
+          new Response(JSON.stringify(result), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+
+        console.log("[v0] [SW] Location data synced and cached:", locations.length, "locations")
+
+        // Notify all clients about location updates with enhanced data
+        const clients = await self.clients.matchAll()
+        clients.forEach((client) => {
+          client.postMessage({
+            type: "LOCATION_UPDATE",
+            data: locations,
+            timestamp: Date.now(),
+            user_role: result.user_role,
+            assigned_location_only: result.assigned_location_only,
+          })
+        })
+      }
+    }
+  } catch (error) {
+    console.error("[v0] [SW] Location sync failed:", error)
+  }
+}
+
+async function syncProximitySettings() {
+  try {
+    console.log("[v0] [SW] Syncing proximity settings...")
+
+    const response = await fetch("/api/settings")
+    if (response.ok) {
+      const settings = await response.json()
+
+      // Cache the settings data for offline access
       const cache = await caches.open(DYNAMIC_CACHE)
       await cache.put(
-        "/api/attendance/locations",
-        new Response(JSON.stringify(locations), {
+        "/api/settings",
+        new Response(JSON.stringify(settings), {
           headers: { "Content-Type": "application/json" },
         }),
       )
 
-      console.log("[v0] [SW] Location data synced and cached")
+      console.log("[v0] [SW] Proximity settings synced and cached")
 
-      // Notify all clients about location updates
+      // Notify all clients about proximity settings updates
       const clients = await self.clients.matchAll()
       clients.forEach((client) => {
         client.postMessage({
-          type: "LOCATION_UPDATE",
-          data: locations,
+          type: "PROXIMITY_UPDATE",
+          data: settings,
+          timestamp: Date.now(),
         })
       })
     }
   } catch (error) {
-    console.error("[v0] [SW] Location sync failed:", error)
+    console.error("[v0] [SW] Proximity settings sync failed:", error)
   }
 }
