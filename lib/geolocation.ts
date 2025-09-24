@@ -12,6 +12,13 @@ export interface GeofenceLocation {
   radius_meters: number
 }
 
+export interface ProximitySettings {
+  checkInProximityRange: number
+  defaultRadius: number
+  requireHighAccuracy: boolean
+  allowManualOverride: boolean
+}
+
 export class GeolocationError extends Error {
   constructor(
     message: string,
@@ -55,7 +62,7 @@ export async function getCurrentLocation(): Promise<LocationData> {
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000, // Increased timeout from 10s to 15s
+        timeout: 15000,
         maximumAge: 60000,
       },
     )
@@ -134,6 +141,7 @@ export function findNearestLocation(
 export function validateAttendanceLocation(
   userLocation: LocationData,
   qccLocations: GeofenceLocation[],
+  proximitySettings?: ProximitySettings,
 ): {
   canCheckIn: boolean
   nearestLocation?: GeofenceLocation
@@ -143,6 +151,8 @@ export function validateAttendanceLocation(
   allLocations?: Array<{ location: GeofenceLocation; distance: number }>
   availableLocations?: Array<{ location: GeofenceLocation; distance: number }>
 } {
+  const checkInRange = proximitySettings?.checkInProximityRange || 500
+
   const nearest = findNearestLocation(userLocation, qccLocations)
 
   if (!nearest) {
@@ -161,7 +171,7 @@ export function validateAttendanceLocation(
     }))
     .sort((a, b) => a.distance - b.distance)
 
-  const availableLocations = allLocationsWithDistance.filter(({ distance }) => distance <= 50)
+  const availableLocations = allLocationsWithDistance.filter(({ distance }) => distance <= checkInRange)
 
   const validation = isWithinGeofence(userLocation, nearest.location)
 
@@ -175,7 +185,7 @@ export function validateAttendanceLocation(
       message = `Ready for check-in at ${availableLocations.length} nearby locations. Nearest: ${availableLocations[0].location.name} (${availableLocations[0].distance}m away)`
     }
   } else {
-    message = `Outside 50m range - Cannot check in. Nearest location: ${nearest.location.name} (Distance: ${nearest.distance}m)`
+    message = `Outside ${checkInRange}m range - Cannot check in. Nearest location: ${nearest.location.name} (Distance: ${nearest.distance}m)`
   }
 
   return {

@@ -34,6 +34,7 @@ import {
   UserCheck,
   User,
   ChevronRight,
+  FileText,
 } from "lucide-react"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
@@ -70,6 +71,20 @@ const navigationItems = [
     icon: Clock,
     roles: ["admin", "department_head", "staff"],
     category: "main",
+  },
+  {
+    title: "Excuse Duty",
+    href: "/dashboard/excuse-duty",
+    icon: FileText,
+    roles: ["admin", "department_head", "staff"],
+    category: "main",
+  },
+  {
+    title: "Excuse Duty Review",
+    href: "/dashboard/excuse-duty-review",
+    icon: FileText,
+    roles: ["admin", "department_head"],
+    category: "admin",
   },
   {
     title: "Schedule",

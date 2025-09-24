@@ -81,12 +81,17 @@ export async function PUT(request: NextRequest) {
 
     // Update user settings
     if (userSettings) {
-      const { error: userSettingsError } = await supabase.from("user_settings").upsert({
-        user_id: user.id,
-        app_settings: userSettings.app_settings || {},
-        notification_settings: userSettings.notification_settings || {},
-        updated_at: new Date().toISOString(),
-      })
+      const { error: userSettingsError } = await supabase.from("user_settings").upsert(
+        {
+          user_id: user.id,
+          app_settings: userSettings.app_settings || {},
+          notification_settings: userSettings.notification_settings || {},
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id", // Specify conflict resolution column
+        },
+      )
 
       if (userSettingsError) {
         console.error("[v0] User settings update error:", userSettingsError)

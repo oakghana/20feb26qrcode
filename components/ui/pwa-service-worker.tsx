@@ -1,0 +1,143 @@
+"use client"
+
+import { useEffect } from "react"
+
+export function PWAServiceWorker() {
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      const setupPWAEvents = () => {
+        // Handle beforeinstallprompt event globally
+        const handleBeforeInstallPrompt = (e: Event) => {
+          console.log("[PWA] beforeinstallprompt event captured globally")
+          e.preventDefault()
+          // Store the event globally for components to access
+          ;(window as any).deferredPrompt = e
+
+          // Dispatch custom event for components to listen to
+          window.dispatchEvent(new CustomEvent("pwa-install-available", { detail: e }))
+        }
+
+        window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+
+        // Handle app installed event
+        const handleAppInstalled = () => {
+          console.log("[PWA] App was installed successfully")
+          ;(window as any).deferredPrompt = null
+
+          // Dispatch custom event
+          window.dispatchEvent(new CustomEvent("pwa-installed"))
+        }
+
+        window.addEventListener("appinstalled", handleAppInstalled)
+
+        const handleOnline = () => {
+          console.log("[PWA] App is online")
+          window.dispatchEvent(new CustomEvent("pwa-online"))
+        }
+
+        const handleOffline = () => {
+          console.log("[PWA] App is offline")
+          window.dispatchEvent(new CustomEvent("pwa-offline"))
+        }
+
+        window.addEventListener("online", handleOnline)
+        window.addEventListener("offline", handleOffline)
+
+        return () => {
+          window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+          window.removeEventListener("appinstalled", handleAppInstalled)
+          window.removeEventListener("online", handleOnline)
+          window.removeEventListener("offline", handleOffline)
+        }
+      }
+
+      const registerServiceWorker = async () => {
+        try {
+          console.log("[PWA] Registering service worker...")
+
+          const swResponse = await fetch("/sw.js", { method: "HEAD" })
+          if (!swResponse.ok || !swResponse.headers.get("content-type")?.includes("javascript")) {
+            console.warn("[PWA] Service worker file not accessible or wrong MIME type, skipping registration")
+            return
+          }
+
+          const registration = await navigator.serviceWorker.register("/sw.js", {
+            scope: "/",
+          })
+
+          console.log("[PWA] Service Worker registered successfully:", registration)
+
+          // Listen for updates
+          registration.addEventListener("updatefound", () => {
+            console.log("[PWA] Service Worker update found")
+            const newWorker = registration.installing
+
+            if (newWorker) {
+              newWorker.addEventListener("statechange", () => {
+                if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                  console.log("[PWA] New service worker installed, refresh available")
+                }
+              })
+            }
+          })
+
+          // Handle service worker messages
+          navigator.serviceWorker.addEventListener("message", (event) => {
+            console.log("[PWA] Message from service worker:", event.data)
+
+            if (event.data.type === "LOCATION_UPDATE") {
+              console.log("[PWA] Location data updated:", event.data.data)
+            }
+          })
+
+          // Register for background sync if supported
+          if ("sync" in window.ServiceWorkerRegistration.prototype) {
+            console.log("[PWA] Background sync supported")
+          }
+
+          // Request persistent storage for offline functionality
+          if ("storage" in navigator && "persist" in navigator.storage) {
+            const persistent = await navigator.storage.persist()
+            console.log("[PWA] Persistent storage:", persistent)
+          }
+        } catch (error) {
+          console.error("[PWA] Service Worker registration failed:", error)
+        }
+      }
+
+      const initializePWA = () => {
+        const isPreview =
+          window.location.hostname.includes("vusercontent.net") ||
+          window.location.hostname.includes("localhost") ||
+          process.env.NODE_ENV === "development"
+
+        if (isPreview) {
+          console.log("[PWA] Preview/development environment detected, skipping service worker registration")
+        } else {
+          registerServiceWorker()
+        }
+
+        return setupPWAEvents()
+      }
+
+      // Register service worker after page load
+      if (document.readyState === "complete") {
+        const cleanup = initializePWA()
+        return cleanup
+      } else {
+        let cleanup: (() => void) | undefined
+        const handleLoad = () => {
+          cleanup = initializePWA()
+        }
+        window.addEventListener("load", handleLoad)
+
+        return () => {
+          window.removeEventListener("load", handleLoad)
+          if (cleanup) cleanup()
+        }
+      }
+    }
+  }, [])
+
+  return null
+}

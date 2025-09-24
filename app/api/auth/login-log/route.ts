@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Database connection failed",
+          details: clientError instanceof Error ? clientError.message : "Unknown error",
         },
         { status: 500 },
       )
@@ -54,10 +55,15 @@ export async function POST(request: NextRequest) {
         success,
         method,
         timestamp: new Date().toISOString(),
-        user_agent: user_agent || request.headers.get("user-agent"),
+        user_agent: user_agent || request.headers.get("user-agent") || "unknown",
       },
-      ip_address: request.ip || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
-      user_agent: user_agent || request.headers.get("user-agent"),
+      ip_address:
+        request.ip ||
+        request.headers.get("x-forwarded-for") ||
+        request.headers.get("x-real-ip") ||
+        request.headers.get("cf-connecting-ip") ||
+        "unknown",
+      user_agent: user_agent || request.headers.get("user-agent") || "unknown",
     }
 
     console.log("[v0] Inserting audit log:", {
@@ -69,36 +75,49 @@ export async function POST(request: NextRequest) {
       hasUserAgent: !!auditLogData.user_agent,
     })
 
-    // Log the login activity
-    const { data, error } = await supabase.from("audit_logs").insert(auditLogData).select()
+    try {
+      const { data, error } = (await Promise.race([
+        supabase.from("audit_logs").insert(auditLogData).select(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Database operation timeout")), 10000)),
+      ])) as any
 
-    if (error) {
-      console.error("[v0] Failed to insert audit log:", {
-        error: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        data: auditLogData,
+      if (error) {
+        console.error("[v0] Failed to insert audit log:", {
+          error: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          data: auditLogData,
+        })
+
+        console.log("[v0] Audit logging failed but allowing login to continue")
+        return NextResponse.json({
+          success: true,
+          logged: false,
+          warning: "Login successful but activity logging failed",
+        })
+      }
+
+      console.log("[v0] Audit log inserted successfully:", data)
+      return NextResponse.json({ success: true, logged: true })
+    } catch (dbError) {
+      console.error("[v0] Database operation failed:", dbError)
+      return NextResponse.json({
+        success: true,
+        logged: false,
+        warning: "Login successful but activity logging failed",
       })
-      return NextResponse.json(
-        {
-          error: "Failed to log activity",
-          details: error.message,
-        },
-        { status: 500 },
-      )
     }
-
-    console.log("[v0] Audit log inserted successfully:", data)
-    return NextResponse.json({ success: true, logged: true })
   } catch (error) {
     console.error("[v0] Login logging error:", error)
     return NextResponse.json(
       {
-        error: "Internal server error",
+        success: true,
+        logged: false,
+        warning: "Login successful but activity logging failed",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 },
+      { status: 200 }, // Changed from 500 to 200 to prevent fetch failures
     )
   }
 }

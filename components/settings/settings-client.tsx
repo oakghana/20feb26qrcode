@@ -25,6 +25,8 @@ interface SettingsClientProps {
 }
 
 export function SettingsClient({ profile }: SettingsClientProps) {
+  console.log("[v0] SettingsClient component mounted with profile:", profile)
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -37,6 +39,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
     allowManualOverride: false,
     requireHighAccuracy: true,
     maxLocationAge: "300000", // 5 minutes
+    checkInProximityRange: "500", // New setting for check-in proximity
   })
 
   const [appSettings, setAppSettings] = useState({
@@ -69,12 +72,15 @@ export function SettingsClient({ profile }: SettingsClientProps) {
   })
 
   useEffect(() => {
+    console.log("[v0] SettingsClient useEffect triggered")
     loadSettings()
   }, [])
 
   const loadSettings = async () => {
+    console.log("[v0] Loading settings...")
     try {
       const response = await fetch("/api/settings")
+      console.log("[v0] Settings API response status:", response.status)
 
       if (response.ok) {
         const data = await response.json()
@@ -136,6 +142,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
         setNotificationSettings({ ...notificationSettings, ...JSON.parse(savedNotificationSettings) })
       }
     } finally {
+      console.log("[v0] Settings loading complete")
       setLoading(false)
     }
   }
@@ -233,8 +240,11 @@ export function SettingsClient({ profile }: SettingsClientProps) {
   }
 
   if (loading) {
+    console.log("[v0] SettingsClient showing loading state")
     return <div className="flex justify-center items-center h-64">Loading settings...</div>
   }
+
+  console.log("[v0] SettingsClient rendering main content")
 
   return (
     <div className="space-y-6">
@@ -581,6 +591,23 @@ export function SettingsClient({ profile }: SettingsClientProps) {
                   </p>
                 </div>
                 <div>
+                  <Label htmlFor="checkInProximityRange">Check-in Proximity Range (meters)</Label>
+                  <Input
+                    id="checkInProximityRange"
+                    type="number"
+                    min="100"
+                    max="2000"
+                    value={geoSettings.checkInProximityRange}
+                    onChange={(e) => setGeoSettings({ ...geoSettings, checkInProximityRange: e.target.value })}
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Maximum distance from QCC location for check-in (100m - 2000m)
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
                   <Label htmlFor="maxLocationAge">Max Location Age (milliseconds)</Label>
                   <Input
                     id="maxLocationAge"
@@ -590,26 +617,16 @@ export function SettingsClient({ profile }: SettingsClientProps) {
                   />
                   <p className="text-sm text-muted-foreground mt-1">Maximum age of cached location data</p>
                 </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="requireHighAccuracy">Require High Accuracy GPS</Label>
-                    <p className="text-sm text-muted-foreground">Force high accuracy location for attendance</p>
-                  </div>
+                <div>
+                  <Label htmlFor="requireHighAccuracy">Require High Accuracy GPS</Label>
                   <Switch
                     id="requireHighAccuracy"
                     checked={geoSettings.requireHighAccuracy}
                     onCheckedChange={(checked) => setGeoSettings({ ...geoSettings, requireHighAccuracy: checked })}
                   />
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="allowManualOverride">Allow Manual Location Override</Label>
-                    <p className="text-sm text-muted-foreground">Permit manual attendance entry in emergencies</p>
-                  </div>
+                <div>
+                  <Label htmlFor="allowManualOverride">Allow Manual Location Override</Label>
                   <Switch
                     id="allowManualOverride"
                     checked={geoSettings.allowManualOverride}

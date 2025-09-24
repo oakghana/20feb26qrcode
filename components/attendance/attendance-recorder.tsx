@@ -20,6 +20,7 @@ import {
   requestLocationPermission,
   calculateDistance,
   type LocationData,
+  type ProximitySettings,
 } from "@/lib/geolocation"
 import { getDeviceInfo } from "@/lib/device-info"
 import { QRScanner } from "@/components/qr/qr-scanner"
@@ -86,6 +87,12 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [assignedLocationInfo, setAssignedLocationInfo] = useState<AssignedLocationInfo | null>(null)
   const { locations, loading: locationsLoading, error: locationsError, isConnected } = useRealTimeLocations()
+  const [proximitySettings, setProximitySettings] = useState<ProximitySettings>({
+    checkInProximityRange: 500,
+    defaultRadius: 20,
+    requireHighAccuracy: true,
+    allowManualOverride: false,
+  })
   const [locationValidation, setLocationValidation] = useState<{
     canCheckIn: boolean
     nearestLocation?: GeofenceLocation
@@ -109,7 +116,33 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
 
   useEffect(() => {
     fetchUserProfile()
+    loadProximitySettings()
   }, [])
+
+  const loadProximitySettings = async () => {
+    try {
+      const response = await fetch("/api/settings")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.systemSettings?.geo_settings) {
+          const geoSettings = data.systemSettings.geo_settings
+          setProximitySettings({
+            checkInProximityRange: Number.parseInt(geoSettings.checkInProximityRange) || 500,
+            defaultRadius: Number.parseInt(geoSettings.defaultRadius) || 20,
+            requireHighAccuracy: geoSettings.requireHighAccuracy ?? true,
+            allowManualOverride: geoSettings.allowManualOverride ?? false,
+          })
+          console.log("[v0] Loaded proximity settings:", {
+            checkInProximityRange: Number.parseInt(geoSettings.checkInProximityRange) || 500,
+            defaultRadius: Number.parseInt(geoSettings.defaultRadius) || 20,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Failed to load proximity settings:", error)
+      // Keep default settings if loading fails
+    }
+  }
 
   useEffect(() => {
     if (userLocation && locations.length > 0 && userProfile?.assigned_location_id) {
@@ -175,7 +208,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
 
       console.log("[v0] Distance to each location:", locationDistances)
 
-      const validation = validateAttendanceLocation(userLocation, locations)
+      const validation = validateAttendanceLocation(userLocation, locations, proximitySettings)
       console.log("[v0] Location validation result:", validation)
       console.log(
         "[v0] Locations data:",
@@ -185,9 +218,10 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       console.log("[v0] Can check in:", validation.canCheckIn)
       console.log("[v0] Distance:", validation.distance)
       console.log("[v0] Nearest location being checked:", validation.nearestLocation?.name)
+      console.log("[v0] Using proximity range:", proximitySettings.checkInProximityRange)
       setLocationValidation({ ...validation, allLocations: locationDistances })
     }
-  }, [userLocation, locations])
+  }, [userLocation, locations, proximitySettings])
 
   useEffect(() => {
     if (locationsError) {
@@ -274,7 +308,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       setUserLocation(location)
 
       if (!locationValidation?.canCheckIn) {
-        setError("You must be within 50m of a QCC location to check in")
+        setError(`You must be within ${proximitySettings.checkInProximityRange}m of a QCC location to check in`)
         setIsLoading(false)
         return
       }
@@ -293,7 +327,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       const targetLocation = locations.find((loc) => loc.id === targetLocationId)
 
       if (!targetLocation) {
-        setError("No location available for check-in within 50m range")
+        setError(`No location available for check-in within ${proximitySettings.checkInProximityRange}m range`)
         setIsLoading(false)
         return
       }
@@ -647,10 +681,11 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             </div>
           </CardTitle>
           <CardDescription>
-            Your current location relative to QCC Stations/Locations (50m proximity required for check-in)
+            Your current location relative to QCC Stations/Locations ({proximitySettings.checkInProximityRange}m
+            proximity required for check-in)
             <br />
-            Check-in requires being within 50m of any QCC location. Check-out can be done from anywhere within the
-            company. Location data updates automatically when admins make changes.
+            Check-in requires being within {proximitySettings.checkInProximityRange}m of any QCC location. Check-out can
+            be done from anywhere within the company. Location data updates automatically when admins make changes.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -807,7 +842,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                           </div>
                           <div className="text-right">
                             <div className="text-sm font-medium">{distance}m</div>
-                            {distance <= 50 ? (
+                            {distance <= proximitySettings.checkInProximityRange ? (
                               <Badge variant="secondary" className="text-xs">
                                 Available
                               </Badge>

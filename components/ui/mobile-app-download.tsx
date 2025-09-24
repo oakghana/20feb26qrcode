@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -11,8 +11,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Smartphone, Download, Apple, Play, Globe, MapPin } from "lucide-react"
+import { Smartphone, Download, Apple, Play, Globe, MapPin, CheckCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[]
+  readonly userChoice: Promise<{
+    outcome: "accepted" | "dismissed"
+    platform: string
+  }>
+  prompt(): Promise<void>
+}
 
 interface MobileAppDownloadProps {
   className?: string
@@ -21,33 +30,95 @@ interface MobileAppDownloadProps {
 
 export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppDownloadProps) {
   const [isInstalling, setIsInstalling] = useState(false)
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [isInstalled, setIsInstalled] = useState(false)
+
+  useEffect(() => {
+    const checkInstalled = () => {
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true
+      setIsInstalled(standalone)
+    }
+
+    const handlePWAInstallAvailable = (event: CustomEvent) => {
+      console.log("[PWA] Install available event received")
+      setDeferredPrompt(event.detail as BeforeInstallPromptEvent)
+    }
+
+    const handlePWAInstalled = () => {
+      console.log("[PWA] App installed event received")
+      setIsInstalled(true)
+      setDeferredPrompt(null)
+    }
+
+    checkInstalled()
+
+    window.addEventListener("pwa-install-available", handlePWAInstallAvailable as EventListener)
+    window.addEventListener("pwa-installed", handlePWAInstalled)
+
+    if ((window as any).deferredPrompt) {
+      setDeferredPrompt((window as any).deferredPrompt)
+    }
+
+    return () => {
+      window.removeEventListener("pwa-install-available", handlePWAInstallAvailable as EventListener)
+      window.removeEventListener("pwa-installed", handlePWAInstalled)
+    }
+  }, [])
 
   const handlePWAInstall = async () => {
     setIsInstalling(true)
 
-    // Check if PWA install prompt is available
-    const deferredPrompt = (window as any).deferredPrompt
     if (deferredPrompt) {
       try {
+        console.log("[PWA] Showing install prompt")
         await deferredPrompt.prompt()
         const { outcome } = await deferredPrompt.userChoice
         console.log("[PWA] User choice:", outcome)
+
+        if (outcome === "accepted") {
+          console.log("[PWA] User accepted the install prompt")
+        } else {
+          console.log("[PWA] User dismissed the install prompt")
+        }
+
+        setDeferredPrompt(null)
       } catch (error) {
         console.error("[PWA] Error during installation:", error)
       }
     } else {
-      // Show manual install instructions
-      alert(
-        "To install the app:\n\n1. Tap the share button in your browser\n2. Select 'Add to Home Screen'\n3. Tap 'Add' to install\n\nThe app includes real-time location tracking for accurate attendance recording.",
-      )
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      const isAndroid = /Android/.test(navigator.userAgent)
+
+      let instructions = "To install the QCC Attendance app:\n\n"
+
+      if (isIOS) {
+        instructions += "1. Tap the Share button (⬆️) at the bottom of Safari\n"
+        instructions += "2. Scroll down and tap 'Add to Home Screen'\n"
+        instructions += "3. Tap 'Add' to install the app\n\n"
+      } else if (isAndroid) {
+        instructions += "1. Tap the menu (⋮) in your browser\n"
+        instructions += "2. Select 'Add to Home screen' or 'Install app'\n"
+        instructions += "3. Tap 'Add' or 'Install' to confirm\n\n"
+      } else {
+        instructions += "1. Look for an install icon in your browser's address bar\n"
+        instructions += "2. Click it and select 'Install'\n"
+        instructions += "3. Or use your browser's menu to 'Install app'\n\n"
+      }
+
+      instructions += "✅ Features included:\n"
+      instructions += "• Real-time GPS location tracking\n"
+      instructions += "• Offline attendance recording\n"
+      instructions += "• Push notifications\n"
+      instructions += "• Native mobile experience"
+
+      alert(instructions)
     }
 
     setIsInstalling(false)
   }
 
-  const isStandalone = () => {
-    return window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true
-  }
+  const canInstall = deferredPrompt !== null && !isInstalled
 
   if (variant === "sidebar") {
     return (
@@ -63,15 +134,19 @@ export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppD
                   <Smartphone className="h-5 w-5 text-accent" />
                 </div>
                 <div className="absolute -top-1 -right-1">
-                  <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-accent text-accent-foreground">
-                    New
-                  </Badge>
+                  {isInstalled ? (
+                    <CheckCircle className="h-4 w-4 text-green-500 bg-background rounded-full" />
+                  ) : (
+                    <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-accent text-accent-foreground">
+                      {canInstall ? "Ready" : "New"}
+                    </Badge>
+                  )}
                 </div>
               </div>
               <div className="flex-1 text-left">
                 <p className="text-sm font-semibold text-foreground">Mobile App</p>
                 <p className="text-xs text-muted-foreground font-medium">
-                  {isStandalone() ? "App Installed" : "Download & Install"}
+                  {isInstalled ? "App Installed ✓" : canInstall ? "Ready to Install" : "Download & Install"}
                 </p>
               </div>
               <Download className="h-4 w-4 text-muted-foreground" />
@@ -89,18 +164,24 @@ export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppD
 
             <DropdownMenuItem
               onClick={handlePWAInstall}
-              disabled={isInstalling || isStandalone()}
+              disabled={isInstalling}
               className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-muted/50 rounded-lg transition-all duration-200 touch-manipulation min-h-[44px]"
             >
               <div className="p-1.5 bg-primary/10 rounded-md">
-                <Globe className="h-4 w-4 text-primary" />
+                {isInstalled ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Globe className="h-4 w-4 text-primary" />
+                )}
               </div>
               <div className="flex-1">
-                <span className="font-medium">{isStandalone() ? "App Already Installed" : "Install Web App"}</span>
+                <span className="font-medium">
+                  {isInstalled ? "App Already Installed" : canInstall ? "Install Web App" : "Get Install Instructions"}
+                </span>
                 <div className="flex items-center gap-1 mt-1">
                   <MapPin className="h-3 w-3 text-muted-foreground" />
                   <p className="text-xs text-muted-foreground">
-                    {isStandalone() ? "Real-time location tracking active" : "Includes real-time location tracking"}
+                    {isInstalled ? "Real-time location tracking active" : "Includes real-time location tracking"}
                   </p>
                 </div>
               </div>
@@ -123,6 +204,8 @@ export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppD
                 Soon
               </Badge>
             </DropdownMenuItem>
+
+            <DropdownMenuSeparator className="bg-border/50" />
 
             <DropdownMenuItem disabled className="flex items-center gap-3 px-3 py-3 opacity-50 rounded-lg min-h-[44px]">
               <div className="p-1.5 bg-muted/20 rounded-md">
@@ -160,7 +243,7 @@ export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppD
             size="lg"
             className="h-14 w-14 rounded-full shadow-2xl bg-gradient-to-r from-accent to-accent/90 hover:from-accent/90 hover:to-accent hover:shadow-3xl transition-all duration-300 hover:scale-110 touch-manipulation"
           >
-            <Smartphone className="h-6 w-6" />
+            {isInstalled ? <CheckCircle className="h-6 w-6" /> : <Smartphone className="h-6 w-6" />}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -169,26 +252,30 @@ export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppD
         >
           <DropdownMenuLabel className="font-semibold flex items-center gap-2">
             <Smartphone className="h-4 w-4 text-accent" />
-            Download Mobile App
+            {isInstalled ? "Mobile App Installed" : "Download Mobile App"}
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-border/50" />
 
           <DropdownMenuItem
             onClick={handlePWAInstall}
-            disabled={isInstalling || isStandalone()}
+            disabled={isInstalling}
             className="flex items-center gap-3 px-3 py-4 cursor-pointer hover:bg-muted/50 rounded-lg transition-all duration-200 touch-manipulation"
           >
             <div className="p-2 bg-primary/10 rounded-lg">
-              <Globe className="h-5 w-5 text-primary" />
+              {isInstalled ? (
+                <CheckCircle className="h-5 w-5 text-green-500" />
+              ) : (
+                <Globe className="h-5 w-5 text-primary" />
+              )}
             </div>
             <div className="flex-1">
               <span className="font-medium text-base">
-                {isStandalone() ? "App Already Installed" : "Install Web App"}
+                {isInstalled ? "App Already Installed" : canInstall ? "Install Web App" : "Get Install Instructions"}
               </span>
               <div className="flex items-center gap-1 mt-1">
                 <MapPin className="h-3 w-3 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  {isStandalone() ? "Real-time location tracking active" : "Includes real-time location tracking"}
+                  {isInstalled ? "Real-time location tracking active" : "Includes real-time location tracking"}
                 </p>
               </div>
             </div>
@@ -196,6 +283,8 @@ export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppD
               <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             )}
           </DropdownMenuItem>
+
+          <DropdownMenuSeparator className="bg-border/50" />
 
           <DropdownMenuItem disabled className="flex items-center gap-3 px-3 py-4 opacity-50 rounded-lg">
             <div className="p-2 bg-muted/20 rounded-lg">
@@ -209,6 +298,8 @@ export function MobileAppDownload({ className, variant = "sidebar" }: MobileAppD
               Soon
             </Badge>
           </DropdownMenuItem>
+
+          <DropdownMenuSeparator className="bg-border/50" />
 
           <DropdownMenuItem disabled className="flex items-center gap-3 px-3 py-4 opacity-50 rounded-lg">
             <div className="p-2 bg-muted/20 rounded-lg">

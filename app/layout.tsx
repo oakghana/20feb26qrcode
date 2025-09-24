@@ -3,6 +3,7 @@ import { Space_Grotesk, DM_Sans } from "next/font/google"
 import "./globals.css"
 import { NotificationProvider } from "@/components/ui/notification-system"
 import { ThemeProvider } from "@/components/theme-provider"
+import { PWAServiceWorker } from "@/components/ui/pwa-service-worker"
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -69,6 +70,7 @@ export default function RootLayout({
       <body className="font-sans">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <NotificationProvider>{children}</NotificationProvider>
+          <PWAServiceWorker />
         </ThemeProvider>
       </body>
     </html>
