@@ -203,7 +203,7 @@ async function processStaffRow(supabase: any, data: any) {
     }
   }
 
-  const validRoles = ["staff", "admin", "department_head"]
+  const validRoles = ["staff", "admin", "department_head", "nsp", "intern", "contract"]
   let userRole = "staff" // Default role
   if (data.role && validRoles.includes(data.role)) {
     userRole = data.role

@@ -231,6 +231,9 @@ export default function UserManagementClient({
       admin: "bg-red-100 text-red-800",
       department_head: "bg-blue-100 text-blue-800",
       staff: "bg-gray-100 text-gray-800",
+      nsp: "bg-purple-100 text-purple-800",
+      intern: "bg-green-100 text-green-800",
+      contract: "bg-orange-100 text-orange-800",
     }
     return (
       <Badge className={colors[role as keyof typeof colors] || "bg-gray-100 text-gray-800"}>
@@ -329,6 +332,23 @@ export default function UserManagementClient({
                     {formErrors.email}
                   </p>
                 )}
+              </div>
+
+              <div>
+                <Label htmlFor="role">Role</Label>
+                <Select name="role" defaultValue="staff">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="staff">Staff</SelectItem>
+                    <SelectItem value="department_head">Department Head</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="nsp">NSP</SelectItem>
+                    <SelectItem value="intern">Intern</SelectItem>
+                    <SelectItem value="contract">Contract</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* ... existing form fields with similar accessibility enhancements ... */}
@@ -431,6 +451,9 @@ export default function UserManagementClient({
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="department_head">Dept Head</SelectItem>
                       <SelectItem value="staff">Staff</SelectItem>
+                      <SelectItem value="nsp">NSP</SelectItem>
+                      <SelectItem value="intern">Intern</SelectItem>
+                      <SelectItem value="contract">Contract</SelectItem>
                     </SelectContent>
                   </Select>
                   <p id="role-help" className="sr-only">

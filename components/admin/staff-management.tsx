@@ -386,6 +386,9 @@ export function StaffManagement() {
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="department_head">Department Head</SelectItem>
                   <SelectItem value="staff">Staff</SelectItem>
+                  <SelectItem value="nsp">NSP</SelectItem>
+                  <SelectItem value="intern">Intern</SelectItem>
+                  <SelectItem value="contract">Contract</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -526,6 +529,9 @@ export function StaffManagement() {
                           <SelectItem value="staff">Staff</SelectItem>
                           <SelectItem value="department_head">Department Head</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="nsp">NSP</SelectItem>
+                          <SelectItem value="intern">Intern</SelectItem>
+                          <SelectItem value="contract">Contract</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -679,6 +685,9 @@ export function StaffManagement() {
                         <SelectItem value="staff">Staff</SelectItem>
                         <SelectItem value="department_head">Department Head</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="nsp">NSP</SelectItem>
+                        <SelectItem value="intern">Intern</SelectItem>
+                        <SelectItem value="contract">Contract</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -777,7 +786,13 @@ export function StaffManagement() {
                               ? "default"
                               : member.role === "department_head"
                                 ? "secondary"
-                                : "outline"
+                                : member.role === "nsp"
+                                  ? "default"
+                                  : member.role === "intern"
+                                    ? "outline"
+                                    : member.role === "contract"
+                                      ? "destructive"
+                                      : "outline"
                           }
                           className="font-medium"
                         >

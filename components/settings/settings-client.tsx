@@ -12,6 +12,7 @@ import { Settings, MapPin, Shield, Save, Database, Bell, LogOut } from "lucide-r
 import { createClient } from "@/lib/supabase/client"
 import { PasswordManagement } from "@/components/admin/password-management"
 import { useRouter } from "next/navigation"
+import { useNotifications } from "@/components/ui/notification-system"
 
 interface UserProfile {
   id: string
@@ -33,6 +34,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const router = useRouter()
+  const { showSuccess, showError, showInfo } = useNotifications()
 
   const [geoSettings, setGeoSettings] = useState({
     defaultRadius: "20",
@@ -74,7 +76,58 @@ export function SettingsClient({ profile }: SettingsClientProps) {
   useEffect(() => {
     console.log("[v0] SettingsClient useEffect triggered")
     loadSettings()
-  }, [])
+
+    if (profile?.role !== "admin") {
+      const supabase = createClient()
+
+      // Listen for admin settings updates
+      const channel = supabase
+        .channel("system_notifications")
+        .on("broadcast", { event: "admin_settings_updated" }, (payload) => {
+          console.log("[v0] Received admin settings update:", payload)
+
+          showInfo(
+            `System settings have been updated by ${payload.payload.admin_name}. Changes will take effect immediately.`,
+            "Settings Updated",
+          )
+
+          // Reload settings to get the latest changes
+          loadSettings()
+        })
+        .subscribe()
+
+      // Listen for direct database changes to system_settings table
+      const settingsChannel = supabase
+        .channel("settings_changes")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "system_settings",
+          },
+          (payload) => {
+            console.log("[v0] System settings database change detected:", payload)
+
+            if (payload.eventType === "UPDATE") {
+              showInfo("System settings have been updated. Refreshing your settings...", "Settings Refreshed")
+
+              // Reload settings after a short delay to ensure consistency
+              setTimeout(() => {
+                loadSettings()
+              }, 1000)
+            }
+          },
+        )
+        .subscribe()
+
+      return () => {
+        console.log("[v0] Cleaning up real-time subscriptions")
+        supabase.removeChannel(channel)
+        supabase.removeChannel(settingsChannel)
+      }
+    }
+  }, [profile])
 
   const loadSettings = async () => {
     console.log("[v0] Loading settings...")
@@ -180,11 +233,34 @@ export function SettingsClient({ profile }: SettingsClientProps) {
       const result = await response.json()
       console.log("[v0] Settings saved successfully:", result)
 
+      if (profile?.role === "admin") {
+        showSuccess(
+          "Settings have been saved and will be applied to all staff members immediately.",
+          "Admin Settings Saved",
+        )
+
+        const supabase = createClient()
+        await supabase.channel("system_notifications").send({
+          type: "broadcast",
+          event: "admin_settings_updated",
+          payload: {
+            message: "System settings have been updated by administrator",
+            timestamp: new Date().toISOString(),
+            admin_name: `${profile.first_name} ${profile.last_name}`,
+          },
+        })
+      } else {
+        showSuccess("Your personal settings have been saved successfully.", "Settings Saved")
+      }
+
       setSuccess("Settings saved successfully")
       setTimeout(() => setSuccess(null), 3000)
     } catch (error) {
       console.error("[v0] Failed to save settings:", error)
-      setError(`Failed to save settings: ${error instanceof Error ? error.message : "Unknown error"}`)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+
+      showError(`Failed to save settings: ${errorMessage}`, "Save Failed")
+      setError(`Failed to save settings: ${errorMessage}`)
 
       localStorage.setItem("qcc-app-settings", JSON.stringify(appSettings))
       localStorage.setItem("qcc-notification-settings", JSON.stringify(notificationSettings))

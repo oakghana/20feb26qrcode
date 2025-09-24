@@ -230,12 +230,19 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
 
   const fetchUserProfile = async () => {
     try {
+      console.log("[v0] Fetching user profile...")
       const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
 
-      if (user) {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+
+        if (!user) {
+          console.log("[v0] No authenticated user found")
+          return
+        }
+
         const { data: profileData, error } = await supabase
           .from("user_profiles")
           .select(`
@@ -266,9 +273,19 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
           assigned_location_id: profileData.assigned_location_id,
           department: profileData.departments?.name,
         })
+      } catch (authError) {
+        console.error("[v0] Supabase auth error:", authError)
+        // Don't set error state for auth issues in preview environment
+        if (!window.location.hostname.includes("vusercontent.net")) {
+          setError("Authentication error. Please refresh the page.")
+        }
       }
     } catch (error) {
       console.error("[v0] Error fetching user profile:", error)
+      // Only show error in production environment
+      if (!window.location.hostname.includes("vusercontent.net")) {
+        setError("Failed to load user profile. Please refresh the page.")
+      }
     }
   }
 
@@ -312,14 +329,12 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         return
       }
 
-      if (
-        !selectedLocationId &&
-        locationValidation.availableLocations &&
-        locationValidation.availableLocations.length > 0
-      ) {
-        setShowLocationSelector(true)
-        setIsLoading(false)
-        return
+      if (locationValidation.availableLocations && locationValidation.availableLocations.length > 0) {
+        if (!selectedLocationId) {
+          setShowLocationSelector(true)
+          setIsLoading(false)
+          return
+        }
       }
 
       const targetLocationId = selectedLocationId || locationValidation.availableLocations?.[0]?.location.id
@@ -409,7 +424,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
           nearestLocation = nearest?.location || locations[0]
         }
       } catch (locationError) {
-        console.log("[v0] Location unavailable for check-out, proceeding without GPS:", locationError)
+        console.log("[v0] Location unavailable for check-out, showing location selector:", locationError)
 
         if (locations.length > 1 && !selectedLocationId) {
           setLocationValidation((prev) => ({
@@ -421,7 +436,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
           return
         }
 
-        nearestLocation = selectedLocationId ? locations.find((loc) => loc.id === selectedLocationId) : locations[0] // Use first available location as fallback
+        nearestLocation = selectedLocationId ? locations.find((loc) => loc.id === selectedLocationId) : locations[0]
       }
 
       console.log("[v0] Attempting check-out with location:", nearestLocation?.name)
@@ -609,9 +624,12 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
   const handleLocationSelect = (locationId: string) => {
     setSelectedLocationId(locationId)
     setShowLocationSelector(false)
-    // Automatically proceed with check-in
     setTimeout(() => {
-      handleCheckIn()
+      if (canCheckIn && !isCheckedIn) {
+        handleCheckIn()
+      } else if (canCheckOut) {
+        handleCheckOut()
+      }
     }, 100)
   }
 
@@ -934,7 +952,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             </DialogTitle>
             <DialogDescription>
               {locationValidation?.availableLocations && locationValidation.availableLocations.length > 0
-                ? `Choose from ${locationValidation.availableLocations.length} available QCC location${locationValidation.availableLocations.length > 1 ? "s" : ""}`
+                ? `Choose from ${locationValidation.availableLocations.length} available QCC location${locationValidation.availableLocations.length > 1 ? "s" : ""} within range`
                 : "Choose which QCC location to use for attendance"}
             </DialogDescription>
           </DialogHeader>
@@ -952,19 +970,21 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                   </div>
                   <div className="text-right ml-3">
                     <div className="text-sm font-medium">{distance}m</div>
-                    {distance <= proximitySettings.checkInProximityRange ? (
-                      <Badge variant="secondary" className="text-xs">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Available
-                      </Badge>
-                    ) : canCheckOut ? (
-                      <Badge variant="outline" className="text-xs">
-                        <Navigation className="h-3 w-3 mr-1" />
-                        Checkout OK
-                      </Badge>
+                    {canCheckIn && !isCheckedIn ? (
+                      distance <= proximitySettings.checkInProximityRange ? (
+                        <Badge variant="secondary" className="text-xs">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Available
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          Too Far
+                        </Badge>
+                      )
                     ) : (
-                      <Badge variant="outline" className="text-xs">
-                        Too Far
+                      <Badge variant="secondary" className="text-xs">
+                        <Navigation className="h-3 w-3 mr-1" />
+                        Available
                       </Badge>
                     )}
                   </div>
