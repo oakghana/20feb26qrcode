@@ -191,7 +191,7 @@ function NotificationItem({
       case "warning":
         return "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200"
       case "info":
-        return "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200"
+        return "bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200"
     }
   }
 
@@ -204,7 +204,7 @@ function NotificationItem({
       case "warning":
         return "text-amber-600 dark:text-amber-400"
       case "info":
-        return "text-blue-600 dark:text-blue-400"
+        return "text-green-600 dark:text-green-400"
     }
   }
 

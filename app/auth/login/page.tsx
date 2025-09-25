@@ -556,12 +556,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
-        <Card className="shadow-lg border border-gray-200 bg-white">
+        <Card className="glass-effect shadow-2xl border-border/50">
           <CardHeader className="text-center space-y-6 pb-8">
             <div className="flex justify-center">
-              <div className="w-24 h-24 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center shadow-sm">
+              <div className="w-24 h-24 rounded-full bg-card border-2 border-primary/20 flex items-center justify-center shadow-lg">
                 <Image
                   src="/images/qcc-logo.png"
                   alt="QCC Logo - Quality Control Company Limited"
@@ -572,26 +572,24 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <CardTitle className="text-2xl font-bold text-[#4A7C59] tracking-wide">
-                QCC ELECTRONIC ATTENDANCE
-              </CardTitle>
-              <CardDescription className="text-gray-600 text-sm">
+              <CardTitle className="text-2xl font-bold text-primary tracking-wide">QCC ELECTRONIC ATTENDANCE</CardTitle>
+              <CardDescription className="text-muted-foreground text-sm">
                 Sign in with your Staff Number, Email or use OTP
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="px-8 pb-8">
             <Tabs defaultValue="password" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-gray-100 p-1 rounded-lg">
+              <TabsList className="grid w-full grid-cols-2 bg-muted/50 p-1 rounded-lg">
                 <TabsTrigger
                   value="password"
-                  className="data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
+                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                 >
                   Staff Login
                 </TabsTrigger>
                 <TabsTrigger
                   value="otp"
-                  className="data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
+                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                 >
                   OTP Login
                 </TabsTrigger>
@@ -600,7 +598,7 @@ export default function LoginPage() {
               <TabsContent value="password" className="space-y-6 mt-6">
                 <form onSubmit={handleLogin} className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="identifier" className="text-sm font-medium text-gray-700">
+                    <Label htmlFor="identifier" className="text-sm font-medium text-foreground">
                       Staff Number or Email Address
                     </Label>
                     <Input
@@ -610,14 +608,14 @@ export default function LoginPage() {
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
                       required
-                      className="h-12 border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59] bg-gray-50"
+                      className="h-12 border-border focus:border-primary focus:ring-primary bg-input focus-enhanced"
                     />
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Enter your 7-digit staff number (e.g., 1234567) or corporate email address
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                    <Label htmlFor="password" className="text-sm font-medium text-foreground">
                       Password
                     </Label>
                     <Input
@@ -627,13 +625,13 @@ export default function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      className="h-12 border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59] bg-gray-50"
+                      className="h-12 border-border focus:border-primary focus:ring-primary bg-input focus-enhanced"
                     />
                   </div>
 
                   <Button
                     type="submit"
-                    className="w-full h-12 bg-[#4A7C59] hover:bg-[#3d6b4a] text-white font-medium rounded-lg"
+                    className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
                     disabled={isLoading}
                   >
                     {isLoading ? "Signing in..." : "Sign In"}
@@ -645,7 +643,7 @@ export default function LoginPage() {
                 {!otpSent ? (
                   <form onSubmit={handleSendOtp} className="space-y-6">
                     <div className="space-y-2">
-                      <Label htmlFor="otpEmail" className="text-sm font-medium text-gray-700">
+                      <Label htmlFor="otpEmail" className="text-sm font-medium text-foreground">
                         Corporate Email Address
                       </Label>
                       <Input
@@ -655,13 +653,13 @@ export default function LoginPage() {
                         value={otpEmail}
                         onChange={(e) => setOtpEmail(e.target.value)}
                         required
-                        className="h-12 border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59] bg-gray-50"
+                        className="h-12 border-border focus:border-primary focus:ring-primary bg-input focus-enhanced"
                       />
-                      <p className="text-xs text-gray-500">OTP will be sent to your registered email address</p>
+                      <p className="text-xs text-muted-foreground">OTP will be sent to your registered email address</p>
                     </div>
                     <Button
                       type="submit"
-                      className="w-full h-12 bg-[#4A7C59] hover:bg-[#3d6b4a] text-white font-medium rounded-lg"
+                      className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
                       disabled={isLoading}
                     >
                       {isLoading ? "Sending OTP..." : "Send OTP Code"}
@@ -670,7 +668,7 @@ export default function LoginPage() {
                 ) : (
                   <form onSubmit={handleVerifyOtp} className="space-y-6">
                     <div className="space-y-4">
-                      <Label htmlFor="otp" className="text-sm font-medium text-gray-700">
+                      <Label htmlFor="otp" className="text-sm font-medium text-foreground">
                         Enter OTP Code
                       </Label>
                       <div className="flex justify-center">
@@ -678,36 +676,38 @@ export default function LoginPage() {
                           <InputOTPGroup>
                             <InputOTPSlot
                               index={0}
-                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                              className="w-12 h-12 text-lg border-border focus:border-primary focus:ring-primary bg-input"
                             />
                             <InputOTPSlot
                               index={1}
-                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                              className="w-12 h-12 text-lg border-border focus:border-primary focus:ring-primary bg-input"
                             />
                             <InputOTPSlot
                               index={2}
-                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                              className="w-12 h-12 text-lg border-border focus:border-primary focus:ring-primary bg-input"
                             />
                             <InputOTPSlot
                               index={3}
-                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                              className="w-12 h-12 text-lg border-border focus:border-primary focus:ring-primary bg-input"
                             />
                             <InputOTPSlot
                               index={4}
-                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                              className="w-12 h-12 text-lg border-border focus:border-primary focus:ring-primary bg-input"
                             />
                             <InputOTPSlot
                               index={5}
-                              className="w-12 h-12 text-lg border-gray-300 focus:border-[#4A7C59] focus:ring-[#4A7C59]"
+                              className="w-12 h-12 text-lg border-border focus:border-primary focus:ring-primary bg-input"
                             />
                           </InputOTPGroup>
                         </InputOTP>
                       </div>
-                      <p className="text-xs text-gray-500 text-center">Enter the 6-digit code sent to {otpEmail}</p>
+                      <p className="text-xs text-muted-foreground text-center">
+                        Enter the 6-digit code sent to {otpEmail}
+                      </p>
                     </div>
                     <Button
                       type="submit"
-                      className="w-full h-12 bg-[#4A7C59] hover:bg-[#3d6b4a] text-white font-medium rounded-lg"
+                      className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
                       disabled={isLoading || otp.length !== 6}
                     >
                       {isLoading ? "Verifying..." : "Verify OTP"}
@@ -716,7 +716,7 @@ export default function LoginPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="flex-1 h-12 border-gray-300 text-gray-700 hover:bg-gray-50 bg-transparent"
+                        className="flex-1 h-12 border-border text-foreground hover:bg-muted bg-transparent"
                         onClick={() => {
                           setOtpSent(false)
                           setOtp("")
@@ -728,7 +728,7 @@ export default function LoginPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        className="flex-1 h-12 border-[#4A7C59] text-[#4A7C59] hover:bg-[#4A7C59] hover:text-white bg-transparent"
+                        className="flex-1 h-12 border-primary text-primary hover:bg-primary hover:text-primary-foreground bg-transparent"
                         onClick={handleSendOtp}
                         disabled={isLoading}
                       >
@@ -741,12 +741,12 @@ export default function LoginPage() {
             </Tabs>
 
             <div className="mt-8 text-center">
-              <p className="text-sm text-gray-600">Don't have an account?</p>
+              <p className="text-sm text-muted-foreground">Don't have an account?</p>
             </div>
 
-            <div className="mt-6 text-center border-t border-gray-200 pt-6">
-              <p className="text-sm font-medium text-gray-700">Quality Control Company Limited</p>
-              <p className="text-xs text-gray-500 mt-1">Intranet Portal - Powered by IT Department</p>
+            <div className="mt-6 text-center border-t border-border pt-6">
+              <p className="text-sm font-medium text-foreground">Quality Control Company Limited</p>
+              <p className="text-xs text-muted-foreground mt-1">Intranet Portal - Powered by IT Department</p>
             </div>
           </CardContent>
         </Card>

@@ -128,7 +128,7 @@ export default function UserLookupPage() {
                     )}
 
                     {result.credentials.login_note && (
-                      <div className="p-3 bg-blue-50 rounded-lg">
+                      <div className="p-3 bg-green-50 rounded-lg">
                         <span className="font-medium">Login Note:</span>
                         <p className="mt-1 text-sm text-gray-600">{result.credentials.login_note}</p>
                       </div>

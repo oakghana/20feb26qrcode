@@ -5,37 +5,19 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   getCurrentLocation,
   validateAttendanceLocation,
+  validateCheckoutLocation,
   requestLocationPermission,
   calculateDistance,
   type LocationData,
   type ProximitySettings,
 } from "@/lib/geolocation"
 import { getDeviceInfo } from "@/lib/device-info"
-import { QRScanner } from "@/components/qr/qr-scanner"
 import { validateQRCode, type QRCodeData } from "@/lib/qr-code"
-import {
-  MapPin,
-  Clock,
-  CheckCircle,
-  Loader2,
-  AlertTriangle,
-  QrCode,
-  Navigation,
-  Wifi,
-  WifiOff,
-  Building,
-} from "lucide-react"
+import { MapPin, Clock, CheckCircle, Loader2, AlertTriangle, Navigation, Wifi, WifiOff, Building } from "lucide-react"
 import { useRealTimeLocations } from "@/hooks/use-real-time-locations"
 import { createClient } from "@/lib/supabase/client"
 
@@ -87,13 +69,14 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
   const [assignedLocationInfo, setAssignedLocationInfo] = useState<AssignedLocationInfo | null>(null)
   const { locations, loading: locationsLoading, error: locationsError, isConnected } = useRealTimeLocations()
   const [proximitySettings, setProximitySettings] = useState<ProximitySettings>({
-    checkInProximityRange: 500,
+    checkInProximityRange: 50,
     defaultRadius: 20,
     requireHighAccuracy: true,
     allowManualOverride: false,
   })
   const [locationValidation, setLocationValidation] = useState<{
     canCheckIn: boolean
+    canCheckOut?: boolean
     nearestLocation?: GeofenceLocation
     distance?: number
     message: string
@@ -118,6 +101,10 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     loadProximitySettings()
   }, [])
 
+  useEffect(() => {
+    loadProximitySettings()
+  }, [])
+
   const loadProximitySettings = async () => {
     try {
       const response = await fetch("/api/settings")
@@ -126,13 +113,13 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         if (data.systemSettings?.geo_settings) {
           const geoSettings = data.systemSettings.geo_settings
           setProximitySettings({
-            checkInProximityRange: Number.parseInt(geoSettings.checkInProximityRange) || 500,
+            checkInProximityRange: Number.parseInt(geoSettings.checkInProximityRange) || 50,
             defaultRadius: Number.parseInt(geoSettings.defaultRadius) || 20,
             requireHighAccuracy: geoSettings.requireHighAccuracy ?? true,
             allowManualOverride: geoSettings.allowManualOverride ?? false,
           })
           console.log("[v0] Loaded proximity settings:", {
-            checkInProximityRange: Number.parseInt(geoSettings.checkInProximityRange) || 500,
+            checkInProximityRange: Number.parseInt(geoSettings.checkInProximityRange) || 50,
             defaultRadius: Number.parseInt(geoSettings.defaultRadius) || 20,
           })
         }
@@ -208,25 +195,28 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       console.log("[v0] Distance to each location:", locationDistances)
 
       const validation = validateAttendanceLocation(userLocation, locations, proximitySettings)
+      const checkoutValidation = validateCheckoutLocation(userLocation, locations, proximitySettings)
+
       console.log("[v0] Location validation result:", validation)
+      console.log("[v0] Check-out validation result:", checkoutValidation)
       console.log(
         "[v0] Locations data:",
         locations.map((l) => ({ name: l.name, radius: l.radius_meters })),
       )
       console.log("[v0] Validation message:", validation.message)
       console.log("[v0] Can check in:", validation.canCheckIn)
+      console.log("[v0] Can check out:", checkoutValidation.canCheckOut)
       console.log("[v0] Distance:", validation.distance)
       console.log("[v0] Nearest location being checked:", validation.nearestLocation?.name)
       console.log("[v0] Using proximity range:", proximitySettings.checkInProximityRange)
-      setLocationValidation({ ...validation, allLocations: locationDistances })
+
+      setLocationValidation({
+        ...validation,
+        canCheckOut: checkoutValidation.canCheckOut,
+        allLocations: locationDistances,
+      })
     }
   }, [userLocation, locations, proximitySettings])
-
-  useEffect(() => {
-    if (locationsError) {
-      setError(`Location data error: ${locationsError}`)
-    }
-  }, [locationsError])
 
   const fetchUserProfile = async () => {
     try {
@@ -399,6 +389,16 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         setUserLocation(location)
         console.log("[v0] Location acquired for check-out:", location)
 
+        const checkoutValidation = validateCheckoutLocation(location, locations, proximitySettings)
+
+        if (!checkoutValidation.canCheckOut) {
+          setError(
+            `Check-out requires being within ${proximitySettings.checkInProximityRange}m of any QCC location. ${checkoutValidation.message}`,
+          )
+          setIsLoading(false)
+          return
+        }
+
         if (locations.length > 1) {
           const locationDistances = locations
             .map((loc) => {
@@ -406,37 +406,37 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
               return { location: loc, distance: Math.round(distance) }
             })
             .sort((a, b) => a.distance - b.distance)
+            .filter(({ distance }) => distance <= proximitySettings.checkInProximityRange)
 
           setLocationValidation((prev) => ({
             ...prev,
             availableLocations: locationDistances,
           }))
 
-          if (!selectedLocationId) {
+          if (locationDistances.length === 0) {
+            setError(`No QCC locations within ${proximitySettings.checkInProximityRange}m range for check-out`)
+            setIsLoading(false)
+            return
+          }
+
+          if (!selectedLocationId && locationDistances.length > 1) {
             setShowLocationSelector(true)
             setIsLoading(false)
             return
           }
 
-          nearestLocation = locations.find((loc) => loc.id === selectedLocationId)
+          nearestLocation = selectedLocationId
+            ? locations.find((loc) => loc.id === selectedLocationId)
+            : locationDistances[0]?.location
         } else {
           const nearest = findNearestLocation(location, locations)
           nearestLocation = nearest?.location || locations[0]
         }
       } catch (locationError) {
         console.log("[v0] Location unavailable for check-out, showing location selector:", locationError)
-
-        if (locations.length > 1 && !selectedLocationId) {
-          setLocationValidation((prev) => ({
-            ...prev,
-            availableLocations: locations.map((loc) => ({ location: loc, distance: 0 })),
-          }))
-          setShowLocationSelector(true)
-          setIsLoading(false)
-          return
-        }
-
-        nearestLocation = selectedLocationId ? locations.find((loc) => loc.id === selectedLocationId) : locations[0]
+        setError("Location is required for check-out. Please enable GPS or use a QR code.")
+        setIsLoading(false)
+        return
       }
 
       console.log("[v0] Attempting check-out with location:", nearestLocation?.name)
@@ -604,7 +604,6 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       })
 
       if (response.ok) {
-        // Trigger a page reload to ensure all data is fresh
         window.location.reload()
       } else {
         const result = await response.json()
@@ -639,7 +638,6 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
   const canCheckOut = isCheckedIn
 
   const findNearestLocation = (userLocation: LocationData, locations: GeofenceLocation[]) => {
-    // Placeholder for finding nearest location logic
     return { location: locations[0] }
   }
 
@@ -740,7 +738,8 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             proximity required for check-in)
             <br />
             Check-in requires being within {proximitySettings.checkInProximityRange}m of any QCC location. Check-out can
-            be done from anywhere within the company. Location data updates automatically when admins make changes.
+            be done from anywhere within 50m of the company. Location data updates automatically when admins make
+            changes.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -931,8 +930,22 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
 
                   {canCheckOut && (
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-600">Check-out allowed from any location</span>
+                      {locationValidation.canCheckOut ? (
+                        <>
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span className="text-sm text-green-600">
+                            Check-out available within {proximitySettings.checkInProximityRange}m range
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="h-4 w-4 text-orange-600" />
+                          <span className="text-sm text-orange-600">
+                            Check-out requires being within {proximitySettings.checkInProximityRange}m of any QCC
+                            location
+                          </span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -959,182 +972,90 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
           <div className="space-y-4">
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {locationValidation?.availableLocations?.map(({ location, distance }) => (
-                <div
+                <Button
                   key={location.id}
+                  variant="outline"
+                  className="w-full justify-between h-auto p-3 bg-transparent"
                   onClick={() => handleLocationSelect(location.id)}
-                  className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
                 >
-                  <div className="flex-1">
-                    <div className="font-medium text-sm">{location.name}</div>
-                    <div className="text-xs text-muted-foreground line-clamp-1">{location.address}</div>
+                  <div className="text-left">
+                    <div className="font-medium">{location.name}</div>
+                    <div className="text-xs text-muted-foreground">{location.address}</div>
                   </div>
-                  <div className="text-right ml-3">
+                  <div className="text-right">
                     <div className="text-sm font-medium">{distance}m</div>
-                    {canCheckIn && !isCheckedIn ? (
-                      distance <= proximitySettings.checkInProximityRange ? (
-                        <Badge variant="secondary" className="text-xs">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Available
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs">
-                          Too Far
-                        </Badge>
-                      )
-                    ) : (
+                    {distance <= proximitySettings.checkInProximityRange ? (
                       <Badge variant="secondary" className="text-xs">
-                        <Navigation className="h-3 w-3 mr-1" />
                         Available
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs">
+                        Too Far
                       </Badge>
                     )}
                   </div>
-                </div>
+                </Button>
               ))}
-            </div>
-
-            <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">
-              {canCheckIn && !isCheckedIn
-                ? `💡 Check-in requires being within ${proximitySettings.checkInProximityRange}m of a location`
-                : "💡 Check-out can be done from any QCC location"}
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowLocationSelector(false)
-                  setSelectedLocationId("")
-                }}
-                className="flex-1 bg-transparent"
-              >
-                Cancel
-              </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Action Buttons */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>
-            Record your attendance at any registered QCC location using GPS or QR code
-            {!userLocation && " - QR code works without location access"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription className="whitespace-pre-line">{error}</AlertDescription>
-            </Alert>
+      <div className="space-y-4">
+        {error && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {success && (
+          <Alert>
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex gap-4">
+          {canCheckIn && (
+            <Button onClick={handleCheckIn} disabled={isLoading || !locationValidation?.canCheckIn} className="flex-1">
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Checking In...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Check In
+                </>
+              )}
+            </Button>
           )}
 
-          {success && (
-            <Alert>
-              <CheckCircle className="h-4 w-4" />
-              <AlertDescription>{success}</AlertDescription>
-            </Alert>
+          {canCheckOut && (
+            <Button
+              onClick={handleCheckOut}
+              disabled={isLoading || !locationValidation?.canCheckOut}
+              variant="outline"
+              className="flex-1 bg-transparent"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Checking Out...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Check Out
+                </>
+              )}
+            </Button>
           )}
-
-          <div className="space-y-3">
-            {/* GPS Check-in/out buttons */}
-            <div className="grid gap-3 md:grid-cols-2">
-              <Button
-                onClick={handleCheckIn}
-                disabled={!canCheckIn || !locationValidation?.canCheckIn || isLoading}
-                className="h-12"
-                size="lg"
-              >
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock className="mr-2 h-4 w-4" />}
-                GPS Check In
-              </Button>
-
-              <Button
-                onClick={handleCheckOut}
-                disabled={!canCheckOut || isLoading}
-                variant="outline"
-                className="h-12 bg-transparent"
-                size="lg"
-              >
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock className="mr-2 h-4 w-4" />}
-                Check Out (Any Location)
-              </Button>
-            </div>
-
-            {/* QR code check-in/out buttons */}
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or use QR Code</span>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <Dialog
-                open={showQRScanner && qrScanMode === "checkin"}
-                onOpenChange={(open) => {
-                  setShowQRScanner(open)
-                  if (open) setQrScanMode("checkin")
-                }}
-              >
-                <DialogTrigger asChild>
-                  <Button
-                    disabled={!canCheckIn || isLoading}
-                    variant="outline"
-                    className="h-12 bg-transparent"
-                    size="lg"
-                  >
-                    <QrCode className="mr-2 h-4 w-4" />
-                    QR Check In
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Check In with QR Code</DialogTitle>
-                    <DialogDescription>Scan the location QR code to check in at any QCC location</DialogDescription>
-                  </DialogHeader>
-                  <QRScanner onScanSuccess={handleQRCheckIn} onClose={() => setShowQRScanner(false)} />
-                </DialogContent>
-              </Dialog>
-
-              <Dialog
-                open={showQRScanner && qrScanMode === "checkout"}
-                onOpenChange={(open) => {
-                  setShowQRScanner(open)
-                  if (open) setQrScanMode("checkout")
-                }}
-              >
-                <DialogTrigger asChild>
-                  <Button
-                    disabled={!canCheckOut || isLoading}
-                    variant="outline"
-                    className="h-12 bg-transparent"
-                    size="lg"
-                  >
-                    <QrCode className="mr-2 h-4 w-4" />
-                    QR Check Out
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Check Out with QR Code</DialogTitle>
-                    <DialogDescription>Scan the location QR code to check out</DialogDescription>
-                  </DialogHeader>
-                  <QRScanner onScanSuccess={handleQRCheckOut} onClose={() => setShowQRScanner(false)} />
-                </DialogContent>
-              </Dialog>
-            </div>
-          </div>
-
-          {!canCheckIn && !canCheckOut && (
-            <p className="text-sm text-muted-foreground text-center">You have completed your attendance for today.</p>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

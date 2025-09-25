@@ -37,7 +37,7 @@ export function PWAServiceWorker() {
           if (navigator.serviceWorker.controller) {
             navigator.serviceWorker.ready
               .then((registration) => {
-                return registration.sync.register("location-sync")
+                return registration.sync.register("location")
               })
               .catch((error) => {
                 console.error("[PWA] Failed to register location sync on online:", error)
@@ -127,7 +127,7 @@ export function PWAServiceWorker() {
             console.log("[PWA] Background sync supported")
 
             try {
-              await registration.sync.register("location-sync")
+              await registration.sync.register("location")
               console.log("[PWA] Initial location sync registered")
             } catch (error) {
               console.error("[PWA] Failed to register initial location sync:", error)

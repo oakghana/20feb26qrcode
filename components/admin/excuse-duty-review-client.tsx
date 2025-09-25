@@ -212,28 +212,12 @@ export function ExcuseDutyReviewClient({ userRole, userDepartment }: ExcuseDutyR
   }
 
   const viewDocument = (fileUrl: string, fileName: string) => {
-    const newWindow = window.open()
-    if (newWindow) {
-      newWindow.document.write(`
-        <html>
-          <head>
-            <title>${fileName}</title>
-            <style>
-              body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
-              img { max-width: 100%; height: auto; }
-              iframe { width: 100%; height: 90vh; border: none; }
-            </style>
-          </head>
-          <body>
-            <h3>${fileName}</h3>
-            ${
-              fileUrl.startsWith("data:image/")
-                ? `<img src="${fileUrl}" alt="${fileName}" />`
-                : `<iframe src="${fileUrl}"></iframe>`
-            }
-          </body>
-        </html>
-      `)
+    if (fileUrl.startsWith("data:")) {
+      // For data URLs, open directly
+      window.open(fileUrl, "_blank", "width=800,height=600,scrollbars=yes,resizable=yes")
+    } else {
+      // For regular URLs, open directly
+      window.open(fileUrl, "_blank", "width=800,height=600,scrollbars=yes,resizable=yes")
     }
   }
 

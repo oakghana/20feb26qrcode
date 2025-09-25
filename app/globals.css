@@ -4,105 +4,111 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* QCC Professional Theme - Green and Orange */
-  --background: oklch(0.99 0.005 120); /* Clean white with subtle green tint */
-  --foreground: oklch(0.15 0.02 140); /* Dark gray-green for text */
-  --card: oklch(1 0 0); /* Pure white cards */
-  --card-foreground: oklch(0.15 0.02 140); /* Dark text on cards */
-  --popover: oklch(1 0 0); /* White popover */
-  --popover-foreground: oklch(0.15 0.02 140); /* Dark text */
+  /* Professional Light Theme - Green Primary */
+  --background: oklch(0.98 0.005 120); /* Very light green-gray background */
+  --foreground: oklch(0.15 0.01 120); /* Dark text with subtle green tint */
+  --card: oklch(0.96 0.01 120); /* Light cards with green undertone */
+  --card-foreground: oklch(0.15 0.01 120); /* Dark text on cards */
+  --popover: oklch(0.98 0.005 120); /* Light popover */
+  --popover-foreground: oklch(0.15 0.01 120); /* Dark text */
 
-  /* Updated primary to QCC green from the image */
-  --primary: oklch(0.45 0.15 140); /* QCC Green #4A7C59 */
+  /* Changed primary from blue to professional green */
+  --primary: oklch(0.55 0.18 140); /* Professional green #22C55E */
   --primary-foreground: oklch(0.98 0 0); /* White text on green */
 
-  /* Updated secondary to light gray */
-  --secondary: oklch(0.96 0.005 120); /* Light gray-green */
-  --secondary-foreground: oklch(0.15 0.02 140); /* Dark text */
+  /* Light gray secondary */
+  --secondary: oklch(0.92 0.01 120); /* Light gray-green */
+  --secondary-foreground: oklch(0.15 0.01 120); /* Dark text */
 
-  --muted: oklch(0.96 0.005 120); /* Light muted background */
-  --muted-foreground: oklch(0.45 0.02 140); /* Medium gray text */
+  --muted: oklch(0.94 0.01 120); /* Light muted background */
+  --muted-foreground: oklch(0.45 0.02 120); /* Medium gray text */
 
-  /* Updated accent to QCC orange from the image */
-  --accent: oklch(0.65 0.15 45); /* QCC Orange #E67E22 */
+  /* Bright orange accent */
+  --accent: oklch(0.65 0.2 45); /* Bright orange accent #FF6B35 */
   --accent-foreground: oklch(0.98 0 0); /* White text on orange */
-  --accent-hover: oklch(0.6 0.18 45); /* Darker orange on hover */
+  --accent-hover: oklch(0.6 0.22 45); /* Darker orange on hover */
 
   --destructive: oklch(0.55 0.2 25); /* Red for destructive actions */
   --destructive-foreground: oklch(0.98 0 0); /* White text */
-  --border: oklch(0.92 0.01 120); /* Light border */
-  --input: oklch(0.98 0.005 120); /* Input background */
-  --ring: oklch(0.45 0.15 140); /* Green focus ring */
+  --border: oklch(0.88 0.01 120); /* Light border */
+  --input: oklch(0.96 0.01 120); /* Light input background */
+  --ring: oklch(0.55 0.18 140); /* Green focus ring */
 
-  /* Updated chart colors to match QCC theme */
-  --chart-1: oklch(0.45 0.15 140); /* QCC Green */
-  --chart-2: oklch(0.65 0.15 45); /* QCC Orange */
-  --chart-3: oklch(0.35 0.12 140); /* Dark green */
-  --chart-4: oklch(0.75 0.12 45); /* Light orange */
-  --chart-5: oklch(0.55 0.18 140); /* Medium green */
+  /* Updated chart colors to use green instead of blue */
+  --chart-1: oklch(0.55 0.18 140); /* Professional green */
+  --chart-2: oklch(0.65 0.2 45); /* Bright orange */
+  --chart-3: oklch(0.45 0.15 140); /* Dark green */
+  --chart-4: oklch(0.75 0.15 45); /* Light orange */
+  --chart-5: oklch(0.65 0.2 180); /* Teal accent */
 
-  --radius: 0.5rem; /* Standard border radius */
+  --radius: 0.75rem; /* Slightly larger border radius for modern look */
 
-  /* Updated sidebar colors to match the image */
-  --sidebar: oklch(0.98 0.005 120); /* Light sidebar background */
-  --sidebar-foreground: oklch(0.15 0.02 140); /* Dark text */
-  --sidebar-primary: oklch(0.45 0.15 140); /* Green primary */
+  /* Updated sidebar colors to green theme */
+  --sidebar: oklch(0.96 0.01 120); /* Light sidebar */
+  --sidebar-foreground: oklch(0.15 0.01 120); /* Dark text */
+  --sidebar-primary: oklch(0.55 0.18 140); /* Green primary */
   --sidebar-primary-foreground: oklch(0.98 0 0); /* White text */
-  --sidebar-accent: oklch(0.65 0.15 45); /* Orange accent */
+  --sidebar-accent: oklch(0.65 0.2 45); /* Orange accent */
   --sidebar-accent-foreground: oklch(0.98 0 0); /* White text */
-  --sidebar-border: oklch(0.92 0.01 120); /* Light border */
-  --sidebar-ring: oklch(0.45 0.15 140); /* Green ring */
+  --sidebar-border: oklch(0.88 0.01 120); /* Light border */
+  --sidebar-ring: oklch(0.55 0.18 140); /* Green ring */
 
-  /* Professional shadows */
-  --shadow-sm: 0 1px 3px oklch(0.2 0.01 140 / 0.1);
-  --shadow-md: 0 4px 12px oklch(0.2 0.01 140 / 0.15);
-  --shadow-lg: 0 8px 24px oklch(0.2 0.01 140 / 0.2);
+  /* Light shadows for depth */
+  --shadow-sm: 0 2px 8px oklch(0.15 0.01 120 / 0.1);
+  --shadow-md: 0 8px 24px oklch(0.15 0.01 120 / 0.15);
+  --shadow-lg: 0 16px 48px oklch(0.15 0.01 120 / 0.2);
 }
 
 .dark {
-  /* Enhanced dark theme with more prominent orange accents */
-  --background: oklch(0.08 0.02 45); /* Dark orange-tinted background */
-  --foreground: oklch(0.95 0.005 45); /* Light text with orange tint */
-  --card: oklch(0.12 0.03 45); /* Dark cards with orange undertone */
-  --card-foreground: oklch(0.95 0.005 45); /* Light text */
-  --popover: oklch(0.12 0.03 45); /* Dark popover with orange tint */
-  --popover-foreground: oklch(0.95 0.005 45); /* Light text */
+  /* Professional Dark Theme - Green Primary */
+  --background: oklch(0.05 0.01 120); /* Very dark green-gray background */
+  --foreground: oklch(0.95 0.005 120); /* Light text with subtle green tint */
+  --card: oklch(0.08 0.02 120); /* Dark cards with green undertone */
+  --card-foreground: oklch(0.95 0.005 120); /* Light text on cards */
+  --popover: oklch(0.08 0.02 120); /* Dark popover */
+  --popover-foreground: oklch(0.95 0.005 120); /* Light text */
 
-  --primary: oklch(0.65 0.2 45); /* Vibrant orange primary */
-  --primary-foreground: oklch(0.08 0.02 45); /* Dark text on orange */
+  /* Updated dark theme primary to brighter green */
+  --primary: oklch(0.6 0.2 140); /* Brighter green primary */
+  --primary-foreground: oklch(0.03 0.01 120); /* Dark text on bright green */
 
-  --secondary: oklch(0.15 0.03 45); /* Dark secondary with orange tint */
-  --secondary-foreground: oklch(0.95 0.005 45); /* Light text */
+  --secondary: oklch(0.12 0.02 120); /* Dark gray-green */
+  --secondary-foreground: oklch(0.95 0.005 120); /* Light text */
 
-  --muted: oklch(0.15 0.03 45); /* Dark muted with orange tint */
-  --muted-foreground: oklch(0.7 0.02 45); /* Medium text with orange tint */
+  --muted: oklch(0.1 0.02 120); /* Dark muted background */
+  --muted-foreground: oklch(0.65 0.02 120); /* Medium gray text */
 
-  --accent: oklch(0.75 0.22 45); /* Bright orange accent */
-  --accent-foreground: oklch(0.08 0.02 45); /* Dark text on bright orange */
+  --accent: oklch(0.7 0.22 45); /* Brighter orange accent */
+  --accent-foreground: oklch(0.03 0.01 120); /* Dark text on bright orange */
 
-  --destructive: oklch(0.6 0.22 25); /* Bright red */
-  --destructive-foreground: oklch(0.95 0.005 45); /* Light text */
+  --destructive: oklch(0.6 0.22 25); /* Brighter red */
+  --destructive-foreground: oklch(0.98 0.005 120); /* Bright text */
 
-  --border: oklch(0.2 0.03 45); /* Dark border with orange tint */
-  --input: oklch(0.15 0.03 45); /* Dark input with orange tint */
-  --ring: oklch(0.65 0.2 45); /* Orange focus ring */
+  --border: oklch(0.15 0.02 120); /* Dark border */
+  --input: oklch(0.1 0.02 120); /* Dark input background */
+  --ring: oklch(0.6 0.2 140); /* Brighter green ring */
 
-  /* Enhanced sidebar with dark orange theme */
-  --sidebar: oklch(0.1 0.03 45); /* Dark sidebar with orange undertone */
-  --sidebar-foreground: oklch(0.95 0.005 45); /* Light text */
-  --sidebar-primary: oklch(0.65 0.2 45); /* Orange primary */
-  --sidebar-primary-foreground: oklch(0.08 0.02 45); /* Dark text */
-  --sidebar-accent: oklch(0.75 0.22 45); /* Bright orange accent */
-  --sidebar-accent-foreground: oklch(0.08 0.02 45); /* Dark text */
-  --sidebar-border: oklch(0.2 0.03 45); /* Dark border with orange tint */
-  --sidebar-ring: oklch(0.65 0.2 45); /* Orange ring */
+  /* Enhanced chart colors for dark theme with green */
+  --chart-1: oklch(0.6 0.2 140); /* Bright green */
+  --chart-2: oklch(0.7 0.22 45); /* Bright orange */
+  --chart-3: oklch(0.5 0.18 140); /* Medium green */
+  --chart-4: oklch(0.8 0.18 45); /* Light orange */
+  --chart-5: oklch(0.7 0.2 180); /* Bright teal */
 
-  /* Enhanced chart colors for dark orange theme */
-  --chart-1: oklch(0.65 0.2 45); /* Primary orange */
-  --chart-2: oklch(0.75 0.22 45); /* Bright orange */
-  --chart-3: oklch(0.55 0.18 45); /* Medium orange */
-  --chart-4: oklch(0.45 0.15 45); /* Dark orange */
-  --chart-5: oklch(0.85 0.15 45); /* Light orange */
+  /* Enhanced sidebar for dark theme with green */
+  --sidebar: oklch(0.06 0.02 120); /* Very dark sidebar */
+  --sidebar-foreground: oklch(0.95 0.005 120); /* Light text */
+  --sidebar-primary: oklch(0.6 0.2 140); /* Brighter green primary */
+  --sidebar-primary-foreground: oklch(0.03 0.01 120); /* Dark text */
+  --sidebar-accent: oklch(0.7 0.22 45); /* Brighter orange accent */
+  --sidebar-accent-foreground: oklch(0.03 0.01 120); /* Dark text */
+  --sidebar-border: oklch(0.15 0.02 120); /* Dark border */
+  --sidebar-ring: oklch(0.6 0.2 140); /* Brighter green ring */
+
+  /* Professional shadows for depth */
+  --shadow-sm: 0 2px 8px oklch(0.02 0.01 120 / 0.3);
+  --shadow-md: 0 8px 24px oklch(0.02 0.01 120 / 0.4);
+  --shadow-lg: 0 16px 48px oklch(0.02 0.01 120 / 0.5);
 }
 
 @theme inline {
@@ -142,6 +148,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Professional typography scale */
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-dm-sans);
 }
 
 @layer base {
@@ -149,6 +159,54 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    /* Updated texture for green theme compatibility */
+    background-image: radial-gradient(circle at 1px 1px, oklch(0.9 0.01 120 / 0.3) 1px, transparent 0);
+    background-size: 20px 20px;
+  }
+
+  .dark body {
+    /* Dark theme texture with green tint */
+    background-image: radial-gradient(circle at 1px 1px, oklch(0.1 0.02 120 / 0.3) 1px, transparent 0);
+  }
+
+  /* Enhanced scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--muted);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+  }
+
+  /* Professional glass effect for cards with green theme */
+  .glass-effect {
+    backdrop-filter: blur(12px);
+    background: oklch(0.96 0.01 120 / 0.8);
+    border: 1px solid oklch(0.88 0.01 120 / 0.5);
+  }
+
+  .dark .glass-effect {
+    background: oklch(0.08 0.02 120 / 0.8);
+    border: 1px solid oklch(0.15 0.02 120 / 0.5);
+  }
+
+  /* Enhanced focus states with green */
+  .focus-enhanced:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px oklch(0.55 0.18 140 / 0.2);
   }
 }

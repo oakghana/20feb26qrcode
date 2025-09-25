@@ -229,7 +229,7 @@ export default function UserManagementClient({
   const getRoleBadge = (role: string) => {
     const colors = {
       admin: "bg-red-100 text-red-800",
-      department_head: "bg-blue-100 text-blue-800",
+      department_head: "bg-green-100 text-green-800",
       staff: "bg-gray-100 text-gray-800",
       nsp: "bg-purple-100 text-purple-800",
       intern: "bg-green-100 text-green-800",

@@ -51,7 +51,7 @@ export function ScheduleClient() {
   const typeColors = useMemo(
     () => ({
       work: "bg-primary",
-      meeting: "bg-blue-500",
+      meeting: "bg-green-500",
       training: "bg-green-500",
       break: "bg-orange-500",
     }),
@@ -334,7 +334,7 @@ export function ScheduleClient() {
                           <Clock className="h-4 w-4" />
                           {schedule.start_time} - {schedule.end_time}
                         </div>
-                        <Badge variant="outline" className="capitalize bg-blue-50 text-blue-700 border-blue-200">
+                        <Badge variant="outline" className="capitalize bg-green-50 text-green-700 border-green-200">
                           {schedule.type}
                         </Badge>
                         <Badge
@@ -347,7 +347,7 @@ export function ScheduleClient() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="hover:bg-blue-50 bg-transparent">
+                    <Button size="sm" variant="outline" className="hover:bg-green-50 bg-transparent">
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button size="sm" variant="outline" className="hover:bg-red-50 bg-transparent">

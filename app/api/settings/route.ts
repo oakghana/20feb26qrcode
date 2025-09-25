@@ -109,6 +109,15 @@ export async function PUT(request: NextRequest) {
 
     // Update system settings if admin
     if (systemSettings && profile?.role === "admin") {
+      if (systemSettings.geo_settings?.checkInProximityRange) {
+        const validatedProximity = Math.max(
+          50, // Updated minimum proximity distance from 100m to 50m
+          Math.min(2000, Number.parseInt(systemSettings.geo_settings.checkInProximityRange)),
+        )
+        systemSettings.geo_settings.checkInProximityRange = validatedProximity.toString()
+        systemSettings.geo_settings.globalProximityDistance = validatedProximity.toString()
+      }
+
       if (systemSettings.geo_settings?.defaultRadius) {
         const validatedRadius = Math.max(20, Number.parseInt(systemSettings.geo_settings.defaultRadius))
         systemSettings.geo_settings.defaultRadius = validatedRadius.toString()
@@ -126,15 +135,15 @@ export async function PUT(request: NextRequest) {
         throw systemSettingsError
       }
 
-      if (systemSettings.geo_settings?.defaultRadius) {
-        const newRadius = Number.parseInt(systemSettings.geo_settings.defaultRadius)
-        await supabase.from("geofence_locations").update({ radius_meters: newRadius }).eq("radius_meters", 20) // Update locations with default radius
-      }
-
       await supabase.from("audit_logs").insert({
         user_id: user.id,
-        action: "update_system_settings",
-        details: { updated_fields: Object.keys(systemSettings) },
+        action: "update_global_proximity_distance",
+        details: {
+          updated_fields: Object.keys(systemSettings),
+          global_proximity_distance:
+            systemSettings.geo_settings?.globalProximityDistance || systemSettings.geo_settings?.checkInProximityRange,
+          message: "Global proximity distance updated - applies to all staff members",
+        },
         ip_address: request.headers.get("x-forwarded-for") || "unknown",
         user_agent: request.headers.get("user-agent") || "unknown",
       })

@@ -151,7 +151,7 @@ export function validateAttendanceLocation(
   allLocations?: Array<{ location: GeofenceLocation; distance: number }>
   availableLocations?: Array<{ location: GeofenceLocation; distance: number }>
 } {
-  const checkInRange = proximitySettings?.checkInProximityRange || 500
+  const globalProximityDistance = proximitySettings?.checkInProximityRange || 50
 
   const nearest = findNearestLocation(userLocation, qccLocations)
 
@@ -171,9 +171,7 @@ export function validateAttendanceLocation(
     }))
     .sort((a, b) => a.distance - b.distance)
 
-  const availableLocations = allLocationsWithDistance.filter(({ distance }) => distance <= checkInRange)
-
-  const validation = isWithinGeofence(userLocation, nearest.location)
+  const availableLocations = allLocationsWithDistance.filter(({ distance }) => distance <= globalProximityDistance)
 
   const canCheckIn = availableLocations.length > 0
 
@@ -185,15 +183,20 @@ export function validateAttendanceLocation(
       message = `Ready for check-in at ${availableLocations.length} nearby locations. Nearest: ${availableLocations[0].location.name} (${availableLocations[0].distance}m away)`
     }
   } else {
-    message = `Outside ${checkInRange}m range - Cannot check in. Nearest location: ${nearest.location.name} (Distance: ${nearest.distance}m)`
+    message = `Outside ${globalProximityDistance}m range - Cannot check in. Nearest location: ${nearest.location.name} (Distance: ${nearest.distance}m)`
+  }
+
+  let accuracyWarning: string | undefined
+  if (userLocation.accuracy > globalProximityDistance / 10) {
+    accuracyWarning = `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For best results with ${globalProximityDistance}m proximity range, ensure you have a clear view of the sky.`
   }
 
   return {
     canCheckIn,
     nearestLocation: nearest.location,
-    distance: validation.distance,
+    distance: nearest.distance,
     message,
-    accuracyWarning: validation.accuracyWarning,
+    accuracyWarning,
     allLocations: allLocationsWithDistance,
     availableLocations,
   }
@@ -202,6 +205,7 @@ export function validateAttendanceLocation(
 export function validateCheckoutLocation(
   userLocation: LocationData,
   qccLocations: GeofenceLocation[],
+  proximitySettings?: ProximitySettings,
 ): {
   canCheckOut: boolean
   nearestLocation?: GeofenceLocation
@@ -209,6 +213,7 @@ export function validateCheckoutLocation(
   message: string
   accuracyWarning?: string
 } {
+  const globalProximityDistance = proximitySettings?.checkInProximityRange || 50
   const nearest = findNearestLocation(userLocation, qccLocations)
 
   if (!nearest) {
@@ -218,13 +223,26 @@ export function validateCheckoutLocation(
     }
   }
 
+  const canCheckOut = nearest.distance <= globalProximityDistance
+
+  let message: string
+  if (canCheckOut) {
+    message = `Ready for check-out at ${nearest.location.name} (${nearest.distance}m away)`
+  } else {
+    message = `Outside ${globalProximityDistance}m range - Cannot check out. Nearest location: ${nearest.location.name} (Distance: ${nearest.distance}m)`
+  }
+
+  let accuracyWarning: string | undefined
+  if (userLocation.accuracy > globalProximityDistance / 10) {
+    accuracyWarning = `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For best results with ${globalProximityDistance}m proximity range, ensure you have a clear view of the sky.`
+  }
+
   return {
-    canCheckOut: true,
+    canCheckOut,
     nearestLocation: nearest.location,
     distance: nearest.distance,
-    message: `Check-out allowed from any location. Nearest QCC location: ${nearest.location.name} (${nearest.distance}m away)`,
-    accuracyWarning:
-      userLocation.accuracy > 10 ? "GPS accuracy is low, but check-out is still allowed from any location." : undefined,
+    message,
+    accuracyWarning,
   }
 }
 

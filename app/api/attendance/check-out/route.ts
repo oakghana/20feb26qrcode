@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
+import { validateCheckoutLocation, type LocationData } from "@/lib/geolocation"
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +20,10 @@ export async function POST(request: NextRequest) {
     const { latitude, longitude, location_id, qr_code_used, qr_timestamp } = body
 
     console.log("[v0] Check-out request:", { latitude, longitude, location_id, qr_code_used })
+
+    if (!qr_code_used && (!latitude || !longitude)) {
+      return NextResponse.json({ error: "Location coordinates are required for GPS check-out" }, { status: 400 })
+    }
 
     // Find today's attendance record
     const today = new Date().toISOString().split("T")[0]
@@ -46,10 +51,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Already checked out today" }, { status: 400 })
     }
 
-    let checkoutLocationData = null
-    let isRemoteCheckout = false
+    const { data: qccLocations, error: locationsError } = await supabase
+      .from("geofence_locations")
+      .select("id, name, address, latitude, longitude, radius_meters, district_id")
+      .eq("is_active", true)
 
-    if (location_id) {
+    if (locationsError || !qccLocations || qccLocations.length === 0) {
+      return NextResponse.json({ error: "No active QCC locations found" }, { status: 400 })
+    }
+
+    const { data: settingsData } = await supabase.from("system_settings").select("geo_settings").single()
+
+    const proximitySettings = {
+      checkInProximityRange: settingsData?.geo_settings?.checkInProximityRange || 50,
+      defaultRadius: settingsData?.geo_settings?.defaultRadius || 20,
+      requireHighAccuracy: settingsData?.geo_settings?.requireHighAccuracy ?? true,
+      allowManualOverride: settingsData?.geo_settings?.allowManualOverride ?? false,
+    }
+
+    let checkoutLocationData = null
+    const isRemoteCheckout = false
+
+    if (!qr_code_used && latitude && longitude) {
+      const userLocation: LocationData = {
+        latitude,
+        longitude,
+        accuracy: 10, // Assume reasonable accuracy for API validation
+      }
+
+      const validation = validateCheckoutLocation(userLocation, qccLocations, proximitySettings)
+
+      if (!validation.canCheckOut) {
+        return NextResponse.json(
+          {
+            error: `Check-out requires being within ${proximitySettings.checkInProximityRange}m of any QCC location. ${validation.message}`,
+          },
+          { status: 400 },
+        )
+      }
+
+      checkoutLocationData = validation.nearestLocation
+      console.log("[v0] Proximity validation passed for check-out at:", checkoutLocationData?.name)
+    } else if (location_id) {
+      // For QR code check-out, use the provided location
       const { data: locationData, error: locationError } = await supabase
         .from("geofence_locations")
         .select("id, name, address, district_id, districts(name)")
@@ -58,22 +102,18 @@ export async function POST(request: NextRequest) {
 
       if (!locationError && locationData) {
         checkoutLocationData = locationData
-        console.log("[v0] Using provided location:", locationData.name)
+        console.log("[v0] Using QR code location:", locationData.name)
       }
     }
 
     if (!checkoutLocationData) {
-      const { data: defaultLocation } = await supabase
-        .from("geofence_locations")
-        .select("id, name, address, latitude, longitude, district_id, districts(name)")
-        .order("id")
-        .limit(1)
-
-      if (defaultLocation && defaultLocation.length > 0) {
-        checkoutLocationData = defaultLocation[0]
-        isRemoteCheckout = true
-        console.log("[v0] Using default location:", checkoutLocationData.name)
-      }
+      return NextResponse.json(
+        {
+          error:
+            "Unable to determine check-out location. Please ensure you are within 50m of a QCC location or use a QR code.",
+        },
+        { status: 400 },
+      )
     }
 
     // Calculate work hours

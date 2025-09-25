@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Settings, MapPin, Shield, Save, Database, Bell, LogOut } from "lucide-react"
+import { Settings, MapPin, Shield, Save, Database, Bell, LogOut, AlertTriangle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { PasswordManagement } from "@/components/admin/password-management"
 import { useRouter } from "next/navigation"
@@ -41,7 +41,8 @@ export function SettingsClient({ profile }: SettingsClientProps) {
     allowManualOverride: false,
     requireHighAccuracy: true,
     maxLocationAge: "300000", // 5 minutes
-    checkInProximityRange: "500", // New setting for check-in proximity
+    checkInProximityRange: "50", // Changed from "500" to "50" - global proximity distance for ALL users
+    globalProximityDistance: "50", // Changed from "500" to "50" - explicit global setting
   })
 
   const [appSettings, setAppSettings] = useState({
@@ -646,39 +647,48 @@ export function SettingsClient({ profile }: SettingsClientProps) {
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="h-5 w-5" />
                 <Shield className="h-4 w-4 text-orange-500" />
-                Advanced Geolocation Settings (Admin Only)
+                Global Proximity Settings (Admin Only)
               </CardTitle>
-              <CardDescription>Configure location tracking and geofencing parameters</CardDescription>
+              <CardDescription>
+                Configure proximity distance that applies to ALL staff members consistently
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <Label htmlFor="defaultRadius">Default Geofence Radius (meters)</Label>
+              <div className="grid gap-4 md:grid-cols-1">
+                <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950">
+                  <Label htmlFor="globalProximityDistance" className="text-base font-semibold">
+                    Global Proximity Distance (meters)
+                  </Label>
                   <Input
-                    id="defaultRadius"
+                    id="globalProximityDistance"
                     type="number"
                     min="50"
-                    max="500"
-                    value={geoSettings.defaultRadius}
-                    onChange={(e) => setGeoSettings({ ...geoSettings, defaultRadius: e.target.value })}
-                  />
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Minimum distance for attendance scanning (minimum 50m)
-                  </p>
-                </div>
-                <div>
-                  <Label htmlFor="checkInProximityRange">Check-in Proximity Range (meters)</Label>
-                  <Input
-                    id="checkInProximityRange"
-                    type="number"
-                    min="100"
                     max="2000"
                     value={geoSettings.checkInProximityRange}
-                    onChange={(e) => setGeoSettings({ ...geoSettings, checkInProximityRange: e.target.value })}
+                    onChange={(e) =>
+                      setGeoSettings({
+                        ...geoSettings,
+                        checkInProximityRange: e.target.value,
+                        globalProximityDistance: e.target.value,
+                      })
+                    }
+                    className="mt-2 text-lg font-medium"
                   />
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Maximum distance from QCC location for check-in (100m - 2000m)
+                  <p className="text-sm text-muted-foreground mt-2">
+                    <strong>This distance applies to ALL staff members consistently.</strong>
+                    <br />
+                    Staff can check in when they are within this distance from any QCC location.
+                    <br />
+                    Recommended: 50-100m for strict control, 200-500m for general use.
                   </p>
+                  <div className="mt-3 p-3 bg-white dark:bg-gray-800 rounded border">
+                    <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                      ✓ Current setting: {geoSettings.checkInProximityRange}m proximity for all users
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Individual location radius settings are now used for reference only
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -693,21 +703,37 @@ export function SettingsClient({ profile }: SettingsClientProps) {
                   />
                   <p className="text-sm text-muted-foreground mt-1">Maximum age of cached location data</p>
                 </div>
-                <div>
-                  <Label htmlFor="requireHighAccuracy">Require High Accuracy GPS</Label>
-                  <Switch
-                    id="requireHighAccuracy"
-                    checked={geoSettings.requireHighAccuracy}
-                    onCheckedChange={(checked) => setGeoSettings({ ...geoSettings, requireHighAccuracy: checked })}
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="requireHighAccuracy">Require High Accuracy GPS</Label>
+                    <Switch
+                      id="requireHighAccuracy"
+                      checked={geoSettings.requireHighAccuracy}
+                      onCheckedChange={(checked) => setGeoSettings({ ...geoSettings, requireHighAccuracy: checked })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="allowManualOverride">Allow Manual Location Override</Label>
+                    <Switch
+                      id="allowManualOverride"
+                      checked={geoSettings.allowManualOverride}
+                      onCheckedChange={(checked) => setGeoSettings({ ...geoSettings, allowManualOverride: checked })}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="allowManualOverride">Allow Manual Location Override</Label>
-                  <Switch
-                    id="allowManualOverride"
-                    checked={geoSettings.allowManualOverride}
-                    onCheckedChange={(checked) => setGeoSettings({ ...geoSettings, allowManualOverride: checked })}
-                  />
+              </div>
+
+              <div className="p-4 border border-orange-200 rounded-lg bg-orange-50 dark:bg-orange-950">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-orange-800 dark:text-orange-200">Proximity Distance Consistency</p>
+                    <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                      The global proximity distance setting above will be applied to ALL staff members immediately when
+                      saved. Individual location radius settings are maintained for reference but do not affect
+                      attendance validation.
+                    </p>
+                  </div>
                 </div>
               </div>
             </CardContent>

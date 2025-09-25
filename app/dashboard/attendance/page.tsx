@@ -5,6 +5,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { createClient } from "@/lib/supabase/server"
 import { Clock, History } from "lucide-react"
 
+export const metadata = {
+  title: "Attendance | QCC Electronic Attendance",
+  description: "Record your daily attendance and view your history at QCC locations",
+}
+
 export default async function AttendancePage() {
   const supabase = await createClient()
 

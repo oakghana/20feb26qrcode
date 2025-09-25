@@ -51,7 +51,7 @@ export function OfflineIndicator() {
           // Trigger background sync
           const registration = await navigator.serviceWorker.ready
           if ("sync" in registration) {
-            await registration.sync.register("attendance-sync")
+            await registration.sync.register("attendance")
             console.log("[Offline] Background sync registered")
           }
         } catch (error) {

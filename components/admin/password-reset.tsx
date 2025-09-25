@@ -134,8 +134,8 @@ export function PasswordReset({ userEmail, onClose }: PasswordResetProps) {
           </div>
         </form>
 
-        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-          <p className="text-sm text-blue-800">
+        <div className="mt-4 p-3 bg-green-50 rounded-lg">
+          <p className="text-sm text-green-800">
             <strong>Note:</strong> User passwords are securely stored in Supabase Auth and cannot be viewed directly.
             This reset function sends a secure email link that allows users to create a new password.
           </p>

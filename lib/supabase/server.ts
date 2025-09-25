@@ -20,12 +20,12 @@ export async function createClient() {
 
     // Validate environment variables with fallback values
     const supabaseUrl =
-      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "https://vgtajtqxgczhjboatvol.supabase.co" // Added fallback URL from provided config
+      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "https://vgtajtqxgczhjboatvol.supabase.co"
 
     const supabaseKey =
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
       process.env.SUPABASE_ANON_KEY ||
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZndGFqdHF4Z2N6aGpib2F0dm9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NzUyNDgsImV4cCI6MjA3MjU1MTI0OH0.EuuTCRC-rDoz_WHl4pwpV6_fEqrqcgGroa4nTjAEn1k" // Added fallback key from provided config
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZndGFqdHF4Z2N6aGpib2F0dm9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NzUyNDgsImV4cCI6MjA3MjU1MTI0OH0.EuuTCRC-rDoz_WHl4pwpV6_fEqrqcgGroa4nTjAEn1k"
 
     console.log("[v0] Using Supabase URL:", supabaseUrl)
     console.log("[v0] Using Supabase Key:", supabaseKey ? "present" : "missing")
@@ -42,40 +42,16 @@ export async function createClient() {
       throw new Error("Missing Supabase environment variables")
     }
 
-    let cookieStore
-    try {
-      cookieStore = await cookies()
-      console.log("[v0] Cookie store obtained successfully")
-    } catch (cookieError) {
-      console.error("[v0] Failed to get cookie store:", cookieError)
-      // Create a fallback cookie store that doesn't throw errors
-      cookieStore = {
-        getAll: () => [],
-        set: () => {},
-        get: () => undefined,
-      }
-    }
+    const cookieStore = await cookies()
 
     const client = createServerClient(supabaseUrl, supabaseKey, {
       cookies: {
         getAll() {
-          try {
-            return cookieStore.getAll ? cookieStore.getAll() : []
-          } catch {
-            return []
-          }
+          return cookieStore.getAll()
         },
         setAll(cookiesToSet) {
           try {
-            if (cookieStore.set) {
-              cookiesToSet.forEach(({ name, value, options }) => {
-                try {
-                  cookieStore.set(name, value, options)
-                } catch {
-                  // Ignore cookie setting errors in server components
-                }
-              })
-            }
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
           } catch {
             // The "setAll" method was called from a Server Component.
             // This can be ignored if you have middleware refreshing

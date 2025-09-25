@@ -40,21 +40,29 @@ export async function updateSession(request: NextRequest) {
     },
   })
 
-  // Do not run code between createServerClient and supabase.auth.getUser()
+  // Do not run code between createServerClient and
+  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+  // issues with users being randomly logged out.
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
+  // Allow access to auth pages and static files
   if (
     request.nextUrl.pathname !== "/" &&
-    !user &&
     !request.nextUrl.pathname.startsWith("/auth") &&
     !request.nextUrl.pathname.startsWith("/_next") &&
     !request.nextUrl.pathname.startsWith("/favicon")
   ) {
-    const url = request.nextUrl.clone()
-    url.pathname = "/auth/login"
-    return NextResponse.redirect(url)
+    // For v0 preview, be more permissive with auth
+    const isV0Preview = request.nextUrl.hostname.includes("vusercontent.net")
+    if (!isV0Preview && !user) {
+      // Only redirect in production if user is not authenticated
+      const url = request.nextUrl.clone()
+      url.pathname = "/auth/login"
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

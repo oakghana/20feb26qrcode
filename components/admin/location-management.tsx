@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import Link from "next/link"
 
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
@@ -19,7 +20,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { MapPin, Plus, QrCode, Edit, AlertTriangle, Loader2, Navigation, Wifi, WifiOff, Power } from "lucide-react"
+import {
+  MapPin,
+  Plus,
+  QrCode,
+  Edit,
+  AlertTriangle,
+  Loader2,
+  Navigation,
+  Wifi,
+  WifiOff,
+  Power,
+  Home,
+} from "lucide-react"
 import { generateQRCode, generateSignature, type QRCodeData } from "@/lib/qr-code"
 
 interface GeofenceLocation {
@@ -409,7 +422,15 @@ export function LocationManagement() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold">Location Management</h2>
+          <div className="flex items-center gap-3 mb-2">
+            <Button asChild variant="outline" size="sm" className="shrink-0 bg-transparent">
+              <Link href="/dashboard">
+                <Home className="h-4 w-4 mr-2" />
+                Dashboard
+              </Link>
+            </Button>
+            <h2 className="text-xl sm:text-2xl font-bold">Location Management</h2>
+          </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Manage geofence locations and QR codes</span>
             {!isOnline && (
