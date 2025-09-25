@@ -61,8 +61,13 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
       console.log("[v0] Password Management: Fetching users")
       const response = await fetch("/api/admin/users")
 
+      console.log("[v0] Password Management: Response status:", response.status)
+      console.log("[v0] Password Management: Response headers:", Object.fromEntries(response.headers.entries()))
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorText = await response.text()
+        console.error("[v0] Password Management: HTTP error response:", errorText)
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`)
       }
 
       const contentType = response.headers.get("content-type")
@@ -78,13 +83,21 @@ export function PasswordManagement({ userId, userEmail, isAdmin = false }: Passw
       if (result.success) {
         setUsers(result.users || [])
         console.log("[v0] Password Management: Loaded", result.users?.length || 0, "users")
+        if (result.debug) {
+          console.log("[v0] Password Management: Debug info:", result.debug)
+        }
       } else {
         console.error("[v0] Password Management: API error:", result.error)
-        setError(result.error || "Failed to fetch users")
+        const errorMessage = result.error || "Failed to fetch users"
+        const contextMessage = result.userRole
+          ? `Current user role: ${result.userRole}. Required roles: ${result.requiredRoles?.join(", ") || "admin, department_head"}`
+          : ""
+        setError(`${errorMessage}${contextMessage ? ` (${contextMessage})` : ""}`)
       }
     } catch (error) {
       console.error("[v0] Password Management: Fetch error:", error)
-      setError("Failed to load users. Please try again.")
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      setError(`Failed to load users: ${errorMessage}`)
     } finally {
       setLoadingUsers(false)
     }

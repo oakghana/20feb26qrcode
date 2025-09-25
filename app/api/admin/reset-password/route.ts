@@ -46,17 +46,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Check if user is admin
     const { data: profile, error: profileError } = await supabase
       .from("user_profiles")
-      .select("role")
+      .select("role, first_name, last_name, is_active")
       .eq("id", user.id)
       .single()
 
-    if (profileError || profile?.role !== "admin") {
-      console.error("[v0] Admin password reset: Not admin:", profile?.role)
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 })
+    console.log("[v0] Admin password reset: Profile check:", { profile, profileError })
+
+    if (profileError) {
+      console.error("[v0] Admin password reset: Profile error:", profileError)
+      return NextResponse.json({ error: "Failed to verify admin status" }, { status: 500 })
     }
+
+    if (!profile) {
+      console.error("[v0] Admin password reset: No profile found")
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
+    }
+
+    if (profile.role !== "admin") {
+      console.error("[v0] Admin password reset: Not admin:", profile.role)
+      return NextResponse.json(
+        {
+          error: "Admin access required",
+          currentRole: profile.role,
+        },
+        { status: 403 },
+      )
+    }
+
+    if (!profile.is_active) {
+      console.error("[v0] Admin password reset: Admin account inactive")
+      return NextResponse.json({ error: "Admin account is inactive" }, { status: 403 })
+    }
+
+    console.log("[v0] Admin password reset: Admin verified:", `${profile.first_name} ${profile.last_name}`)
 
     const { data: targetUser, error: userError } = await supabase
       .from("user_profiles")

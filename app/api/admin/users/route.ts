@@ -19,12 +19,42 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Users API: User authenticated", user.id)
 
-    // Check if user has admin or department_head role
-    const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
+    const { data: profile, error: profileError } = await supabase
+      .from("user_profiles")
+      .select("role, is_active, first_name, last_name")
+      .eq("id", user.id)
+      .single()
 
-    if (!profile || !["admin", "department_head"].includes(profile.role)) {
-      console.log("[v0] Users API: Insufficient permissions", profile?.role)
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    console.log("[v0] Users API: Profile query result:", { profile, profileError })
+
+    if (profileError) {
+      console.error("[v0] Users API: Profile fetch error:", profileError)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch user profile",
+          details: profileError.message,
+        },
+        { status: 500 },
+      )
+    }
+
+    if (!profile) {
+      console.log("[v0] Users API: No profile found for user")
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
+    }
+
+    console.log("[v0] Users API: User profile:", profile)
+
+    if (!["admin", "department_head"].includes(profile.role)) {
+      console.log("[v0] Users API: Insufficient permissions - user role:", profile.role)
+      return NextResponse.json(
+        {
+          error: "Insufficient permissions",
+          userRole: profile.role,
+          requiredRoles: ["admin", "department_head"],
+        },
+        { status: 403 },
+      )
     }
 
     console.log("[v0] Users API: Permission check passed", profile.role)
@@ -61,6 +91,14 @@ export async function GET(request: NextRequest) {
       {
         success: true,
         users: users || [],
+        debug: {
+          currentUser: {
+            id: user.id,
+            role: profile.role,
+            name: `${profile.first_name} ${profile.last_name}`,
+          },
+          totalUsers: users?.length || 0,
+        },
       },
       {
         headers: {
