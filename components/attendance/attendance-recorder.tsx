@@ -744,45 +744,57 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         </CardHeader>
         <CardContent className="space-y-4">
           {userProfile && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="font-medium text-blue-900 mb-2 flex items-center gap-2">
+            <div className="p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800/50 rounded-lg">
+              <div className="font-medium text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
                 <Building className="h-4 w-4" />
                 Your Assignment Information
               </div>
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-blue-700">Employee:</span>
-                  <span className="font-medium text-blue-900">
+                  <span className="text-green-700 dark:text-green-300">Employee:</span>
+                  <span className="font-medium text-green-900 dark:text-green-100">
                     {userProfile.first_name} {userProfile.last_name} ({userProfile.employee_id})
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-blue-700">Position:</span>
-                  <span className="font-medium text-blue-900">{userProfile.position}</span>
+                  <span className="text-green-700 dark:text-green-300">Position:</span>
+                  <span className="font-medium text-green-900 dark:text-green-100">{userProfile.position}</span>
                 </div>
                 {userProfile.departments && (
                   <div className="flex justify-between">
-                    <span className="text-blue-700">Department:</span>
-                    <span className="font-medium text-blue-900">{userProfile.departments.name}</span>
+                    <span className="text-green-700 dark:text-green-300">Department:</span>
+                    <span className="font-medium text-green-900 dark:text-green-100">
+                      {userProfile.departments.name}
+                    </span>
                   </div>
                 )}
                 {assignedLocationInfo ? (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-blue-700">Assigned Location:</span>
-                      <span className="font-medium text-blue-900">{assignedLocationInfo.location.name}</span>
+                      <span className="text-green-700 dark:text-green-300">Assigned Location:</span>
+                      <span className="font-medium text-green-900 dark:text-green-100">
+                        {assignedLocationInfo.location.name}
+                      </span>
                     </div>
                     {assignedLocationInfo.distance !== undefined && (
                       <div className="flex justify-between">
-                        <span className="text-blue-700">Distance to Assignment:</span>
+                        <span className="text-green-700 dark:text-green-300">Distance to Assignment:</span>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-blue-900">{assignedLocationInfo.distance}m</span>
+                          <span className="font-medium text-green-900 dark:text-green-100">
+                            {assignedLocationInfo.distance}m
+                          </span>
                           {assignedLocationInfo.isAtAssignedLocation ? (
-                            <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200"
+                            >
                               At Assigned Location
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800">
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200"
+                            >
                               Remote Location
                             </Badge>
                           )}
@@ -792,15 +804,20 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                   </>
                 ) : userProfile.assigned_location_id ? (
                   <div className="flex justify-between">
-                    <span className="text-blue-700">Assigned Location:</span>
-                    <span className="font-medium text-blue-900">Loading...</span>
+                    <span className="text-green-700 dark:text-green-300">Assigned Location:</span>
+                    <span className="font-medium text-green-900 dark:text-green-100">Loading...</span>
                   </div>
                 ) : (
                   <div className="flex justify-between">
-                    <span className="text-blue-700">Assigned Location:</span>
-                    <span className="font-medium text-orange-600">Not assigned</span>
+                    <span className="text-green-700 dark:text-green-300">Assigned Location:</span>
+                    <span className="font-medium text-orange-600 dark:text-orange-400">Not assigned</span>
                   </div>
                 )}
+                <div className="mt-2 p-2 bg-green-100 dark:bg-green-900/20 rounded text-xs">
+                  <span className="text-green-800 dark:text-green-200">
+                    ✓ You can check in at any QCC location within 50 meters of your current position
+                  </span>
+                </div>
               </div>
             </div>
           )}

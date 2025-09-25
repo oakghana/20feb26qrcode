@@ -44,53 +44,34 @@ export async function GET() {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 })
     }
 
-    // For admins and department heads, return all locations (fallback to admin API)
-    if (["admin", "department_head"].includes(profile.role)) {
-      const { data: locations, error } = await supabase
-        .from("geofence_locations")
-        .select(`
-          id,
-          name,
-          address,
-          latitude,
-          longitude,
-          radius_meters,
-          district_id
-        `)
-        .eq("is_active", true)
-        .order("name")
+    const { data: locations, error } = await supabase
+      .from("geofence_locations")
+      .select(`
+        id,
+        name,
+        address,
+        latitude,
+        longitude,
+        radius_meters,
+        district_id
+      `)
+      .eq("is_active", true)
+      .order("name")
 
-      if (error) {
-        console.error("[v0] User Location API - Database error:", error)
-        return NextResponse.json({ error: "Failed to fetch locations" }, { status: 500 })
-      }
-
-      console.log("[v0] User Location API - Admin found locations:", locations?.length)
-      return NextResponse.json({
-        success: true,
-        data: locations,
-        user_role: profile.role,
-      })
+    if (error) {
+      console.error("[v0] User Location API - Database error:", error)
+      return NextResponse.json({ error: "Failed to fetch locations" }, { status: 500 })
     }
 
-    // For staff, return only their assigned location
-    if (profile.assigned_location_id && profile.geofence_locations) {
-      console.log("[v0] User Location API - Staff assigned location:", profile.geofence_locations.name)
-      return NextResponse.json({
-        success: true,
-        data: [profile.geofence_locations], // Return as array for consistency
-        user_role: profile.role,
-        assigned_location_only: true,
-      })
-    }
+    console.log("[v0] User Location API - Found locations:", locations?.length)
 
-    // Staff with no assigned location
-    console.log("[v0] User Location API - Staff with no assigned location")
     return NextResponse.json({
       success: true,
-      data: [],
+      data: locations,
       user_role: profile.role,
-      message: "No location assigned. Please contact your administrator.",
+      assigned_location_id: profile.assigned_location_id,
+      assigned_location: profile.geofence_locations,
+      message: "All QCC locations available for attendance within 50m proximity range",
     })
   } catch (error) {
     console.error("[v0] User Location API - Unexpected error:", error)

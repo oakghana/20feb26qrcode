@@ -1,21 +1,21 @@
 import type React from "react"
-import { Space_Grotesk, DM_Sans } from "next/font/google"
+import { Inter, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 import { NotificationProvider } from "@/components/ui/notification-system"
 import { PWAServiceWorker } from "@/components/ui/pwa-service-worker"
 import { TimeBasedThemeProvider } from "@/components/theme/time-based-theme-provider"
 
-const spaceGrotesk = Space_Grotesk({
+const inter = Inter({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-space-grotesk",
-  weight: ["400", "500", "600", "700"],
+  variable: "--font-inter",
+  weight: ["300", "400", "500", "600", "700"],
 })
 
-const dmSans = DM_Sans({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-dm-sans",
+  variable: "--font-jetbrains-mono",
   weight: ["400", "500", "600", "700"],
 })
 
@@ -64,7 +64,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${dmSans.variable} antialiased`}>
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}>
       <body className="font-sans">
         <TimeBasedThemeProvider>
           <NotificationProvider>{children}</NotificationProvider>
