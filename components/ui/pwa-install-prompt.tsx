@@ -39,6 +39,12 @@ export function PWAInstallPrompt() {
       }, 5000)
     }
 
+    const handleShowPWAInstall = () => {
+      if (deferredPrompt && !isInstalled) {
+        setShowPrompt(true)
+      }
+    }
+
     const handleAppInstalled = () => {
       console.log("[PWA] App was installed")
       setShowPrompt(false)
@@ -49,12 +55,14 @@ export function PWAInstallPrompt() {
     checkInstalled()
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
     window.addEventListener("appinstalled", handleAppInstalled)
+    window.addEventListener("show-pwa-install", handleShowPWAInstall)
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
       window.removeEventListener("appinstalled", handleAppInstalled)
+      window.removeEventListener("show-pwa-install", handleShowPWAInstall)
     }
-  }, [isInstalled])
+  }, [isInstalled, deferredPrompt])
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return

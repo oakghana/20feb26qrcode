@@ -7,6 +7,7 @@ interface PWAState {
   isOnline: boolean
   canInstall: boolean
   installPrompt: any
+  serviceWorkerReady: boolean
 }
 
 export function usePWA() {
@@ -15,6 +16,7 @@ export function usePWA() {
     isOnline: true,
     canInstall: false,
     installPrompt: null,
+    serviceWorkerReady: false,
   })
 
   useEffect(() => {
@@ -50,16 +52,39 @@ export function usePWA() {
     const registerServiceWorker = async () => {
       if ("serviceWorker" in navigator) {
         try {
-          const registration = await navigator.serviceWorker.register("/sw.js")
-          console.log("[PWA] Service Worker registered:", registration)
+          // First check if the service worker file exists
+          const swResponse = await fetch("/sw.js", { method: "HEAD" })
+          if (!swResponse.ok) {
+            console.warn("[PWA] Service Worker file not accessible, skipping registration")
+            return
+          }
+
+          const registration = await navigator.serviceWorker.register("/sw.js", {
+            scope: "/",
+          })
+
+          console.log("[PWA] Service Worker registered successfully:", registration)
+          setPWAState((prev) => ({ ...prev, serviceWorkerReady: true }))
 
           // Listen for updates
           registration.addEventListener("updatefound", () => {
             console.log("[PWA] Service Worker update found")
+            const newWorker = registration.installing
+            if (newWorker) {
+              newWorker.addEventListener("statechange", () => {
+                if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                  console.log("[PWA] New service worker installed, refresh recommended")
+                }
+              })
+            }
           })
         } catch (error) {
-          console.error("[PWA] Service Worker registration failed:", error)
+          console.warn("[PWA] Service Worker registration failed, continuing without SW:", error)
+          // Don't throw error, just continue without service worker
+          setPWAState((prev) => ({ ...prev, serviceWorkerReady: false }))
         }
+      } else {
+        console.warn("[PWA] Service Workers not supported in this browser")
       }
     }
 
@@ -95,6 +120,14 @@ export function usePWA() {
       } catch (error) {
         console.error("[PWA] Install failed:", error)
       }
+    } else {
+      console.log("[PWA] No install prompt available, showing manual instructions")
+      alert(
+        "To install this app:\n\n" +
+          "Chrome/Edge: Click the menu (⋮) → 'Install app'\n" +
+          "Safari: Click Share → 'Add to Home Screen'\n" +
+          "Firefox: Click the menu → 'Install'",
+      )
     }
   }
 
