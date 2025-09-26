@@ -11,12 +11,14 @@ import {
   validateCheckoutLocation,
   requestLocationPermission,
   calculateDistance,
+  detectWindowsLocationCapabilities,
+  watchLocation,
   type LocationData,
   type ProximitySettings,
 } from "@/lib/geolocation"
 import { getDeviceInfo } from "@/lib/device-info"
 import { validateQRCode, type QRCodeData } from "@/lib/qr-code"
-import { MapPin, Clock, CheckCircle, Loader2, AlertTriangle, Navigation, Wifi, WifiOff, Building } from "lucide-react"
+import { MapPin, Clock, Loader2, AlertTriangle, Navigation, Wifi, WifiOff, Building } from "lucide-react"
 import { useRealTimeLocations } from "@/hooks/use-real-time-locations"
 import { createClient } from "@/lib/supabase/client"
 
@@ -92,11 +94,17 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     message: string
   }>({ granted: null, message: "" })
   const [showLocationHelp, setShowLocationHelp] = useState(false)
-  const [selectedLocationId, setSelectedLocationId] = useState<string>("")
+  const [windowsCapabilities, setWindowsCapabilities] = useState<ReturnType<
+    typeof detectWindowsLocationCapabilities
+  > | null>(null)
+  const [locationWatchId, setLocationWatchId] = useState<number | null>(null)
 
   useEffect(() => {
     fetchUserProfile()
     loadProximitySettings()
+    const capabilities = detectWindowsLocationCapabilities()
+    setWindowsCapabilities(capabilities)
+    console.log("[v0] Windows location capabilities detected:", capabilities)
   }, [])
 
   useEffect(() => {
@@ -282,9 +290,27 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     setError(null)
 
     try {
+      console.log("[v0] Requesting location with Windows optimization...")
       const location = await getCurrentLocation()
       setUserLocation(location)
       setLocationPermissionStatus({ granted: true, message: "Location access granted" })
+
+      if (windowsCapabilities?.isWindows && !locationWatchId) {
+        const watchId = watchLocation(
+          (updatedLocation) => {
+            console.log("[v0] Location updated via Windows Location Services:", updatedLocation)
+            setUserLocation(updatedLocation)
+          },
+          (error) => {
+            console.log("[v0] Location watch error:", error.message)
+            // Don't show errors for watch failures, just log them
+          },
+        )
+        if (watchId) {
+          setLocationWatchId(watchId)
+        }
+      }
+
       return location
     } catch (error) {
       if (error instanceof Error && error.message.includes("Location access denied")) {
@@ -301,6 +327,14 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    return () => {
+      if (locationWatchId && navigator.geolocation) {
+        navigator.geolocation.clearWatch(locationWatchId)
+      }
+    }
+  }, [locationWatchId])
 
   const handleCheckIn = async () => {
     setIsLoading(true)
@@ -322,13 +356,13 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       // First priority: Use user's assigned location if they're within range
       if (userProfile?.assigned_location_id && assignedLocationInfo?.isAtAssignedLocation) {
         targetLocationId = userProfile.assigned_location_id
-        console.log("[v0] Using assigned location for check-in:", assignedLocationInfo.location.name)
+        console.log("[v0] Automatically using assigned location for check-in:", assignedLocationInfo.location.name)
       }
-      // Second priority: Use the nearest available location
+      // Second priority: Use the nearest available location automatically
       else if (locationValidation.availableLocations && locationValidation.availableLocations.length > 0) {
         targetLocationId = locationValidation.availableLocations[0].location.id
         console.log(
-          "[v0] Using nearest available location for check-in:",
+          "[v0] Automatically using nearest available location for check-in:",
           locationValidation.availableLocations[0].location.name,
         )
       }
@@ -342,6 +376,8 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       }
 
       const deviceInfo = getDeviceInfo()
+
+      console.log("[v0] Performing automatic check-in at:", targetLocation.name)
 
       const response = await fetch("/api/attendance/check-in", {
         method: "POST",
@@ -367,7 +403,9 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         }
 
         setSuccess(message)
-        window.location.reload()
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
       } else {
         setError(result.error || "Failed to check in")
       }
@@ -423,25 +461,26 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             return
           }
 
+          // Automatically select the best location for check-out
           if (userProfile?.assigned_location_id && assignedLocationInfo?.isAtAssignedLocation) {
             nearestLocation = locations.find((loc) => loc.id === userProfile.assigned_location_id)
-            console.log("[v0] Using assigned location for check-out:", nearestLocation?.name)
+            console.log("[v0] Automatically using assigned location for check-out:", nearestLocation?.name)
           } else {
             nearestLocation = locationDistances[0]?.location
-            console.log("[v0] Using nearest location for check-out:", nearestLocation?.name)
+            console.log("[v0] Automatically using nearest location for check-out:", nearestLocation?.name)
           }
         } else {
           const nearest = findNearestLocation(location, locations)
           nearestLocation = nearest?.location || locations[0]
         }
       } catch (locationError) {
-        console.log("[v0] Location unavailable for check-out, showing location selector:", locationError)
+        console.log("[v0] Location unavailable for check-out:", locationError)
         setError("Location is required for check-out. Please enable GPS or use a QR code.")
         setIsLoading(false)
         return
       }
 
-      console.log("[v0] Attempting check-out with location:", nearestLocation?.name)
+      console.log("[v0] Attempting automatic check-out with location:", nearestLocation?.name)
 
       const requestBody = {
         latitude: location?.latitude || null,
@@ -638,8 +677,21 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
             Attendance Status
+            {windowsCapabilities?.isWindows && (
+              <Badge variant="outline" className="text-xs ml-auto">
+                Windows Location Services
+              </Badge>
+            )}
           </CardTitle>
-          <CardDescription>Your current attendance status for today</CardDescription>
+          <CardDescription>
+            Your current attendance status for today
+            {windowsCapabilities?.isWindows && (
+              <span className="block text-xs mt-1 text-muted-foreground">
+                Using Windows Location Services for enhanced accuracy ({windowsCapabilities.supportedSources.join(", ")}
+                )
+              </span>
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
@@ -726,9 +778,19 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             Your current location relative to QCC Stations/Locations ({proximitySettings.checkInProximityRange}m
             proximity required for check-in)
             <br />
-            Check-in requires being within {proximitySettings.checkInProximityRange}m of any QCC location. Check-out can
-            be done from anywhere within 50m of the company. Location data updates automatically when admins make
-            changes.
+            {windowsCapabilities?.isWindows ? (
+              <>
+                Check-in requires being within {proximitySettings.checkInProximityRange}m of any QCC location. Windows
+                Location Services provide enhanced accuracy using GPS, Wi-Fi, and cellular data. Location data updates
+                automatically when admins make changes.
+              </>
+            ) : (
+              <>
+                Check-in requires being within {proximitySettings.checkInProximityRange}m of any QCC location. Check-out
+                can be done from anywhere within 50m of the company. Location data updates automatically when admins
+                make changes.
+              </>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -828,12 +890,12 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Getting Location...
+                      {windowsCapabilities?.isWindows ? "Getting Windows Location..." : "Getting Location..."}
                     </>
                   ) : (
                     <>
                       <MapPin className="mr-2 h-4 w-4" />
-                      Get Current Location
+                      {windowsCapabilities?.isWindows ? "Get Windows Location" : "Get Current Location"}
                     </>
                   )}
                 </Button>
@@ -853,7 +915,9 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription className="space-y-2">
-                    <div className="font-medium">Location Access Required</div>
+                    <div className="font-medium">
+                      {windowsCapabilities?.isWindows ? "Windows Location Access Required" : "Location Access Required"}
+                    </div>
                     <div className="text-sm whitespace-pre-line">{locationPermissionStatus.message}</div>
                     <div className="flex gap-2 mt-3">
                       <Button size="sm" onClick={handleRequestLocationPermission} disabled={isLoading}>
@@ -874,148 +938,196 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-sm">Location acquired</span>
-              </div>
-
-              {locationValidation?.accuracyWarning && (
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription className="text-sm">{locationValidation.accuracyWarning}</AlertDescription>
-                </Alert>
-              )}
-
-              {locationValidation && (
-                <div className="space-y-3">
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="font-medium mb-2">Available QCC Locations:</div>
-                    <div className="space-y-2">
-                      {locationValidation.allLocations?.slice(0, 5).map(({ location, distance }) => (
-                        <div
-                          key={location.id}
-                          className="flex items-center justify-between p-2 bg-background rounded border"
-                        >
-                          <div>
-                            <div className="font-medium text-sm">{location.name}</div>
-                            <div className="text-xs text-muted-foreground">{location.address}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium">{distance}m</div>
-                            {distance <= proximitySettings.checkInProximityRange ? (
-                              <Badge variant="secondary" className="text-xs">
-                                Available
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-xs">
-                                Too Far
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      {locationValidation.allLocations && locationValidation.allLocations.length > 5 && (
-                        <div className="text-xs text-muted-foreground text-center">
-                          +{locationValidation.allLocations.length - 5} more locations available
-                        </div>
-                      )}
-                    </div>
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg">
+                <div className="font-medium text-blue-900 dark:text-blue-100 mb-2">Current Location</div>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-blue-700 dark:text-blue-300">Coordinates:</span>
+                    <span className="font-mono text-blue-900 dark:text-blue-100">
+                      {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
+                    </span>
                   </div>
-
-                  {locationValidation.canCheckIn ? (
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-600">{locationValidation.message}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-orange-600" />
-                      <span className="text-sm text-orange-600">{locationValidation.message}</span>
+                  <div className="flex justify-between">
+                    <span className="text-blue-700 dark:text-blue-300">Accuracy:</span>
+                    <span className="font-medium text-blue-900 dark:text-blue-100">
+                      ±{Math.round(userLocation.accuracy)}m
+                    </span>
+                  </div>
+                  {userLocation.timestamp && (
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-300">Updated:</span>
+                      <span className="font-medium text-blue-900 dark:text-blue-100">
+                        {new Date(userLocation.timestamp).toLocaleTimeString()}
+                      </span>
                     </div>
                   )}
+                </div>
+              </div>
 
-                  {canCheckOut && (
-                    <div className="flex items-center gap-2">
-                      {locationValidation.canCheckOut ? (
-                        <>
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                          <span className="text-sm text-green-600">
-                            Check-out available within {proximitySettings.checkInProximityRange}m range
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertTriangle className="h-4 w-4 text-orange-600" />
-                          <span className="text-sm text-orange-600">
-                            Check-out requires being within {proximitySettings.checkInProximityRange}m of any QCC
-                            location
-                          </span>
-                        </>
-                      )}
+              {locationValidation && (
+                <div className="space-y-2">
+                  <div
+                    className={`p-3 rounded-lg border ${
+                      locationValidation.canCheckIn
+                        ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800/50"
+                        : "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/50"
+                    }`}
+                  >
+                    <div
+                      className={`font-medium mb-2 ${
+                        locationValidation.canCheckIn
+                          ? "text-green-900 dark:text-green-100"
+                          : "text-orange-900 dark:text-orange-100"
+                      }`}
+                    >
+                      Location Validation
+                    </div>
+                    <div
+                      className={`text-sm ${
+                        locationValidation.canCheckIn
+                          ? "text-green-700 dark:text-green-300"
+                          : "text-orange-700 dark:text-orange-300"
+                      }`}
+                    >
+                      {locationValidation.message}
+                    </div>
+                    {locationValidation.nearestLocation && locationValidation.distance !== undefined && (
+                      <div className="mt-2 text-xs space-y-1">
+                        <div className="flex justify-between">
+                          <span>Nearest Location:</span>
+                          <span className="font-medium">{locationValidation.nearestLocation.name}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Distance:</span>
+                          <span className="font-medium">{Math.round(locationValidation.distance)}m</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {locationValidation.allLocations && locationValidation.allLocations.length > 0 && (
+                    <div className="p-3 bg-gray-50 dark:bg-gray-950/30 border border-gray-200 dark:border-gray-800/50 rounded-lg">
+                      <div className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-sm">
+                        All QCC Locations (Distance)
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        {locationValidation.allLocations.slice(0, 5).map(({ location, distance }) => (
+                          <div key={location.id} className="flex justify-between">
+                            <span className="text-gray-700 dark:text-gray-300 truncate mr-2">{location.name}</span>
+                            <span
+                              className={`font-medium ${
+                                distance <= proximitySettings.checkInProximityRange
+                                  ? "text-green-600 dark:text-green-400"
+                                  : "text-gray-600 dark:text-gray-400"
+                              }`}
+                            >
+                              {distance}m
+                            </span>
+                          </div>
+                        ))}
+                        {locationValidation.allLocations.length > 5 && (
+                          <div className="text-gray-500 dark:text-gray-400 text-center">
+                            ... and {locationValidation.allLocations.length - 5} more
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               )}
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={getCurrentLocationData}
+                  disabled={isLoading}
+                  variant="outline"
+                  size="sm"
+                  className="bg-transparent"
+                >
+                  <Navigation className="mr-2 h-4 w-4" />
+                  Refresh Location
+                </Button>
+                <Button
+                  onClick={handleRefreshLocations}
+                  disabled={isLoading}
+                  variant="outline"
+                  size="sm"
+                  className="bg-transparent"
+                  title="Refresh location data"
+                >
+                  <Loader2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* Action Buttons */}
-      <div className="space-y-4">
-        {error && (
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {success && (
-          <Alert>
-            <CheckCircle className="h-4 w-4" />
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="flex gap-4">
-          {canCheckIn && (
-            <Button onClick={handleCheckIn} disabled={isLoading || !locationValidation?.canCheckIn} className="flex-1">
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Checking In...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Check In
-                </>
-              )}
-            </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle>Actions</CardTitle>
+          <CardDescription>Check in or out of your work location</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
-          {canCheckOut && (
-            <Button
-              onClick={handleCheckOut}
-              disabled={isLoading || !locationValidation?.canCheckOut}
-              variant="outline"
-              className="flex-1 bg-transparent"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Checking Out...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Check Out
-                </>
-              )}
-            </Button>
+          {success && (
+            <Alert>
+              <AlertDescription className="text-green-700 dark:text-green-300">{success}</AlertDescription>
+            </Alert>
           )}
-        </div>
-      </div>
+
+          <div className="flex gap-2">
+            {canCheckIn && (
+              <Button
+                onClick={handleCheckIn}
+                disabled={isLoading || !locationValidation?.canCheckIn}
+                className="flex-1"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Checking In...
+                  </>
+                ) : (
+                  <>
+                    <Clock className="mr-2 h-4 w-4" />
+                    Check In
+                  </>
+                )}
+              </Button>
+            )}
+
+            {canCheckOut && (
+              <Button onClick={handleCheckOut} disabled={isLoading} variant="outline" className="flex-1 bg-transparent">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Checking Out...
+                  </>
+                ) : (
+                  <>
+                    <Clock className="mr-2 h-4 w-4" />
+                    Check Out
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+
+          {!locationValidation?.canCheckIn && canCheckIn && (
+            <div className="text-sm text-muted-foreground text-center">
+              You must be within {proximitySettings.checkInProximityRange}m of a QCC location to check in
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

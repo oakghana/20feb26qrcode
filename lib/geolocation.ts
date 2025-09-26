@@ -29,6 +29,41 @@ export class GeolocationError extends Error {
   }
 }
 
+export function detectWindowsLocationCapabilities(): {
+  isWindows: boolean
+  hasGPS: boolean
+  hasWiFi: boolean
+  supportedSources: string[]
+  recommendedSettings: PositionOptions
+} {
+  const userAgent = navigator.userAgent.toLowerCase()
+  const isWindows = userAgent.includes("windows")
+
+  // Detect available location sources on Windows
+  const hasGPS = "geolocation" in navigator && "permissions" in navigator
+  const hasWiFi = "connection" in navigator || "onLine" in navigator
+
+  const supportedSources = []
+  if (hasGPS) supportedSources.push("GPS")
+  if (hasWiFi) supportedSources.push("Wi-Fi")
+  if (isWindows) supportedSources.push("Windows Location Services")
+
+  // Windows-optimized settings for better accuracy
+  const recommendedSettings: PositionOptions = {
+    enableHighAccuracy: true,
+    timeout: isWindows ? 20000 : 15000, // Longer timeout for Windows Location Services
+    maximumAge: isWindows ? 30000 : 60000, // Shorter cache for Windows for better accuracy
+  }
+
+  return {
+    isWindows,
+    hasGPS,
+    hasWiFi,
+    supportedSources,
+    recommendedSettings,
+  }
+}
+
 export async function getCurrentLocation(): Promise<LocationData> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -36,8 +71,20 @@ export async function getCurrentLocation(): Promise<LocationData> {
       return
     }
 
+    const capabilities = detectWindowsLocationCapabilities()
+    console.log("[v0] Windows location capabilities:", capabilities)
+
+    const options = capabilities.recommendedSettings
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        console.log("[v0] Location acquired:", {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          source: capabilities.isWindows ? "Windows Location Services" : "Browser Geolocation",
+        })
+
         resolve({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -46,27 +93,109 @@ export async function getCurrentLocation(): Promise<LocationData> {
       },
       (error) => {
         let message = "Unknown error occurred"
+        let guidance = ""
+
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            message =
-              "Location access denied. Please enable location permissions in your browser settings and try again, or use the QR code option instead."
+            if (capabilities.isWindows) {
+              message = "Location access denied. Please enable location permissions."
+              guidance = `
+Windows Location Setup:
+1. Open Windows Settings → Privacy & Security → Location
+2. Turn ON "Location services" 
+3. Turn ON "Allow apps to access your location"
+4. In your browser, click the location icon in the address bar and select "Allow"
+5. Refresh this page and try again
+
+Alternative: Use the QR code option for attendance.`
+            } else {
+              message =
+                "Location access denied. Please enable location permissions in your browser settings and try again, or use the QR code option instead."
+            }
             break
           case error.POSITION_UNAVAILABLE:
-            message = "Location information is unavailable. Please check your GPS settings or use the QR code option."
+            if (capabilities.isWindows) {
+              message = "Windows Location Services unavailable."
+              guidance = `
+Troubleshooting:
+1. Check if Windows Location Services are enabled in Settings
+2. Ensure you have an active internet connection for Wi-Fi positioning
+3. Try moving to a location with better GPS signal (near a window)
+4. Use the QR code option as an alternative`
+            } else {
+              message = "Location information is unavailable. Please check your GPS settings or use the QR code option."
+            }
             break
           case error.TIMEOUT:
-            message = "Location request timed out. Please try again or use the QR code option."
+            if (capabilities.isWindows) {
+              message = "Windows Location Services timed out."
+              guidance = `
+Try these steps:
+1. Ensure Windows Location Services are running
+2. Check your internet connection
+3. Move to a location with better signal
+4. Try again or use the QR code option`
+            } else {
+              message = "Location request timed out. Please try again or use the QR code option."
+            }
             break
         }
-        reject(new GeolocationError(message, error.code))
+
+        const fullMessage = guidance ? `${message}\n\n${guidance}` : message
+        reject(new GeolocationError(fullMessage, error.code))
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 60000,
-      },
+      options,
     )
   })
+}
+
+export function watchLocation(
+  onLocationUpdate: (location: LocationData) => void,
+  onError: (error: GeolocationError) => void,
+): number | null {
+  if (!navigator.geolocation) {
+    onError(new GeolocationError("Geolocation is not supported by this browser", 0))
+    return null
+  }
+
+  const capabilities = detectWindowsLocationCapabilities()
+
+  // Windows-optimized watch options
+  const options: PositionOptions = {
+    enableHighAccuracy: true,
+    timeout: capabilities.isWindows ? 25000 : 20000,
+    maximumAge: capabilities.isWindows ? 15000 : 30000, // More frequent updates on Windows
+  }
+
+  return navigator.geolocation.watchPosition(
+    (position) => {
+      onLocationUpdate({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+      })
+    },
+    (error) => {
+      let message = "Location tracking error"
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          message = capabilities.isWindows
+            ? "Windows Location Services access denied. Please check your Windows privacy settings."
+            : "Location access denied"
+          break
+        case error.POSITION_UNAVAILABLE:
+          message = capabilities.isWindows
+            ? "Windows Location Services unavailable. Check your location settings."
+            : "Location unavailable"
+          break
+        case error.TIMEOUT:
+          message = capabilities.isWindows ? "Windows Location Services timeout. Trying again..." : "Location timeout"
+          break
+      }
+      onError(new GeolocationError(message, error.code))
+    },
+    options,
+  )
 }
 
 export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -96,9 +225,15 @@ export function isWithinGeofence(
   const isWithin = distance <= geofenceLocation.radius_meters
   let accuracyWarning: string | undefined
 
+  const capabilities = detectWindowsLocationCapabilities()
+
   if (userLocation.accuracy > 20) {
-    accuracyWarning =
-      "GPS accuracy is low. Please ensure you have a clear view of the sky for better location precision."
+    accuracyWarning = capabilities.isWindows
+      ? `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For better accuracy on Windows:
+• Move near a window for better GPS signal
+• Ensure Windows Location Services are enabled
+• Check that Wi-Fi is connected for assisted positioning`
+      : "GPS accuracy is low. Please ensure you have a clear view of the sky for better location precision."
   }
 
   return {
@@ -187,8 +322,15 @@ export function validateAttendanceLocation(
   }
 
   let accuracyWarning: string | undefined
+  const capabilities = detectWindowsLocationCapabilities()
+
   if (userLocation.accuracy > globalProximityDistance / 10) {
-    accuracyWarning = `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For best results with ${globalProximityDistance}m proximity range, ensure you have a clear view of the sky.`
+    accuracyWarning = capabilities.isWindows
+      ? `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For better accuracy with ${globalProximityDistance}m proximity range on Windows:
+• Ensure Windows Location Services are enabled in Settings
+• Move to a location with better GPS signal (near windows)
+• Check that Wi-Fi is connected for assisted positioning`
+      : `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For best results with ${globalProximityDistance}m proximity range, ensure you have a clear view of the sky.`
   }
 
   return {
@@ -233,8 +375,15 @@ export function validateCheckoutLocation(
   }
 
   let accuracyWarning: string | undefined
+  const capabilities = detectWindowsLocationCapabilities()
+
   if (userLocation.accuracy > globalProximityDistance / 10) {
-    accuracyWarning = `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For best results with ${globalProximityDistance}m proximity range, ensure you have a clear view of the sky.`
+    accuracyWarning = capabilities.isWindows
+      ? `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For better accuracy with ${globalProximityDistance}m proximity range on Windows:
+• Check Windows Location Services settings
+• Ensure good GPS signal reception
+• Verify Wi-Fi connection for assisted positioning`
+      : `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For best results with ${globalProximityDistance}m proximity range, ensure you have a clear view of the sky.`
   }
 
   return {
@@ -254,6 +403,8 @@ export async function requestLocationPermission(): Promise<{ granted: boolean; m
     }
   }
 
+  const capabilities = detectWindowsLocationCapabilities()
+
   try {
     // Check if permissions API is available
     if ("permissions" in navigator) {
@@ -262,11 +413,29 @@ export async function requestLocationPermission(): Promise<{ granted: boolean; m
       if (permission.state === "granted") {
         return { granted: true, message: "Location permission already granted" }
       } else if (permission.state === "denied") {
-        return {
-          granted: false,
-          message:
-            "Location access is blocked. Please enable location permissions in your browser settings:\n\n1. Click the location icon in your address bar\n2. Select 'Allow' for location access\n3. Refresh the page and try again\n\nAlternatively, use the QR code option for attendance.",
-        }
+        const message = capabilities.isWindows
+          ? `Location access is blocked. To enable on Windows:
+
+1. Windows Settings:
+   • Open Settings → Privacy & Security → Location
+   • Turn ON "Location services"
+   • Turn ON "Allow apps to access your location"
+
+2. Browser Settings:
+   • Click the location/lock icon in your address bar
+   • Select "Allow" for location access
+   • Refresh the page and try again
+
+Alternative: Use the QR code option for attendance.`
+          : `Location access is blocked. Please enable location permissions in your browser settings:
+
+1. Click the location icon in your address bar
+2. Select 'Allow' for location access
+3. Refresh the page and try again
+
+Alternatively, use the QR code option for attendance.`
+
+        return { granted: false, message }
       }
     }
 
@@ -275,15 +444,70 @@ export async function requestLocationPermission(): Promise<{ granted: boolean; m
     return { granted: true, message: "Location permission granted successfully" }
   } catch (error) {
     if (error instanceof GeolocationError && error.code === 1) {
-      return {
-        granted: false,
-        message:
-          "Location access denied. To enable:\n\n1. Click the location icon (🔒) in your browser's address bar\n2. Select 'Allow' for location access\n3. Refresh the page and try again\n\nOr use the QR code option for attendance tracking.",
-      }
+      const message = capabilities.isWindows
+        ? `Location access denied. To enable on Windows:
+
+1. Windows Settings → Privacy & Security → Location:
+   • Turn ON "Location services"
+   • Turn ON "Allow apps to access your location"
+
+2. Browser permissions:
+   • Click the location icon (🔒) in your browser's address bar
+   • Select "Allow" for location access
+   • Refresh the page and try again
+
+Or use the QR code option for attendance tracking.`
+        : `Location access denied. To enable:
+
+1. Click the location icon (🔒) in your browser's address bar
+2. Select "Allow" for location access
+3. Refresh the page and try again
+
+Or use the QR code option for attendance tracking.`
+
+      return { granted: false, message }
     }
     return {
       granted: false,
       message: error instanceof Error ? error.message : "Failed to access location. Please use the QR code option.",
     }
+  }
+}
+
+export function getWindowsLocationTroubleshooting(): {
+  isWindows: boolean
+  troubleshootingSteps: string[]
+  quickFixes: string[]
+} {
+  const capabilities = detectWindowsLocationCapabilities()
+
+  if (!capabilities.isWindows) {
+    return {
+      isWindows: false,
+      troubleshootingSteps: [
+        "Enable location permissions in your browser",
+        "Check GPS settings on your device",
+        "Ensure you have internet connectivity",
+      ],
+      quickFixes: ["Try refreshing the page", "Use QR code for attendance instead"],
+    }
+  }
+
+  return {
+    isWindows: true,
+    troubleshootingSteps: [
+      "Open Windows Settings > Privacy & Security > Location",
+      "Turn on 'Location services' for Windows",
+      "Turn on 'Allow apps to access your location'",
+      "In your browser, allow location access when prompted",
+      "Ensure you have Wi-Fi or internet connection for better accuracy",
+      "Check that your browser has permission to access location",
+    ],
+    quickFixes: [
+      "Connect to Wi-Fi for improved location accuracy",
+      "Move to an area with better GPS signal (near windows)",
+      "Restart your browser and try again",
+      "Use QR code for immediate attendance tracking",
+    ],
   }
 }
