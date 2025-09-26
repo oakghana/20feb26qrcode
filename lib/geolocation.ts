@@ -2,6 +2,7 @@ export interface LocationData {
   latitude: number
   longitude: number
   accuracy: number
+  timestamp?: number
 }
 
 export interface GeofenceLocation {
@@ -89,6 +90,7 @@ export async function getCurrentLocation(): Promise<LocationData> {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
+          timestamp: Date.now(),
         })
       },
       (error) => {
@@ -173,6 +175,7 @@ export function watchLocation(
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         accuracy: position.coords.accuracy,
+        timestamp: Date.now(),
       })
     },
     (error) => {
