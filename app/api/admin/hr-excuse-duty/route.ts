@@ -16,11 +16,26 @@ export async function GET(request: NextRequest) {
 
     const { data: profile, error: profileError } = await supabase
       .from("user_profiles")
-      .select("role")
+      .select(`
+        role,
+        department_id,
+        departments:departments(name, code)
+      `)
       .eq("id", user.id)
       .single()
 
-    if (profileError || !profile || profile.role !== "admin") {
+    if (profileError || !profile) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
+    const isAdmin = profile.role === "admin"
+    const isHRDepartmentHead =
+      profile.role === "department_head" &&
+      profile.departments &&
+      (profile.departments.name.toLowerCase().includes("hr") ||
+        profile.departments.name.toLowerCase().includes("human resource"))
+
+    if (!isAdmin && !isHRDepartmentHead) {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
@@ -47,19 +62,15 @@ export async function GET(request: NextRequest) {
       (excuseDocs || []).map(async (doc) => {
         const { data: userProfile } = await supabase
           .from("user_profiles")
-          .select("first_name, last_name, employee_id, department_id")
+          .select(`
+            first_name, 
+            last_name, 
+            employee_id, 
+            department_id,
+            departments:departments(name, code)
+          `)
           .eq("id", doc.user_id)
           .single()
-
-        let department = null
-        if (userProfile?.department_id) {
-          const { data: deptData } = await supabase
-            .from("departments")
-            .select("name, code")
-            .eq("id", userProfile.department_id)
-            .single()
-          department = deptData
-        }
 
         let hodReviewer = null
         if (doc.hod_reviewed_by) {
@@ -75,8 +86,11 @@ export async function GET(request: NextRequest) {
           ...doc,
           user_profiles: userProfile
             ? {
-                ...userProfile,
-                departments: department,
+                first_name: userProfile.first_name,
+                last_name: userProfile.last_name,
+                employee_id: userProfile.employee_id,
+                department_id: userProfile.department_id,
+                departments: userProfile.departments,
               }
             : null,
           hod_reviewer: hodReviewer,
@@ -108,11 +122,28 @@ export async function PUT(request: NextRequest) {
 
     const { data: profile, error: profileError } = await supabase
       .from("user_profiles")
-      .select("role, first_name, last_name")
+      .select(`
+        role, 
+        first_name, 
+        last_name,
+        department_id,
+        departments:departments(name, code)
+      `)
       .eq("id", user.id)
       .single()
 
-    if (profileError || !profile || profile.role !== "admin") {
+    if (profileError || !profile) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
+    const isAdmin = profile.role === "admin"
+    const isHRDepartmentHead =
+      profile.role === "department_head" &&
+      profile.departments &&
+      (profile.departments.name.toLowerCase().includes("hr") ||
+        profile.departments.name.toLowerCase().includes("human resource"))
+
+    if (!isAdmin && !isHRDepartmentHead) {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 

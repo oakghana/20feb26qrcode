@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -74,11 +74,7 @@ export function HRExcuseDutyClient() {
   const [submitting, setSubmitting] = useState(false)
   const [statusFilter, setStatusFilter] = useState("hr_review")
 
-  useEffect(() => {
-    fetchExcuseDocuments()
-  }, [statusFilter])
-
-  const fetchExcuseDocuments = async () => {
+  const fetchExcuseDocuments = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
@@ -100,7 +96,11 @@ export function HRExcuseDutyClient() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [statusFilter])
+
+  useEffect(() => {
+    fetchExcuseDocuments()
+  }, [fetchExcuseDocuments])
 
   const handleHRReview = async () => {
     if (!selectedDoc) return
@@ -138,14 +138,14 @@ export function HRExcuseDutyClient() {
     }
   }
 
-  const openReviewDialog = (doc: ExcuseDocument) => {
+  const openReviewDialog = useCallback((doc: ExcuseDocument) => {
     setSelectedDoc(doc)
     setHrAction("approved")
     setHrNotes("")
     setReviewDialogOpen(true)
-  }
+  }, [])
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = useCallback((status: string) => {
     switch (status) {
       case "approved":
         return (
@@ -190,9 +190,9 @@ export function HRExcuseDutyClient() {
           </Badge>
         )
     }
-  }
+  }, [])
 
-  const getDocumentTypeBadge = (type: string) => {
+  const getDocumentTypeBadge = useCallback((type: string) => {
     const colors = {
       medical: "bg-blue-100 text-blue-800 border-blue-200",
       emergency: "bg-red-100 text-red-800 border-red-200",
@@ -205,15 +205,19 @@ export function HRExcuseDutyClient() {
         {type.charAt(0).toUpperCase() + type.slice(1)}
       </Badge>
     )
-  }
+  }, [])
 
-  const viewDocument = (fileUrl: string) => {
+  const viewDocument = useCallback((fileUrl: string) => {
     window.open(fileUrl, "_blank", "width=800,height=600,scrollbars=yes,resizable=yes")
-  }
+  }, [])
 
-  const pendingCount = excuseDocuments.filter((doc) => doc.final_status === "hr_review").length
-  const approvedCount = excuseDocuments.filter((doc) => doc.hr_status === "approved").length
-  const archivedCount = excuseDocuments.filter((doc) => doc.hr_status === "archived").length
+  const { pendingCount, approvedCount, archivedCount } = useMemo(() => {
+    return {
+      pendingCount: excuseDocuments.filter((doc) => doc.final_status === "hr_review").length,
+      approvedCount: excuseDocuments.filter((doc) => doc.hr_status === "approved").length,
+      archivedCount: excuseDocuments.filter((doc) => doc.hr_status === "archived").length,
+    }
+  }, [excuseDocuments])
 
   if (loading) {
     return (

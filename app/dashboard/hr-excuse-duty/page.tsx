@@ -15,11 +15,28 @@ export default async function HRExcuseDutyPage() {
 
   const { data: profile } = await supabase
     .from("user_profiles")
-    .select("role, first_name, last_name")
+    .select(`
+      role, 
+      first_name, 
+      last_name,
+      department_id,
+      departments:departments(name, code)
+    `)
     .eq("id", user.id)
     .single()
 
-  if (!profile || profile.role !== "admin") {
+  if (!profile) {
+    redirect("/dashboard")
+  }
+
+  const isAdmin = profile.role === "admin"
+  const isHRDepartmentHead =
+    profile.role === "department_head" &&
+    profile.departments &&
+    (profile.departments.name.toLowerCase().includes("hr") ||
+      profile.departments.name.toLowerCase().includes("human resource"))
+
+  if (!isAdmin && !isHRDepartmentHead) {
     redirect("/dashboard")
   }
 
