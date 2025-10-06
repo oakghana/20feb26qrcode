@@ -64,9 +64,14 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Staff API - User authenticated:", user.id)
 
-    const { data: staff, error: staffError } = await supabase
-      .from("user_profiles")
-      .select(`
+    const searchParams = request.nextUrl.searchParams
+    const searchTerm = searchParams.get("search")
+    const departmentFilter = searchParams.get("department")
+    const roleFilter = searchParams.get("role")
+
+    console.log("[v0] Staff API - Filters:", { searchTerm, departmentFilter, roleFilter })
+
+    let query = supabase.from("user_profiles").select(`
         id,
         employee_id,
         first_name,
@@ -83,15 +88,38 @@ export async function GET(request: NextRequest) {
         created_at,
         updated_at
       `)
-      .order("created_at", { ascending: false })
+
+    if (departmentFilter && departmentFilter !== "all") {
+      query = query.eq("department_id", departmentFilter)
+    }
+
+    if (roleFilter && roleFilter !== "all") {
+      query = query.eq("role", roleFilter)
+    }
+
+    // Execute query
+    const { data: staff, error: staffError } = await query.order("created_at", { ascending: false })
 
     if (staffError) {
       console.error("[v0] Staff API - Query error:", staffError)
       return createJsonResponse({ success: false, error: "Failed to fetch staff", data: [] }, 500)
     }
 
-    const departmentIds = [...new Set(staff?.map((s) => s.department_id).filter(Boolean))]
-    const locationIds = [...new Set(staff?.map((s) => s.assigned_location_id).filter(Boolean))]
+    let filteredStaff = staff || []
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase()
+      filteredStaff = filteredStaff.filter(
+        (member) =>
+          member.first_name?.toLowerCase().includes(searchLower) ||
+          member.last_name?.toLowerCase().includes(searchLower) ||
+          member.email?.toLowerCase().includes(searchLower) ||
+          member.employee_id?.toLowerCase().includes(searchLower) ||
+          `${member.first_name} ${member.last_name}`.toLowerCase().includes(searchLower),
+      )
+    }
+
+    const departmentIds = [...new Set(filteredStaff?.map((s) => s.department_id).filter(Boolean))]
+    const locationIds = [...new Set(filteredStaff?.map((s) => s.assigned_location_id).filter(Boolean))]
 
     const [departmentsResult, locationsResult] = await Promise.all([
       departmentIds.length > 0
@@ -106,7 +134,7 @@ export async function GET(request: NextRequest) {
     const locationsMap = new Map(locationsResult.data?.map((l) => [l.id, l]) || [])
 
     const enrichedStaff =
-      staff?.map((staffMember) => ({
+      filteredStaff?.map((staffMember) => ({
         ...staffMember,
         departments: staffMember.department_id ? departmentsMap.get(staffMember.department_id) || null : null,
         geofence_locations: staffMember.assigned_location_id

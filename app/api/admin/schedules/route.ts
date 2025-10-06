@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
 
     let query = supabase.from("schedules").select(`
         *,
-        user_profiles(first_name, last_name, email),
         departments(name)
       `)
 
@@ -52,9 +51,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch schedules" }, { status: 500 })
     }
 
+    const userIds = schedules?.filter((s) => s.user_id).map((s) => s.user_id) || []
+    let userProfiles: Record<string, any> = {}
+
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("user_profiles")
+        .select("id, first_name, last_name, email")
+        .in("id", userIds)
+
+      if (profiles) {
+        userProfiles = profiles.reduce(
+          (acc, profile) => {
+            acc[profile.id] = profile
+            return acc
+          },
+          {} as Record<string, any>,
+        )
+      }
+    }
+
+    const schedulesWithProfiles =
+      schedules?.map((schedule) => ({
+        ...schedule,
+        user_profiles: schedule.user_id ? userProfiles[schedule.user_id] : null,
+      })) || []
+
     return NextResponse.json({
       success: true,
-      data: schedules || [],
+      data: schedulesWithProfiles,
     })
   } catch (error) {
     console.error("Schedules API error:", error)
