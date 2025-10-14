@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id)
       .gte("check_in_time", `${yesterdayDate}T00:00:00`)
       .lt("check_in_time", `${yesterdayDate}T23:59:59`)
-      .single()
+      .maybeSingle()
 
     let missedCheckoutWarning = null
     if (yesterdayRecord && yesterdayRecord.check_in_time && !yesterdayRecord.check_out_time) {
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id)
       .gte("check_in_time", `${today}T00:00:00`)
       .lt("check_in_time", `${today}T23:59:59`)
-      .single()
+      .maybeSingle()
 
     if (existingRecord && existingRecord.check_in_time) {
       return NextResponse.json({ error: "Already checked in today" }, { status: 400 })
@@ -105,17 +105,45 @@ export async function POST(request: NextRequest) {
         .from("districts")
         .select("name")
         .eq("id", locationData.district_id)
-        .single()
+        .maybeSingle()
       districtName = district?.name
     }
 
     // Create or update device session
     let deviceSessionId = null
     if (device_info) {
-      const { data: deviceSession, error: deviceError } = await supabase
+      // First try to find existing session
+      const { data: existingSession } = await supabase
         .from("device_sessions")
-        .upsert(
-          {
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("device_id", device_info.device_id)
+        .maybeSingle()
+
+      if (existingSession) {
+        // Update existing session
+        const { data: updatedSession } = await supabase
+          .from("device_sessions")
+          .update({
+            device_name: device_info.device_name,
+            device_type: device_info.device_type,
+            browser_info: device_info.browser_info,
+            ip_address: request.ip || null,
+            is_active: true,
+            last_activity: new Date().toISOString(),
+          })
+          .eq("id", existingSession.id)
+          .select("id")
+          .maybeSingle()
+
+        if (updatedSession) {
+          deviceSessionId = updatedSession.id
+        }
+      } else {
+        // Create new session
+        const { data: newSession } = await supabase
+          .from("device_sessions")
+          .insert({
             user_id: user.id,
             device_id: device_info.device_id,
             device_name: device_info.device_name,
@@ -124,14 +152,13 @@ export async function POST(request: NextRequest) {
             ip_address: request.ip || null,
             is_active: true,
             last_activity: new Date().toISOString(),
-          },
-          { onConflict: "user_id,device_id" },
-        )
-        .select("id")
-        .single()
+          })
+          .select("id")
+          .maybeSingle()
 
-      if (!deviceError && deviceSession) {
-        deviceSessionId = deviceSession.id
+        if (newSession) {
+          deviceSessionId = newSession.id
+        }
       }
     }
 
@@ -161,7 +188,7 @@ export async function POST(request: NextRequest) {
       .from("user_profiles")
       .select("assigned_location_id")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
     if (userProfile?.assigned_location_id && userProfile.assigned_location_id !== location_id) {
       attendanceData.is_remote_location = true
