@@ -25,8 +25,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Location coordinates are required for GPS check-out" }, { status: 400 })
     }
 
-    // Find today's attendance record
+    const now = new Date()
     const today = new Date().toISOString().split("T")[0]
+
+    // Find today's attendance record
     const { data: attendanceRecord, error: findError } = await supabase
       .from("attendance_records")
       .select(`
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id)
       .gte("check_in_time", `${today}T00:00:00`)
       .lt("check_in_time", `${today}T23:59:59`)
-      .single()
+      .maybeSingle()
 
     if (findError || !attendanceRecord) {
       console.log("[v0] No attendance record found:", findError)
@@ -49,6 +51,22 @@ export async function POST(request: NextRequest) {
     if (attendanceRecord.check_out_time) {
       console.log("[v0] Already checked out:", attendanceRecord.check_out_time)
       return NextResponse.json({ error: "Already checked out today" }, { status: 400 })
+    }
+
+    // Check if check-in was from a previous day (after midnight has passed)
+    const checkInDate = new Date(attendanceRecord.check_in_time).toISOString().split("T")[0]
+    const currentDate = now.toISOString().split("T")[0]
+
+    if (checkInDate !== currentDate) {
+      console.log("[v0] Check-out attempted after midnight:", { checkInDate, currentDate })
+      return NextResponse.json(
+        {
+          error:
+            "Check-out must be done before 11:59 PM on the same day. The system has switched to check-in mode for the new day. Your previous day's attendance will be auto-closed.",
+          requiresNewCheckIn: true,
+        },
+        { status: 400 },
+      )
     }
 
     const { data: qccLocations, error: locationsError } = await supabase

@@ -443,6 +443,20 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     setSuccess(null)
 
     try {
+      if (todayAttendance?.check_in_time) {
+        const checkInDate = new Date(todayAttendance.check_in_time).toISOString().split("T")[0]
+        const currentDate = new Date().toISOString().split("T")[0]
+
+        if (checkInDate !== currentDate) {
+          setError(
+            "Check-out must be done before 11:59 PM on the same day. The system has switched to check-in mode for the new day. Please check in for today.",
+          )
+          setIsLoading(false)
+          return
+        }
+      }
+      // </CHANGE>
+
       let location = null
       let nearestLocation = null
 
@@ -701,10 +715,19 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     }
   }
 
-  const isCheckedIn = todayAttendance?.check_in_time && !todayAttendance?.check_out_time
+  const checkInDate = todayAttendance?.check_in_time
+    ? new Date(todayAttendance.check_in_time).toISOString().split("T")[0]
+    : null
+  const currentDate = new Date().toISOString().split("T")[0]
+
+  // If check-in was from a previous day, treat as if no check-in exists (allow new check-in)
+  const isFromPreviousDay = checkInDate && checkInDate !== currentDate
+
+  const isCheckedIn = todayAttendance?.check_in_time && !todayAttendance?.check_out_time && !isFromPreviousDay
   const isCheckedOut = todayAttendance?.check_out_time
-  const canCheckIn = !todayAttendance?.check_in_time
-  const canCheckOut = isCheckedIn
+  const canCheckIn = !todayAttendance?.check_in_time || isFromPreviousDay
+  const canCheckOut = isCheckedIn && !isFromPreviousDay
+  // </CHANGE>
 
   const defaultMode = canCheckIn ? "checkin" : canCheckOut ? "checkout" : "completed"
 

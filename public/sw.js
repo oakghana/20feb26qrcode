@@ -2,7 +2,7 @@ const CACHE_NAME = "qcc-attendance-v1"
 const STATIC_CACHE = "qcc-static-v1"
 const DYNAMIC_CACHE = "qcc-dynamic-v1"
 
-const APP_VERSION = "1.6.10.25"
+const APP_VERSION = "1.8. 14/10/25"
 
 const CACHE_EXPIRATION_TIME = 5 * 60 * 1000 // 5 minutes in milliseconds
 

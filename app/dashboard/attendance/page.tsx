@@ -18,7 +18,6 @@ export default async function AttendancePage() {
   } = await supabase.auth.getUser()
   if (!user) return null
 
-  // Get today's attendance with enhanced location tracking
   const today = new Date().toISOString().split("T")[0]
   const { data: todayAttendance } = await supabase
     .from("attendance_records")
