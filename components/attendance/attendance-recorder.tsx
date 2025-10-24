@@ -31,6 +31,8 @@ import { validateQRCode, type QRCodeData } from "@/lib/qr-code"
 import { MapPin, Clock, Loader2, AlertTriangle, Navigation, Wifi, WifiOff, Building, QrCode } from "lucide-react"
 import { useRealTimeLocations } from "@/hooks/use-real-time-locations"
 import { createClient } from "@/lib/supabase/client"
+import QrScanner from "qr-scanner" // Import QrScanner
+import { useRef } from "react" // Import React and useRef
 
 interface GeofenceLocation {
   id: string
@@ -117,6 +119,11 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     location: LocationData | null
     nearestLocation: any
   } | null>(null)
+
+  // QR Scanner state and refs
+  const qrScannerRef = useRef<QrScanner | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const qrResultRef = useRef<string | null>(null)
 
   useEffect(() => {
     fetchUserProfile()
@@ -657,11 +664,68 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     setIsLoading(false)
   }
 
+  // QR Scanner functions
+  const startScanner = async () => {
+    if (!videoRef.current) return
+
+    try {
+      // Request camera permission
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      videoRef.current.srcObject = stream
+
+      qrScannerRef.current = new QrScanner(
+        videoRef.current,
+        (result) => {
+          qrResultRef.current = result.data // Store result in ref
+          if (qrScanMode === "checkin") {
+            handleQRCheckIn(JSON.parse(result.data))
+          } else {
+            handleQRCheckOut(JSON.parse(result.data))
+          }
+          setShowQRScanner(false) // Close scanner after successful scan
+          qrScannerRef.current?.stop() // Stop the scanner
+        },
+        {
+          // options: https://qr-scanner.github.io/api/#/ScannerOptions
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+        },
+      )
+
+      await qrScannerRef.current.start()
+    } catch (error) {
+      console.error("Failed to start QR scanner:", error)
+      setError("Could not start camera. Please check permissions or try again.")
+      setShowQRScanner(false) // Close scanner if camera fails
+    }
+  }
+
+  const stopScanner = () => {
+    if (qrScannerRef.current) {
+      qrScannerRef.current.stop()
+      qrScannerRef.current = null
+    }
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream
+      stream.getTracks().forEach((track) => track.stop())
+      videoRef.current.srcObject = null
+    }
+  }
+
+  useEffect(() => {
+    if (showQRScanner) {
+      startScanner()
+    } else {
+      stopScanner()
+    }
+    return () => stopScanner() // Cleanup on unmount
+  }, [showQRScanner, qrScanMode])
+
   const handleQRCheckIn = async (qrData: QRCodeData) => {
     setIsLoading(true)
     setError(null)
     setSuccess(null)
-    setShowQRScanner(false)
+    setShowQRScanner(false) // Ensure scanner is closed
 
     try {
       const validation = validateQRCode(qrData)
@@ -731,7 +795,7 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
     setIsLoading(true)
     setError(null)
     setSuccess(null)
-    setShowQRScanner(false)
+    setShowQRScanner(false) // Ensure scanner is closed
 
     try {
       const validation = validateQRCode(qrData)
@@ -1424,37 +1488,36 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                 Position the QR code within your camera view. The system will automatically detect and process it.
               </AlertDescription>
             </Alert>
-            {/* QR Scanner component would go here - for now, show manual input */}
-            <div className="space-y-4">
-              <div className="aspect-square bg-muted rounded-lg flex items-center justify-center">
-                <div className="text-center text-muted-foreground">
-                  <QrCode className="h-16 w-16 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">QR Scanner</p>
-                  <p className="text-xs">Camera access required</p>
-                </div>
-              </div>
-              <Button
-                onClick={() => {
-                  const qrData = prompt("Enter QR code data (for testing):")
-                  if (qrData) {
-                    try {
-                      const parsedData = JSON.parse(qrData)
-                      if (qrScanMode === "checkin") {
-                        handleQRCheckIn(parsedData)
-                      } else {
-                        handleQRCheckOut(parsedData)
-                      }
-                    } catch {
-                      setError("Invalid QR code format")
-                    }
-                  }
-                }}
-                variant="outline"
-                className="w-full bg-transparent"
-              >
-                Manual Input (Testing)
-              </Button>
+            <div className="aspect-square bg-muted rounded-lg flex items-center justify-center">
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover rounded-lg"
+                autoPlay
+                playsInline
+                muted
+              ></video>
             </div>
+            <Button
+              onClick={() => {
+                const qrData = prompt("Enter QR code data (for testing):")
+                if (qrData) {
+                  try {
+                    const parsedData = JSON.parse(qrData)
+                    if (qrScanMode === "checkin") {
+                      handleQRCheckIn(parsedData)
+                    } else {
+                      handleQRCheckOut(parsedData)
+                    }
+                  } catch {
+                    setError("Invalid QR code format")
+                  }
+                }
+              }}
+              variant="outline"
+              className="w-full bg-transparent mt-4"
+            >
+              Manual Input (Testing)
+            </Button>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowQRScanner(false)} className="bg-transparent">
