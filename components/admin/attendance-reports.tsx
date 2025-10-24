@@ -50,6 +50,7 @@ interface AttendanceRecord {
   check_out_location_name?: string
   is_check_in_outside_location?: boolean
   is_check_out_outside_location?: boolean
+  early_checkout_reason?: string
   user_profiles: {
     first_name: string
     last_name: string
@@ -251,6 +252,7 @@ export function AttendanceReports() {
             "Check Out Time",
             "Check Out Location",
             "Check Out Status",
+            "Early Checkout Reason",
             "Work Hours",
             "Status",
             "Location Status",
@@ -268,6 +270,7 @@ export function AttendanceReports() {
               `"${record.check_out_time ? new Date(record.check_out_time).toLocaleTimeString() : "N/A"}"`,
               `"${record.check_out_location?.name || record.check_out_location_name || "N/A"}"`,
               `"${record.is_check_out_outside_location ? "Outside Assigned Location" : "On-site"}"`,
+              `"${record.early_checkout_reason || "-"}"`,
               record.work_hours?.toFixed(2) || "0",
               `"${record.status}"`,
               `"${record.is_check_in_outside_location || record.is_check_out_outside_location ? "Remote Work" : "On-site"}"`,
@@ -817,6 +820,7 @@ export function AttendanceReports() {
                       <TableHead>Check In Location</TableHead>
                       <TableHead>Check Out</TableHead>
                       <TableHead>Check Out Location</TableHead>
+                      <TableHead>Early Checkout Reason</TableHead>
                       <TableHead>Hours</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Location Status</TableHead>
@@ -825,13 +829,13 @@ export function AttendanceReports() {
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8">
+                        <TableCell colSpan={11} className="text-center py-8">
                           Loading records...
                         </TableCell>
                       </TableRow>
                     ) : records.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8">
+                        <TableCell colSpan={11} className="text-center py-8">
                           No records found for the selected period
                         </TableCell>
                       </TableRow>
@@ -878,6 +882,21 @@ export function AttendanceReports() {
                                 </Badge>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            {record.early_checkout_reason ? (
+                              <div className="max-w-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="text-orange-600 border-orange-300 bg-orange-50 mb-1"
+                                >
+                                  Early Checkout
+                                </Badge>
+                                <p className="text-sm text-muted-foreground">{record.early_checkout_reason}</p>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
                           </TableCell>
                           <TableCell>{record.work_hours?.toFixed(2) || "0"}</TableCell>
                           <TableCell>

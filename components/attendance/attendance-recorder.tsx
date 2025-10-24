@@ -1289,6 +1289,22 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
             )}
           </div>
 
+          <div className="pt-2 border-t">
+            <Button
+              onClick={() => window.location.reload()}
+              disabled={isLoading}
+              variant="secondary"
+              className="w-full"
+              size="sm"
+            >
+              <Navigation className="mr-2 h-4 w-4" />
+              Refresh Attendance Status
+            </Button>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Click to manually update your attendance status if the buttons don't change after check-in/check-out
+            </p>
+          </div>
+
           {!locationValidation?.canCheckIn && canCheckIn && (
             <div className="text-sm text-muted-foreground text-center">
               You must be within {proximitySettings.checkInProximityRange}m of a QCC location to check in
