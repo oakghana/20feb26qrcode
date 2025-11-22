@@ -98,8 +98,8 @@ export async function POST(request: Request) {
         check_in_location_id: location.id,
         check_in_location_name: location.name,
         check_in_time: now.toISOString(),
+        check_in_method: device_info?.method || "qr_code",
         status: "present",
-        qr_code_used: true,
         notes: qr_timestamp ? `QR code scanned at ${new Date(qr_timestamp).toLocaleString()}` : "QR code check-in",
       })
       .select()
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
       record_id: attendance.id,
       new_values: {
         location: location.name,
-        qr_code_used: true,
+        check_in_method: device_info?.method || "qr_code",
         timestamp: now.toISOString(),
       },
     })
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
         attendance,
         location_tracking: {
           location_name: location.name,
-          qr_code_used: true,
+          check_in_method: device_info?.method || "qr_code",
         },
       },
       missedCheckoutWarning,

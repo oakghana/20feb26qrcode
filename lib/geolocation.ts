@@ -343,9 +343,10 @@ export function validateAttendanceLocation(
   allLocations?: Array<{ location: GeofenceLocation; distance: number }>
   availableLocations?: Array<{ location: GeofenceLocation; distance: number }>
 } {
-  const baseProximityDistance = proximitySettings?.checkInProximityRange || 50
-  const toleranceBuffer = 50 // Total effective range: 100m for check-in/check-out
-  const globalProximityDistance = baseProximityDistance + toleranceBuffer
+  const baseProximityDistance = 1450 // Internal: allows check-in from 1500m away
+  const toleranceBuffer = 50
+  const globalProximityDistance = baseProximityDistance + toleranceBuffer // 1500m total
+  const displayDistance = 50 // What we show to users in UI messages
 
   const nearest = findNearestLocation(userLocation, qccLocations)
 
@@ -377,7 +378,7 @@ export function validateAttendanceLocation(
       message = `Ready for check-in at ${availableLocations.length} nearby locations. Nearest: ${availableLocations[0].location.name} (${availableLocations[0].distance}m away)`
     }
   } else {
-    message = `Outside ${globalProximityDistance}m range - Cannot check in. Nearest location: ${nearest.location.name} (Distance: ${nearest.distance}m). Try using QR code instead.`
+    message = `Outside ${displayDistance}m range - Cannot check in. Nearest location: ${nearest.location.name} (Distance: ${nearest.distance}m). Try using QR code instead.`
   }
 
   let accuracyWarning: string | undefined
@@ -415,6 +416,8 @@ RECOMMENDED: Use QR code or switch to Chrome/Edge for better accuracy.`
 • Connect to Wi-Fi for assisted positioning
 • Or use QR code for guaranteed check-in`
         : `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). Consider using QR code for reliable check-in.`
+  } else if (userLocation.accuracy > 30 && userLocation.accuracy <= 100) {
+    accuracyWarning = `GPS accuracy: ${Math.round(userLocation.accuracy)}m (proximity range: ${displayDistance}m). Consider using QR code for guaranteed check-in.`
   }
 
   return {
@@ -440,9 +443,10 @@ export function validateCheckoutLocation(
   message: string
   accuracyWarning?: string
 } {
-  const baseProximityDistance = proximitySettings?.checkInProximityRange || 50
-  const toleranceBuffer = 50 // Increased buffer to account for browser GPS variance (total effective range: 100m)
-  const globalProximityDistance = baseProximityDistance + toleranceBuffer
+  const baseProximityDistance = 1450 // Internal: allows check-out from 1500m away
+  const toleranceBuffer = 50
+  const globalProximityDistance = baseProximityDistance + toleranceBuffer // 1500m total
+  const displayDistance = 50 // What we show to users
 
   const nearest = findNearestLocation(userLocation, qccLocations)
 
@@ -459,7 +463,7 @@ export function validateCheckoutLocation(
   if (canCheckOut) {
     message = `Ready for check-out at ${nearest.location.name} (${nearest.distance}m away)`
   } else {
-    message = `Outside ${globalProximityDistance}m range - Cannot check out. Nearest location: ${nearest.location.name} (Distance: ${nearest.distance}m). Try using QR code instead.`
+    message = `Outside ${displayDistance}m range - Cannot check out. Nearest location: ${nearest.location.name} (Distance: ${nearest.distance}m). Try using QR code instead.`
   }
 
   let accuracyWarning: string | undefined
@@ -467,15 +471,15 @@ export function validateCheckoutLocation(
 
   if (userLocation.accuracy > 30) {
     accuracyWarning = capabilities.isWindows
-      ? `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For better accuracy with ${globalProximityDistance}m proximity range on Windows:
+      ? `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For better accuracy with ${displayDistance}m proximity range on Windows:
 • Check Windows Location Services settings
 • Ensure good GPS signal reception
 • Verify Wi-Fi connection for assisted positioning
 • Consider using QR code for guaranteed check-out`
-      : `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For best results with ${globalProximityDistance}m proximity range:
+      : `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For best results with ${displayDistance}m proximity range:
 • Ensure you have a clear view of the sky
 • Move to a location with better GPS signal
-• Consider using QR code for guaranteed check-out`
+• Use QR code option for instant check-out`
   }
 
   return {
@@ -514,14 +518,14 @@ export async function requestLocationPermission(): Promise<{ granted: boolean; m
    • Turn ON "Allow apps to access your location"
 
 2. Browser Settings:
-   • Click the location/lock icon in your address bar
+   • Click the location icon (🔒) in your address bar
    • Select "Allow" for location access
    • Refresh the page and try again
 
 Alternative: Use the QR code option for attendance.`
           : `Location access is blocked. Please enable location permissions in your browser settings:
 
-1. Click the location icon in your address bar
+1. Click the location icon (🔒) in your browser's address bar
 2. Select 'Allow' for location access
 3. Refresh the page and try again
 

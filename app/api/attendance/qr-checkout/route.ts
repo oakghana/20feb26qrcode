@@ -60,6 +60,7 @@ export async function POST(request: Request) {
         check_out_location_id: location.id,
         check_out_location_name: location.name,
         check_out_time: now.toISOString(),
+        check_out_method: device_info?.method || "qr_code",
         work_hours: workHours,
         notes: attendance.notes
           ? `${attendance.notes}\nQR code check-out at ${new Date(qr_timestamp || now).toLocaleString()}`
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
       record_id: attendance.id,
       new_values: {
         location: location.name,
-        qr_code_used: true,
+        check_out_method: device_info?.method || "qr_code",
         work_hours: workHours,
         timestamp: now.toISOString(),
       },
