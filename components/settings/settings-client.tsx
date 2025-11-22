@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client"
 import { PasswordManagement } from "@/components/admin/password-management"
 import { useRouter } from "next/navigation"
 import { useNotifications } from "@/components/ui/notification-system"
+import { clearAppCache, clearCacheAndReload } from "@/lib/cache-manager"
 
 interface UserProfile {
   id: string
@@ -22,18 +23,17 @@ interface UserProfile {
 }
 
 interface SettingsClientProps {
-  profile: UserProfile | null
+  initialSettings: any
 }
 
-export function SettingsClient({ profile }: SettingsClientProps) {
-  console.log("[v0] SettingsClient component mounted with profile:", profile)
-
+export function SettingsClient({ initialSettings }: SettingsClientProps) {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [clearingCache, setClearingCache] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const router = useRouter()
   const { showSuccess, showError, showInfo } = useNotifications()
 
   const [geoSettings, setGeoSettings] = useState({
@@ -78,7 +78,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
     console.log("[v0] SettingsClient useEffect triggered")
     loadSettings()
 
-    if (profile?.role !== "admin") {
+    if (initialSettings.profile?.role !== "admin") {
       const supabase = createClient()
 
       // Listen for admin settings updates
@@ -128,7 +128,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
         supabase.removeChannel(settingsChannel)
       }
     }
-  }, [profile])
+  }, [initialSettings.profile])
 
   const loadSettings = async () => {
     console.log("[v0] Loading settings...")
@@ -170,7 +170,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
         }
 
         // Load system settings if admin
-        if (profile?.role === "admin") {
+        if (initialSettings.profile?.role === "admin") {
           const { data: systemConfig } = await supabase.from("system_settings").select("*").single()
 
           if (systemConfig) {
@@ -217,7 +217,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
             notification_settings: notificationSettings,
           },
           systemSettings:
-            profile?.role === "admin"
+            initialSettings.profile?.role === "admin"
               ? {
                   settings: systemSettings,
                   geo_settings: geoSettings,
@@ -234,7 +234,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
       const result = await response.json()
       console.log("[v0] Settings saved successfully:", result)
 
-      if (profile?.role === "admin") {
+      if (initialSettings.profile?.role === "admin") {
         showSuccess(
           "Settings have been saved and will be applied to all staff members immediately.",
           "Admin Settings Saved",
@@ -247,7 +247,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
           payload: {
             message: "System settings have been updated by administrator",
             timestamp: new Date().toISOString(),
-            admin_name: `${profile.first_name} ${profile.last_name}`,
+            admin_name: `${initialSettings.profile.first_name} ${initialSettings.profile.last_name}`,
           },
         })
       } else {
@@ -266,7 +266,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
       localStorage.setItem("qcc-app-settings", JSON.stringify(appSettings))
       localStorage.setItem("qcc-notification-settings", JSON.stringify(notificationSettings))
 
-      if (profile?.role === "admin") {
+      if (initialSettings.profile?.role === "admin") {
         localStorage.setItem("qcc-geo-settings", JSON.stringify(geoSettings))
         localStorage.setItem("qcc-system-settings", JSON.stringify(systemSettings))
       }
@@ -280,7 +280,8 @@ export function SettingsClient({ profile }: SettingsClientProps) {
     setError(null)
 
     try {
-      // Call logout API to log the action and clear server-side session
+      await clearAppCache()
+
       const response = await fetch("/api/auth/logout", {
         method: "POST",
         headers: {
@@ -292,7 +293,6 @@ export function SettingsClient({ profile }: SettingsClientProps) {
         throw new Error("Failed to logout from server")
       }
 
-      // Also sign out from client-side Supabase
       const supabase = createClient()
       const { error: clientSignOutError } = await supabase.auth.signOut()
 
@@ -300,19 +300,25 @@ export function SettingsClient({ profile }: SettingsClientProps) {
         console.error("Client sign out error:", clientSignOutError)
       }
 
-      // Clear local storage
-      localStorage.removeItem("qcc-app-settings")
-      localStorage.removeItem("qcc-notification-settings")
-      localStorage.removeItem("qcc-geo-settings")
-      localStorage.removeItem("qcc-system-settings")
-
-      // Redirect to login page
-      router.push("/auth/login")
+      window.location.href = "/auth/login"
     } catch (error) {
       console.error("Logout error:", error)
       setError(`Failed to logout: ${error instanceof Error ? error.message : "Unknown error"}`)
     } finally {
       setLoggingOut(false)
+    }
+  }
+
+  const handleClearCache = async () => {
+    setClearingCache(true)
+    setError(null)
+
+    try {
+      await clearCacheAndReload()
+    } catch (error) {
+      console.error("Cache clearing error:", error)
+      setError(`Failed to clear cache: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setClearingCache(false)
     }
   }
 
@@ -356,11 +362,11 @@ export function SettingsClient({ profile }: SettingsClientProps) {
       )}
 
       {/* Password Management Component */}
-      {profile && (
+      {initialSettings.profile && (
         <PasswordManagement
-          userId={profile.id}
-          userEmail={`${profile.first_name} ${profile.last_name}`}
-          isAdmin={profile.role === "admin"}
+          userId={initialSettings.profile.id}
+          userEmail={`${initialSettings.profile.first_name} ${initialSettings.profile.last_name}`}
+          isAdmin={initialSettings.profile.role === "admin"}
         />
       )}
 
@@ -555,7 +561,7 @@ export function SettingsClient({ profile }: SettingsClientProps) {
         </CardContent>
       </Card>
 
-      {profile?.role === "admin" && (
+      {initialSettings.profile?.role === "admin" && (
         <>
           {/* System Settings - Admin Only */}
           <Card>
@@ -740,6 +746,46 @@ export function SettingsClient({ profile }: SettingsClientProps) {
           </Card>
         </>
       )}
+
+      {/* Cache Management Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Cache Management
+          </CardTitle>
+          <CardDescription>
+            Clear app cache to ensure you're running the latest version. This will reload the page.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/50">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Clear Application Cache</p>
+              <p className="text-xs text-muted-foreground">
+                Removes stored data and forces the app to refresh with the latest version
+              </p>
+            </div>
+            <Button variant="secondary" onClick={handleClearCache} disabled={clearingCache} className="ml-4">
+              {clearingCache ? "Clearing..." : "Clear Cache"}
+            </Button>
+          </div>
+
+          <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+            <h4 className="text-sm font-semibold mb-2 text-blue-900 dark:text-blue-100">What gets cleared:</h4>
+            <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
+              <li>• Cached pages and resources</li>
+              <li>• Local storage data</li>
+              <li>• Session storage</li>
+              <li>• Service worker cache</li>
+              <li>• IndexedDB data</li>
+            </ul>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+              Note: Clearing cache will log you out and reload the page
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Save Button */}
       <div className="flex justify-between items-center">

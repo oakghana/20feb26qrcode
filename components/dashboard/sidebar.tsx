@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { clearAppCache } from "@/lib/cache-manager"
 import {
   Home,
   Clock,
@@ -165,6 +166,8 @@ export function Sidebar({ user, profile }: SidebarProps) {
     const supabase = createClient()
 
     try {
+      await clearAppCache()
+
       await fetch("/api/auth/logout", {
         method: "POST",
         headers: {
@@ -176,7 +179,8 @@ export function Sidebar({ user, profile }: SidebarProps) {
     }
 
     await supabase.auth.signOut()
-    router.push("/auth/login")
+
+    window.location.href = "/auth/login"
   }
 
   const isHRDepartmentHead =

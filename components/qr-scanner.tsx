@@ -384,7 +384,6 @@ export function QRScanner({ locations = [] }: { locations: Location[] }) {
         return
       }
 
-      // Check if code matches a location
       const { data: location, error: locationError } = await supabase
         .from("geofence_locations")
         .select("*")
@@ -396,32 +395,58 @@ export function QRScanner({ locations = [] }: { locations: Location[] }) {
         return
       }
 
-      // Record attendance via check-in API
-      const response = await fetch("/api/attendance/check-in", {
+      const now = new Date()
+      const today = now.toISOString().split("T")[0]
+
+      const { data: existingAttendance } = await supabase
+        .from("attendance_records")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("check_in_time", `${today}T00:00:00Z`)
+        .lt("check_in_time", `${today}T23:59:59Z`)
+        .maybeSingle()
+
+      let endpoint = "/api/attendance/qr-checkin"
+      let action = "check-in"
+
+      if (existingAttendance && !existingAttendance.check_out_time) {
+        // Already checked in, perform check-out
+        endpoint = "/api/attendance/qr-checkout"
+        action = "check-out"
+      } else if (existingAttendance && existingAttendance.check_out_time) {
+        showError("You have already completed attendance for today")
+        return
+      }
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          locationId: location.id,
-          manualEntry: true,
-          locationCode: manualCode.toUpperCase(),
+          location_id: location.id,
+          qr_timestamp: new Date().toISOString(),
+          device_info: {
+            method: "manual_code",
+            code: manualCode.toUpperCase(),
+            userAgent: navigator.userAgent,
+          },
         }),
       })
 
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to record attendance")
+        throw new Error(result.error || `Failed to ${action}`)
       }
 
       setScanResult({
         success: true,
-        message: "Attendance recorded successfully!",
-        eventName: "Check-in",
+        message: `${action === "check-in" ? "Checked in" : "Checked out"} successfully!`,
+        eventName: action === "check-in" ? "Check-in" : "Check-out",
         location: location.name,
         timestamp: new Date().toLocaleString(),
       })
 
-      showSuccess(`Checked in to ${location.name}`)
+      showSuccess(`${action === "check-in" ? "Checked in to" : "Checked out from"} ${location.name}`)
       setManualCode("")
       setShowManualInput(false)
       loadRecentAttendance()

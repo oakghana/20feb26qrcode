@@ -19,7 +19,6 @@ import {
   getCurrentLocation,
   validateAttendanceLocation,
   validateCheckoutLocation,
-  requestLocationPermission,
   calculateDistance,
   detectWindowsLocationCapabilities,
   type LocationData,
@@ -908,23 +907,23 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
 
   // REMOVED: handleQRCheckIn, handleQRCheckOut - Replaced by new ones above
 
-  const handleRequestLocationPermission = async () => {
-    setIsLoading(true)
-    setError(null)
+  // const handleRequestLocationPermission = async () => {
+  //   setIsLoading(true)
+  //   setError(null)
 
-    const result = await requestLocationPermission()
-    setLocationPermissionStatus(result) // Using the original permission status state here.
+  //   const result = await requestLocationPermission()
+  //   setLocationPermissionStatus(result) // Using the original permission status state here.
 
-    if (result.granted) {
-      setShowLocationHelp(false)
-      await getCurrentLocationData()
-    } else {
-      setError(result.message)
-      setShowLocationHelp(true)
-    }
+  //   if (result.granted) {
+  //     setShowLocationHelp(false)
+  //     await getCurrentLocationData()
+  //   } else {
+  //     setError(result.message)
+  //     setShowLocationHelp(true)
+  //   }
 
-    setIsLoading(false)
-  }
+  //   setIsLoading(false)
+  // }
 
   const handleRefreshLocations = async () => {
     setIsLoading(true)
@@ -1469,14 +1468,13 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
                 </div>
                 <div className="text-sm whitespace-pre-line">{locationPermissionStatus.message}</div>
                 <div className="flex gap-2 mt-3">
-                  <Button size="sm" onClick={handleRequestLocationPermission} disabled={isLoading}>
-                    Try Again
-                  </Button>
                   <Button
                     size="sm"
-                    variant="outline"
-                    onClick={() => setShowLocationHelp(false)}
-                    className="bg-transparent"
+                    onClick={() => {
+                      setShowLocationHelp(false)
+                      setShowQRScanner(true)
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white"
                   >
                     Use QR Code Instead
                   </Button>
