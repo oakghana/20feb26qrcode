@@ -344,7 +344,7 @@ export function validateAttendanceLocation(
   availableLocations?: Array<{ location: GeofenceLocation; distance: number }>
 } {
   const baseProximityDistance = proximitySettings?.checkInProximityRange || 50
-  const toleranceBuffer = 50
+  const toleranceBuffer = 50 // Total effective range: 100m for check-in/check-out
   const globalProximityDistance = baseProximityDistance + toleranceBuffer
 
   const nearest = findNearestLocation(userLocation, qccLocations)

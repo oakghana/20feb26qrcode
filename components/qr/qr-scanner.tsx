@@ -12,9 +12,10 @@ import { parseQRCode, validateQRCode, type QRCodeData } from "@/lib/qr-code"
 interface QRScannerProps {
   onScanSuccess: (data: QRCodeData) => void
   onClose: () => void
+  autoStart?: boolean // Added autoStart prop for automatic camera launch
 }
 
-export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
+export function QRScanner({ onScanSuccess, onClose, autoStart = false }: QRScannerProps) {
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -148,10 +149,14 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
   }
 
   useEffect(() => {
+    if (autoStart && !isScanning) {
+      startScanning()
+    }
+
     return () => {
       stopScanning()
     }
-  }, [])
+  }, [autoStart])
 
   return (
     <Card className="w-full max-w-md mx-auto">
@@ -181,47 +186,79 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
         )}
 
         {!isScanning ? (
-          <div className="space-y-4">
-            <Button onClick={startScanning} className="w-full touch-manipulation h-14 text-base">
-              <Camera className="h-5 w-5 mr-2" />
+          <div className="space-y-4 p-4">
+            <Button onClick={startScanning} className="w-full touch-manipulation h-16 text-lg font-semibold">
+              <Camera className="h-6 w-6 mr-2" />
               Start Camera
             </Button>
 
-            <div className="text-center text-sm text-muted-foreground">or</div>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
 
             <div>
               <label htmlFor="qr-upload" className="block">
-                <Button variant="outline" className="w-full bg-transparent touch-manipulation h-14 text-base" asChild>
-                  <span>Upload QR Code Image</span>
+                <Button
+                  variant="outline"
+                  className="w-full touch-manipulation h-16 text-lg font-semibold bg-transparent"
+                  asChild
+                >
+                  <span>Upload QR Image</span>
                 </Button>
               </label>
-              <input id="qr-upload" type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+              <input
+                id="qr-upload"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
             </div>
+
+            <p className="text-xs text-center text-muted-foreground mt-4">
+              Point your camera at the QCC location QR code to check in/out instantly
+            </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 p-4">
             <div className="relative aspect-square bg-black rounded-lg overflow-hidden">
-              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+                style={{ WebkitPlaysinline: "true" } as React.CSSProperties}
+              />
               <canvas ref={canvasRef} className="hidden" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-40 h-40 sm:w-48 sm:h-48 border-2 border-primary rounded-lg relative">
-                  <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary"></div>
-                  <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary"></div>
-                  <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary"></div>
-                  <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary"></div>
+                <div className="w-48 h-48 sm:w-56 sm:h-56 border-4 border-primary rounded-lg relative animate-pulse">
+                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary"></div>
+                  <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary"></div>
+                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary"></div>
+                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary"></div>
                 </div>
               </div>
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-                <p className="text-white text-sm bg-black/50 px-3 py-1 rounded">Position QR code within the frame</p>
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-4/5">
+                <p className="text-white text-sm sm:text-base bg-black/70 px-4 py-2 rounded-full text-center font-medium">
+                  📷 Align QR code in frame
+                </p>
               </div>
             </div>
 
             <Button
               onClick={stopScanning}
               variant="outline"
-              className="w-full bg-transparent touch-manipulation h-14 text-base"
+              className="w-full touch-manipulation h-16 text-lg font-semibold bg-transparent"
             >
-              Stop Scanning
+              <X className="h-5 w-5 mr-2" />
+              Cancel Scanning
             </Button>
           </div>
         )}

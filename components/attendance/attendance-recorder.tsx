@@ -991,6 +991,12 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
         })()
       : null
 
+  useEffect(() => {
+    if (showQRScanner) {
+      console.log("[v0] QR scanner dialog opened")
+    }
+  }, [showQRScanner])
+
   return (
     <div className="space-y-6">
       {showSuccessPopup && (
@@ -1547,8 +1553,8 @@ export function AttendanceRecorder({ todayAttendance }: AttendanceRecorderProps)
       {/* NEW CODE END */}
 
       <Dialog open={showQRScanner} onOpenChange={setShowQRScanner}>
-        <DialogContent className="sm:max-w-md p-0">
-          <QRScanner onScanSuccess={handleQRScanSuccess} onClose={() => setShowQRScanner(false)} />
+        <DialogContent className="max-w-[95vw] sm:max-w-md p-0 max-h-[90vh] overflow-auto">
+          <QRScanner onScanSuccess={handleQRScanSuccess} onClose={() => setShowQRScanner(false)} autoStart={true} />
         </DialogContent>
       </Dialog>
     </div>
