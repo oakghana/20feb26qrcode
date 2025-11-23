@@ -1,7 +1,5 @@
 "use client"
 
-"use server"
-
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { StatsCard } from "@/components/dashboard/stats-card"
 import { QuickActions } from "@/components/dashboard/quick-actions"
@@ -26,7 +24,6 @@ export default async function DashboardPage() {
     redirect("/auth/login")
   }
 
-  // Get user profile with error handling
   const { data: profile, error: profileError } = await supabase
     .from("user_profiles")
     .select(`
@@ -37,9 +34,8 @@ export default async function DashboardPage() {
       )
     `)
     .eq("id", user.id)
-    .maybeSingle() // Use maybeSingle instead of single to handle missing records
+    .maybeSingle()
 
-  // If no profile exists, show a message to contact admin
   if (!profile && !profileError) {
     return (
       <DashboardLayout>
@@ -83,7 +79,6 @@ export default async function DashboardPage() {
     pendingApprovals = count || 0
   }
 
-  // Get today's attendance with error handling
   const today = new Date().toISOString().split("T")[0]
   const { data: todayAttendance, error: attendanceError } = await supabase
     .from("attendance_records")
@@ -93,7 +88,6 @@ export default async function DashboardPage() {
     .lt("check_in_time", `${today}T23:59:59`)
     .maybeSingle()
 
-  // Get this month's attendance count with error handling
   const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
   const { count: monthlyAttendance, error: monthlyError } = await supabase
     .from("attendance_records")
@@ -101,11 +95,13 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .gte("check_in_time", startOfMonth)
 
-  // Get total locations with error handling
   const { count: totalLocations, error: locationsError } = await supabase
     .from("geofence_locations")
     .select("*", { count: "exact", head: true })
     .eq("is_active", true)
+
+  const showDepartmentHeadModal =
+    profile?.role === "department_head" && profile.department_id && todayAttendance?.check_out_time
 
   return (
     <DashboardLayout>
@@ -166,12 +162,10 @@ export default async function DashboardPage() {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-5">
-          {/* Quick Actions */}
           <div className="lg:col-span-2">
             <QuickActions />
           </div>
 
-          {/* Recent Activity */}
           <div className="lg:col-span-3">
             <Card className="shadow-sm border-0 bg-gradient-to-br from-card to-card/50">
               <CardHeader className="pb-4">
@@ -247,7 +241,7 @@ export default async function DashboardPage() {
       </div>
       <MobileAppDownload variant="dashboard" />
 
-      {profile?.role === "department_head" && profile.department_id && todayAttendance?.check_out_time && (
+      {showDepartmentHeadModal && (
         <DepartmentHeadAttendanceModal
           open={true}
           onClose={() => {}}
