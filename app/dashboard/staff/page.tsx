@@ -13,7 +13,7 @@ export default async function StaffPage() {
 
   const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
 
-  if (!profile || profile.role !== "admin") {
+  if (!profile || (profile.role !== "admin" && profile.role !== "it-admin")) {
     redirect("/dashboard")
   }
 

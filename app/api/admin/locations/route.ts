@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
+    console.log("[v0] Locations API - Starting request")
     const supabase = await createClient()
 
     const {
@@ -14,11 +15,13 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Check if user has admin or department_head role
+    console.log("[v0] Locations API - User authenticated:", user.id)
+
     const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
 
-    if (!profile || !["admin", "department_head"].includes(profile.role)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    if (!profile || !["admin", "it-admin", "department_head"].includes(profile.role)) {
+      console.log("[v0] Locations API - Insufficient permissions for role:", profile?.role)
+      return NextResponse.json({ error: "Insufficient permissions to view locations" }, { status: 403 })
     }
 
     const { data: locations, error } = await supabase.from("geofence_locations").select("*").order("name")
