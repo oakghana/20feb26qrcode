@@ -19,6 +19,8 @@ export async function GET() {
 
     const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
 
+    console.log("[v0] Locations API - User role:", profile?.role)
+
     if (!profile || !["admin", "it-admin", "department_head"].includes(profile.role)) {
       console.log("[v0] Locations API - Insufficient permissions for role:", profile?.role)
       return NextResponse.json({ error: "Insufficient permissions to view locations" }, { status: 403 })
