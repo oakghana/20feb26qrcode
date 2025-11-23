@@ -21,6 +21,10 @@ export default async function SettingsPage() {
     .eq("id", user.id)
     .single()
 
+  if (profile?.role !== "admin") {
+    redirect("/dashboard?error=access_denied")
+  }
+
   return (
     <DashboardLayout>
       <SettingsClient profile={profile} />

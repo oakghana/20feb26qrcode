@@ -42,15 +42,15 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
     requireHighAccuracy: true,
     maxLocationAge: "300000",
     checkInProximityRange: "50",
-    globalProximityDistance: "1500",
+    globalProximityDistance: "1000",
     enableBrowserSpecificTolerance: true,
     browserTolerances: {
-      chrome: 200,
-      edge: 200,
-      firefox: 500,
-      safari: 300,
-      opera: 1500,
-      default: 1500,
+      chrome: 1000,
+      edge: 300,
+      firefox: 1000,
+      safari: 1000,
+      opera: 1000,
+      default: 1000,
     },
   })
 
@@ -584,7 +584,7 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50 dark:bg-blue-950">
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
                 <div>
                   <Label htmlFor="enableBrowserSpecificTolerance" className="text-base font-semibold">
                     Enable Browser-Specific Tolerances
@@ -607,7 +607,7 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <Label htmlFor="chromeTolerance" className="flex items-center gap-2">
-                        <span className="text-green-600">●</span> Chrome / Edge (meters)
+                        <span className="text-green-600">●</span> Chrome (meters)
                       </Label>
                       <Input
                         id="chromeTolerance"
@@ -621,12 +621,34 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
                             browserTolerances: {
                               ...geoSettings.browserTolerances,
                               chrome: Number(e.target.value),
+                            },
+                          })
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Good accuracy - Recommended: 1000m</p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="edgeTolerance" className="flex items-center gap-2">
+                        <span className="text-blue-600">●</span> Edge (meters)
+                      </Label>
+                      <Input
+                        id="edgeTolerance"
+                        type="number"
+                        min="50"
+                        max="5000"
+                        value={geoSettings.browserTolerances.edge}
+                        onChange={(e) =>
+                          setGeoSettings({
+                            ...geoSettings,
+                            browserTolerances: {
+                              ...geoSettings.browserTolerances,
                               edge: Number(e.target.value),
                             },
                           })
                         }
                       />
-                      <p className="text-xs text-muted-foreground mt-1">Best GPS accuracy - Recommended: 200m</p>
+                      <p className="text-xs text-muted-foreground mt-1">Better accuracy - Recommended: 300m</p>
                     </div>
 
                     <div>
@@ -649,12 +671,12 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
                           })
                         }
                       />
-                      <p className="text-xs text-muted-foreground mt-1">Good accuracy - Recommended: 500m</p>
+                      <p className="text-xs text-muted-foreground mt-1">Good accuracy - Recommended: 1000m</p>
                     </div>
 
                     <div>
                       <Label htmlFor="safariTolerance" className="flex items-center gap-2">
-                        <span className="text-blue-600">●</span> Safari (meters)
+                        <span className="text-purple-600">●</span> Safari (meters)
                       </Label>
                       <Input
                         id="safariTolerance"
@@ -672,7 +694,7 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
                           })
                         }
                       />
-                      <p className="text-xs text-muted-foreground mt-1">Variable - Recommended: 300m</p>
+                      <p className="text-xs text-muted-foreground mt-1">Variable - Recommended: 1000m</p>
                     </div>
 
                     <div>
@@ -695,7 +717,7 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
                           })
                         }
                       />
-                      <p className="text-xs text-muted-foreground mt-1">Poor accuracy - Recommended: 1500m</p>
+                      <p className="text-xs text-muted-foreground mt-1">Lower accuracy - Recommended: 1000m</p>
                     </div>
                   </div>
 
@@ -707,6 +729,7 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
                         <ul className="text-sm text-blue-700 dark:text-blue-300 mt-2 space-y-1 list-disc list-inside">
                           <li>System automatically detects which browser the user is using</li>
                           <li>Applies the appropriate tolerance distance for that browser</li>
+                          <li>Edge users only need to be within {geoSettings.browserTolerances.edge}m</li>
                           <li>Chrome users only need to be within {geoSettings.browserTolerances.chrome}m</li>
                           <li>Firefox users only need to be within {geoSettings.browserTolerances.firefox}m</li>
                           <li>Opera users only need to be within {geoSettings.browserTolerances.opera}m</li>
@@ -736,7 +759,7 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-4 md:grid-cols-1">
-                <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950">
+                <div className="p-4 border rounded-lg bg-muted/50">
                   <Label htmlFor="globalProximityDistance" className="text-base font-semibold">
                     Global Proximity Distance (meters)
                   </Label>

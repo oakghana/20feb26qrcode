@@ -144,16 +144,16 @@ export async function getBrowserTolerance(geoSettings?: GeoSettings): Promise<nu
 
   // If browser-specific tolerance is disabled, use global setting
   if (!geoSettings?.enableBrowserSpecificTolerance) {
-    return geoSettings?.globalProximityDistance || 1500
+    return geoSettings?.globalProximityDistance || 1000
   }
 
   const tolerances = geoSettings?.browserTolerances || {
-    chrome: 200,
-    edge: 200,
-    firefox: 500,
-    safari: 300,
-    opera: 1500,
-    default: 1500,
+    chrome: 1000,
+    edge: 300,
+    firefox: 1000,
+    safari: 1000,
+    opera: 1000,
+    default: 1000,
   }
 
   // Map browser name to tolerance
