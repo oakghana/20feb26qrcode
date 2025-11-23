@@ -37,6 +37,7 @@ import {
   LogOut,
   HelpCircle,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react"
 import Image from "next/image"
 
@@ -132,6 +133,13 @@ const navigationItems = [
     title: "Staff Activation",
     href: "/dashboard/staff-activation",
     icon: UserCheck,
+    roles: ["admin"],
+    category: "admin",
+  },
+  {
+    title: "Warnings",
+    href: "/dashboard/warnings",
+    icon: AlertTriangle,
     roles: ["admin"],
     category: "admin",
   },

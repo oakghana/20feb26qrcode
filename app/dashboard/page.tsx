@@ -1,5 +1,7 @@
 "use client"
 
+"use server"
+
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { StatsCard } from "@/components/dashboard/stats-card"
 import { QuickActions } from "@/components/dashboard/quick-actions"

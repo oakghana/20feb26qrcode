@@ -18,12 +18,12 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .single()
 
-    if (!profile || !["admin", "department_head", "it-admin"].includes(profile.role)) {
+    if (!profile || !["admin", "department_head"].includes(profile.role)) {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
     const body = await request.json()
-    const { staffIds, message, departmentId } = body
+    const { staffIds, message, departmentId, warningType, isAdminWarning, senderLabel } = body
 
     if (!staffIds || !Array.isArray(staffIds) || staffIds.length === 0) {
       return NextResponse.json({ error: "Staff IDs are required" }, { status: 400 })
@@ -35,15 +35,20 @@ export async function POST(request: Request) {
 
     const today = new Date().toISOString().split("T")[0]
 
+    const finalSenderLabel = profile.role === "admin" ? "Management of QCC" : "Department Head"
+    const issuedByRole = profile.role
+
     // Create warnings for each selected staff
     const warnings = staffIds.map((staffId) => ({
       issued_by: user.id,
       issued_to: staffId,
-      warning_type: "no_checkin", // You can make this dynamic based on the tab
+      warning_type: warningType || "no_checkin",
       warning_message: message,
       attendance_date: today,
-      department_id: departmentId,
+      department_id: departmentId || profile.department_id,
       is_read: false,
+      issued_by_role: issuedByRole,
+      sender_label: finalSenderLabel,
     }))
 
     const { data, error } = await supabase.from("staff_warnings").insert(warnings).select()
@@ -53,7 +58,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       count: data.length,
-      message: "Warnings sent successfully",
+      message: `Warnings sent successfully from ${finalSenderLabel}`,
     })
   } catch (error) {
     console.error("Error sending warnings:", error)
