@@ -95,6 +95,10 @@ export function StaffManagement() {
     fetchCurrentUserRole()
   }, [])
 
+  useEffect(() => {
+    fetchStaff()
+  }, [searchTerm, selectedDepartment, selectedRole])
+
   const fetchStaff = async () => {
     try {
       console.log("[v0] Fetching staff with filters:", { searchTerm, selectedDepartment, selectedRole })
