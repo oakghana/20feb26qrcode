@@ -33,6 +33,7 @@ import { getDeviceInfo } from "@/lib/device-info"
 import type { QRCodeData } from "@/lib/qr-code"
 import { MapPin, Clock, Loader2, AlertTriangle, Navigation, CheckCircle2 } from "lucide-react"
 import { useRealTimeLocations } from "@/hooks/use-real-time-locations"
+import { createClient } from "@/lib/supabase/client"
 import { QRScanner } from "@/components/qr/qr-scanner"
 import { toast } from "@/components/ui/use-toast" // Imported toast
 
@@ -80,8 +81,6 @@ interface AttendanceRecorderProps {
   locations: GeofenceLocation[]
   canCheckIn?: boolean
   canCheckOut?: boolean
-  userProfile?: UserProfile | null
-  proximitySettings?: ProximitySettings
 }
 
 // Placeholder for WindowsCapabilities, assuming it's defined elsewhere or inferred
@@ -93,12 +92,10 @@ export function AttendanceRecorder({
   locations,
   canCheckIn: initialCanCheckIn,
   canCheckOut: initialCanCheckOut,
-  userProfile, // Added userProfile as prop
-  proximitySettings, // Added proximitySettings as prop
 }: AttendanceRecorderProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [userLocation, setUserLocation] = useState<LocationData | null>(null)
-  // const [userProfile, setUserProfile] = useState<UserProfile | null>(null) // Now a prop
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [assignedLocationInfo, setAssignedLocationInfo] = useState<AssignedLocationInfo | null>(null)
   const {
     locations: realTimeLocations,
@@ -106,8 +103,7 @@ export function AttendanceRecorder({
     error: locationsError,
     isConnected,
   } = useRealTimeLocations() // Renamed locations to avoid conflict
-  const [proximitySettingsState, setProximitySettingsState] = useState<ProximitySettings>({
-    // Renamed to avoid conflict with prop
+  const [proximitySettings, setProximitySettings] = useState<ProximitySettings>({
     checkInProximityRange: 50,
     defaultRadius: 20,
     requireHighAccuracy: true,
@@ -168,16 +164,6 @@ export function AttendanceRecorder({
   const [recentCheckIn, setRecentCheckIn] = useState(false)
   const [recentCheckOut, setRecentCheckOut] = useState(false)
   const [localTodayAttendance, setLocalTodayAttendance] = useState(initialTodayAttendance)
-
-  const [missedCheckoutWarning, setMissedCheckoutWarning] = useState<{
-    date: string
-    message: string
-  } | null>(null)
-  const [checkInDetails, setCheckInDetails] = useState<{
-    time: string
-    location: string
-    method: string
-  } | null>(null)
 
   const canCheckIn = initialCanCheckIn && !recentCheckIn && !localTodayAttendance?.check_in_time
   const canCheckOut =
@@ -307,7 +293,7 @@ export function AttendanceRecorder({
   }
 
   useEffect(() => {
-    // fetchUserProfile() // Removed, as userProfile is now a prop
+    fetchUserProfile()
     loadProximitySettings()
     // loadGeoSettings() // This is now a prop, no need to load it
     const capabilities = detectWindowsLocationCapabilities()
@@ -379,17 +365,16 @@ export function AttendanceRecorder({
       if (response.ok) {
         const data = await response.json()
         if (data.systemSettings?.geo_settings) {
-          const geoSettingsFromAPI = data.systemSettings.geo_settings // Use a different name to avoid conflict
-          setProximitySettingsState({
-            // Use state setter
-            checkInProximityRange: Number.parseInt(geoSettingsFromAPI.checkInProximityRange) || 50,
-            defaultRadius: Number.parseInt(geoSettingsFromAPI.defaultRadius) || 20,
-            requireHighAccuracy: geoSettingsFromAPI.requireHighAccuracy ?? true,
-            allowManualOverride: geoSettingsFromAPI.allowManualOverride ?? false,
+          const geoSettings = data.systemSettings.geo_settings
+          setProximitySettings({
+            checkInProximityRange: Number.parseInt(geoSettings.checkInProximityRange) || 50,
+            defaultRadius: Number.parseInt(geoSettings.defaultRadius) || 20,
+            requireHighAccuracy: geoSettings.requireHighAccuracy ?? true,
+            allowManualOverride: geoSettings.allowManualOverride ?? false,
           })
           console.log("[v0] Loaded proximity settings:", {
-            checkInProximityRange: Number.parseInt(geoSettingsFromAPI.checkInProximityRange) || 50,
-            defaultRadius: Number.parseInt(geoSettingsFromAPI.defaultRadius) || 20,
+            checkInProximityRange: Number.parseInt(geoSettings.checkInProximityRange) || 50,
+            defaultRadius: Number.parseInt(geoSettings.defaultRadius) || 20,
           })
         }
       }
@@ -400,7 +385,7 @@ export function AttendanceRecorder({
   }
 
   useEffect(() => {
-    if (userLocation && realTimeLocations?.length > 0 && userProfile?.assigned_location_id) {
+    if (userLocation && realTimeLocations.length > 0 && userProfile?.assigned_location_id) {
       // Use realTimeLocations here
       const assignedLocation = realTimeLocations.find((loc) => loc.id === userProfile.assigned_location_id) // Use realTimeLocations here
       if (assignedLocation) {
@@ -432,7 +417,7 @@ export function AttendanceRecorder({
   // Simplified location validation logic as per new update.
   // This effect is now primarily for logging and potentially updating `locationValidation` based on fetched `userLocation`.
   useEffect(() => {
-    if (userLocation && realTimeLocations?.length > 0) {
+    if (userLocation && realTimeLocations.length > 0) {
       // Use realTimeLocations here
       console.log(
         "[v0] All available locations:",
@@ -469,8 +454,8 @@ export function AttendanceRecorder({
 
       console.log("[v0] Distance to each location:", locationDistances)
 
-      const validation = validateAttendanceLocation(userLocation, realTimeLocations, proximitySettingsState) // Use realTimeLocations here, use state
-      const checkoutValidation = validateCheckoutLocation(userLocation, realTimeLocations, proximitySettingsState) // Use realTimeLocations here, use state
+      const validation = validateAttendanceLocation(userLocation, realTimeLocations, proximitySettings) // Use realTimeLocations here
+      const checkoutValidation = validateCheckoutLocation(userLocation, realTimeLocations, proximitySettings) // Use realTimeLocations here
 
       console.log("[v0] Location validation result:", validation)
       console.log("[v0] Check-out validation result:", checkoutValidation)
@@ -483,7 +468,7 @@ export function AttendanceRecorder({
       console.log("[v0] Can check out:", checkoutValidation.canCheckOut)
       console.log("[v0] Distance:", validation.distance)
       console.log("[v0] Nearest location being checked:", validation.nearestLocation?.name)
-      console.log("[v0] Using proximity range:", proximitySettingsState.checkInProximityRange) // Use state
+      console.log("[v0] Using proximity range:", proximitySettings.checkInProximityRange)
 
       // Check for critical accuracy issues
       const criticalAccuracyIssue =
@@ -503,68 +488,68 @@ export function AttendanceRecorder({
         accuracyWarning,
       })
     }
-  }, [userLocation, realTimeLocations, proximitySettingsState, windowsCapabilities]) // Use realTimeLocations here, use state
+  }, [userLocation, realTimeLocations, proximitySettings, windowsCapabilities]) // Use realTimeLocations here
 
-  // const fetchUserProfile = async () => { // Removed, as userProfile is now a prop
-  //   try {
-  //     console.log("[v0] Fetching user profile...")
-  //     const supabase = createClient()
+  const fetchUserProfile = async () => {
+    try {
+      console.log("[v0] Fetching user profile...")
+      const supabase = createClient()
 
-  //     try {
-  //       const {
-  //         data: { user },
-  //       } = await supabase.auth.getUser()
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
 
-  //       if (!user) {
-  //         console.log("[v0] No authenticated user found")
-  //         return
-  //       }
+        if (!user) {
+          console.log("[v0] No authenticated user found")
+          return
+        }
 
-  //       const { data: profileData, error } = await supabase
-  //         .from("user_profiles")
-  //         .select(`
-  //           id,
-  //           first_name,
-  //           last_name,
-  //           employee_id,
-  //           position,
-  //           assigned_location_id,
-  //           departments (
-  //             name,
-  //             code
-  //           )
-  //         `)
-  //         .eq("id", user.id)
-  //         .single()
+        const { data: profileData, error } = await supabase
+          .from("user_profiles")
+          .select(`
+            id,
+            first_name,
+            last_name,
+            employee_id,
+            position,
+            assigned_location_id,
+            departments (
+              name,
+              code
+            )
+          `)
+          .eq("id", user.id)
+          .single()
 
-  //       if (error) {
-  //         console.error("[v0] Failed to fetch user profile:", error)
-  //         return
-  //       }
+        if (error) {
+          console.error("[v0] Failed to fetch user profile:", error)
+          return
+        }
 
-  //       setUserProfile(profileData)
-  //       console.log("[v0] User profile loaded:", {
-  //         name: `${profileData.first_name} ${profileData.last_name}`,
-  //         employee_id: profileData.employee_id,
-  //         position: profileData.position,
-  //         assigned_location_id: profileData.assigned_location_id,
-  //         department: profileData.departments?.name,
-  //       })
-  //     } catch (authError) {
-  //       console.error("[v0] Supabase auth error:", authError)
-  //       // Don't set error state for auth issues in preview environment
-  //       if (!window.location.hostname.includes("vusercontent.net")) {
-  //         setError("Authentication error. Please refresh the page.")
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.error("[v0] Error fetching user profile:", error)
-  //     // Only show error in production environment
-  //     if (!window.location.hostname.includes("vusercontent.net")) {
-  //       setError("Failed to load user profile. Please refresh the page.")
-  //     }
-  //   }
-  // }
+        setUserProfile(profileData)
+        console.log("[v0] User profile loaded:", {
+          name: `${profileData.first_name} ${profileData.last_name}`,
+          employee_id: profileData.employee_id,
+          position: profileData.position,
+          assigned_location_id: profileData.assigned_location_id,
+          department: profileData.departments?.name,
+        })
+      } catch (authError) {
+        console.error("[v0] Supabase auth error:", authError)
+        // Don't set error state for auth issues in preview environment
+        if (!window.location.hostname.includes("vusercontent.net")) {
+          setError("Authentication error. Please refresh the page.")
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching user profile:", error)
+      // Only show error in production environment
+      if (!window.location.hostname.includes("vusercontent.net")) {
+        setError("Failed to load user profile. Please refresh the page.")
+      }
+    }
+  }
 
   const getCurrentLocationData = async () => {
     setIsLoading(true)
@@ -620,18 +605,9 @@ export function AttendanceRecorder({
   // }, [locationWatchId])
 
   const handleCheckIn = async () => {
-    // Prevent multiple check-ins while loading
-    if (recentCheckIn) {
-      toast({
-        title: "Please wait",
-        description: "Your check-in is being processed",
-        variant: "destructive",
-      })
-      return
-    }
-
     setIsLoading(true)
     setError(null)
+    setSuccess(null)
 
     try {
       console.log("[v0] Getting optimized location for check-in...")
@@ -668,7 +644,7 @@ export function AttendanceRecorder({
         location,
         nearest.location.latitude,
         nearest.location.longitude,
-        geoSettings || undefined, // Pass geoSettings prop directly
+        geoSettings || undefined,
       )
 
       console.log("[v0] Browser-specific proximity check:", {
@@ -709,7 +685,7 @@ export function AttendanceRecorder({
           longitude: location.longitude,
           location_id: nearest.location.id,
           location_name: nearest.location.name,
-          device_info: navigator.userAgent, // Use navigator.userAgent as fallback
+          device_info: navigator.userAgent,
         }),
       })
 
@@ -719,19 +695,6 @@ export function AttendanceRecorder({
       }
 
       const result = await response.json()
-
-      if (result.missedCheckoutWarning) {
-        setMissedCheckoutWarning(result.missedCheckoutWarning)
-      }
-
-      setCheckInDetails({
-        time: new Date().toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        location: nearest.location.name || "Unknown",
-        method: "GPS",
-      })
 
       setLocalTodayAttendance({
         ...result.attendance,
@@ -786,7 +749,7 @@ export function AttendanceRecorder({
       const location = await getCurrentLocation()
       setUserLocation(location)
 
-      const checkoutValidation = validateCheckoutLocation(location, locations, proximitySettingsState) // Use state
+      const checkoutValidation = validateCheckoutLocation(location, locations, proximitySettings)
 
       if (!checkoutValidation.canCheckOut) {
         setError(checkoutValidation.message)
@@ -797,18 +760,17 @@ export function AttendanceRecorder({
 
       let nearestLocation = null
 
-      // CHECK: Added null/undefined checks for locations
-      if (locations && locations.length > 1) {
+      if (locations.length > 1) {
         const locationDistances = locations
           .map((loc) => {
             const distance = calculateDistance(location.latitude, location.longitude, loc.latitude, loc.longitude)
             return { location: loc, distance: Math.round(distance) }
           })
           .sort((a, b) => a.distance - b.distance)
-          .filter(({ distance }) => distance <= proximitySettingsState.checkInProximityRange) // Use state
+          .filter(({ distance }) => distance <= proximitySettings.checkInProximityRange)
 
         if (locationDistances.length === 0) {
-          setError(`No QCC locations within ${proximitySettingsState.checkInProximityRange}m range for check-out`) // Use state
+          setError(`No QCC locations within ${proximitySettings.checkInProximityRange}m range for check-out`)
           setIsLoading(false)
           return
         }
@@ -821,8 +783,7 @@ export function AttendanceRecorder({
           nearestLocation = locationDistances[0]?.location
           console.log("[v0] Automatically using nearest location for check-out:", nearestLocation?.name)
         }
-      } else if (locations && locations.length > 0) {
-        // CHECK: Added null/undefined checks for locations
+      } else {
         const nearest = findNearestLocation(location, locations)
         nearestLocation = nearest?.location || locations[0]
       }
@@ -1066,8 +1027,7 @@ export function AttendanceRecorder({
 
   const defaultMode = canCheckIn ? "checkin" : canCheckOut ? "checkout" : "completed"
 
-  // CHECK: Added null/undefined checks for locations
-  const findNearestLocation = (location: LocationData, locations: GeofenceLocation[]) => {
+  const findNearestLocation = (userLocation: LocationData, locations: GeofenceLocation[]) => {
     // This function seems to be a placeholder and might need more robust implementation
     // based on actual requirements, but for now, it returns the first location.
     if (!locations || locations.length === 0) return undefined
@@ -1099,29 +1059,6 @@ export function AttendanceRecorder({
 
   return (
     <div className="space-y-6">
-      {missedCheckoutWarning && (
-        <Alert variant="destructive" className="border-2 border-red-500 dark:border-red-600">
-          <AlertTriangle className="h-5 w-5" />
-          <AlertTitle className="text-base font-bold">Missed Check-Out Detected!</AlertTitle>
-          <AlertDescription className="text-sm space-y-2 mt-2">
-            <p className="font-semibold">{missedCheckoutWarning.message}</p>
-            <p className="text-xs">
-              Date:{" "}
-              {new Date(missedCheckoutWarning.date).toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
-            <p className="text-xs font-medium text-red-600 dark:text-red-400">
-              ⚠️ Warning: Continued failure to check in/out properly may result in disciplinary action from management.
-              Please ensure you check out at the end of each workday.
-            </p>
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
         <div className="flex items-start gap-3">
           <MapPin className="h-5 w-5 text-blue-600 mt-0.5" />
@@ -1375,89 +1312,7 @@ export function AttendanceRecorder({
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Quick Actions
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-col sm:flex-row gap-3">
-            {canCheckIn && (
-              <Button
-                onClick={handleCheckIn}
-                disabled={isLoading || recentCheckIn}
-                className="flex-1 w-full h-14 sm:h-12 text-base sm:text-sm"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 sm:h-4 sm:w-4 animate-spin" />
-                    <span className="text-sm sm:text-base">Getting Location & Checking In...</span>
-                  </>
-                ) : recentCheckIn ? (
-                  <>
-                    <Clock className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
-                    <span className="text-sm sm:text-base">Check-in Recorded - Updating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Clock className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
-                    <span className="text-sm sm:text-base">Check In Now</span>
-                  </>
-                )}
-              </Button>
-            )}
-
-            {canCheckOut && (
-              <Button
-                onClick={handleCheckOut}
-                disabled={isLoading || recentCheckOut}
-                variant="outline"
-                className="flex-1 w-full h-14 sm:h-12 text-base sm:text-sm bg-transparent"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 sm:h-4 sm:w-4 animate-spin" />
-                    <span className="text-sm sm:text-base">Getting Location & Checking Out...</span>
-                  </>
-                ) : recentCheckOut ? (
-                  <>
-                    <Clock className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
-                    <span className="text-sm sm:text-base">Check-out Recorded - Updating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Clock className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
-                    <span className="text-sm sm:text-base">Check Out Now</span>
-                  </>
-                )}
-              </Button>
-            )}
-
-            {(error || showLocationHelp) && (
-              <div className="pt-3 border-t w-full">
-                <Button
-                  onClick={() => {
-                    setShowQRScanner(true)
-                    setQrScanMode(canCheckIn ? "checkin" : "checkout")
-                  }}
-                  size="sm"
-                  variant="outline"
-                  className="w-full h-14 sm:h-12 text-base sm:text-sm bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700"
-                >
-                  <MapPin className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
-                  <span className="text-sm sm:text-base">Enter Location Code Manually (Recommended)</span>
-                </Button>
-                <p className="text-xs sm:text-sm text-center text-muted-foreground mt-2 px-2">
-                  Tap your location below for instant check-in - no camera needed!
-                </p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* Action Buttons */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1600,55 +1455,24 @@ export function AttendanceRecorder({
       </Dialog>
 
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <DialogContent className="sm:max-w-md max-w-[90vw]">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-green-600 text-lg sm:text-xl">
-              <Clock className="h-6 w-6 sm:h-5 sm:w-5" />
+            <DialogTitle className="flex items-center gap-2 text-green-600">
+              <Clock className="h-5 w-5" />
               Success!
             </DialogTitle>
-            <DialogDescription className="text-base sm:text-sm pt-4">{successDialogMessage}</DialogDescription>
+            <DialogDescription className="text-base pt-4">{successDialogMessage}</DialogDescription>
           </DialogHeader>
-
-          {checkInDetails && (
-            <div className="space-y-3 py-4">
-              <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800/50">
-                <AlertDescription className="space-y-2">
-                  <div className="text-green-700 dark:text-green-300 font-semibold text-base sm:text-sm">
-                    Check-In Details:
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-green-600 dark:text-green-400">Time:</div>
-                    <div className="font-medium text-green-800 dark:text-green-200">{checkInDetails.time}</div>
-                    <div className="text-green-600 dark:text-green-400">Location:</div>
-                    <div className="font-medium text-green-800 dark:text-green-200">{checkInDetails.location}</div>
-                    <div className="text-green-600 dark:text-green-400">Method:</div>
-                    <div className="font-medium text-green-800 dark:text-green-200">{checkInDetails.method}</div>
-                  </div>
-                </AlertDescription>
-              </Alert>
-
-              <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/50">
-                <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
-                  Your attendance status will automatically update in a moment. The page will refresh in 3 seconds to
-                  show your updated status.
-                </AlertDescription>
-              </Alert>
-
-              <Alert className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <AlertDescription className="text-amber-700 dark:text-amber-300 text-xs sm:text-sm font-medium">
-                  <p className="font-bold mb-1">Important Reminder:</p>
-                  <p>
-                    Please remember to check out at the end of your workday. Failure to do so will be recorded and
-                    reported to management.
-                  </p>
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
-
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button onClick={() => window.location.reload()} className="w-full h-12 sm:h-10 text-base sm:text-sm">
+          <div className="flex flex-col gap-3 py-4">
+            <Alert className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800/50">
+              <AlertDescription className="text-green-700 dark:text-green-300 text-sm">
+                Your attendance status will automatically update in a moment. The page will refresh in 70 seconds to
+                show your updated status.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => window.location.reload()} className="w-full">
               Refresh Now
             </Button>
           </DialogFooter>
@@ -1661,10 +1485,10 @@ export function AttendanceRecorder({
           <CardTitle className="text-lg">Location Status</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {userProfile?.assigned_location_id && locations && locations.length > 0 && (
+          {userProfile && userProfile.assigned_location_id && (
             <>
               {assignedLocationInfo ? (
-                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-blue-700 dark:text-blue-300 font-medium">Your Assigned Location</span>
                     {assignedLocationInfo.isAtAssignedLocation ? (
@@ -1795,7 +1619,7 @@ export function AttendanceRecorder({
                       <span className="text-gray-700 dark:text-gray-300 truncate mr-2">{location.name}</span>
                       <span
                         className={`font-medium ${
-                          distance <= proximitySettingsState.checkInProximityRange // Use state
+                          distance <= proximitySettings.checkInProximityRange
                             ? "text-green-600 dark:text-green-400"
                             : "text-gray-600 dark:text-gray-400"
                         }`}
@@ -1812,7 +1636,6 @@ export function AttendanceRecorder({
       )}
       {/* NEW CODE END */}
 
-      {/* Tolerance is handled in the backend but not displayed to users */}
       {geoSettings?.enableBrowserSpecificTolerance && userLocation && (
         <Alert>
           <AlertDescription>
