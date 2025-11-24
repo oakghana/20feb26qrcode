@@ -191,6 +191,16 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("[v0] QR check-in error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred during check-in"
+
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        message: errorMessage,
+        details: "Please try again or contact support if the problem persists",
+      },
+      { status: 500 },
+    )
   }
 }

@@ -161,121 +161,170 @@ export function QRScanner({ onScanSuccess, onClose, autoStart = false }: QRScann
   const processQRCode = async (qrDataString: string) => {
     try {
       stopScanning()
-      console.log("[v0] Processing manual code:", qrDataString)
+      console.log("[v0] Processing QR code:", qrDataString)
 
       const qrData = parseQRCode(qrDataString)
-      if (qrData) {
-        const validation = validateQRCode(qrData)
-        if (validation.isValid) {
-          try {
-            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                timeout: 15000, // Increased timeout for mobile
-                maximumAge: 0,
-              })
-            })
-
-            const userLocation = {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-            }
-
-            console.log("[v0] User GPS location obtained for QR check-in:", userLocation)
-            console.log("[v0] Distance to location:", qrData.location_id)
-
-            const response = await fetch("/api/attendance/qr-checkin", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                location_id: qrData.location_id,
-                qr_timestamp: new Date().toISOString(),
-                userLatitude: userLocation.latitude,
-                userLongitude: userLocation.longitude,
-                device_info: {
-                  browser: navigator.userAgent,
-                  platform: navigator.platform,
-                },
-              }),
-            })
-
-            const result = await response.json()
-
-            if (!response.ok) {
-              let errorMsg = result.error || "Failed to process QR code check-in"
-
-              if (response.status === 403 && result.distance) {
-                errorMsg = `You are too far from ${result.locationName} (${result.distance}m away). You must be within 40 meters to check in.`
-              }
-
-              console.error("[v0] QR check-in failed:", errorMsg)
-              setError(errorMsg)
-
-              toast({
-                title: "Check-In Failed",
-                description: errorMsg,
-                variant: "destructive",
-                duration: 8000,
-              })
-              return
-            }
-
-            const successMsg = "QR code scanned successfully!"
-            setSuccess(successMsg)
-
-            toast({
-              title: "Success",
-              description: successMsg,
-              duration: 3000,
-            })
-
-            console.log("[v0] Valid QR code with GPS validation, calling onScanSuccess")
-            onScanSuccess(result.data || qrData)
-          } catch (gpsError) {
-            console.error("[v0] Failed to get GPS location:", gpsError)
-            const errorMsg =
-              "Location access required for QR code check-in. Please enable location services. You must be within 40 meters of the location to check in."
-            setError(errorMsg)
-
-            toast({
-              title: "Location Required",
-              description: errorMsg,
-              variant: "destructive",
-              duration: 8000,
-            })
-          }
-        } else {
-          const errorMsg = validation.reason || "Invalid QR code"
-          setError(errorMsg)
-
-          toast({
-            title: "Invalid QR Code",
-            description: errorMsg,
-            variant: "destructive",
-            duration: 5000,
-          })
-        }
-      } else {
-        const errorMsg = "Invalid QR code format"
+      if (!qrData) {
+        const errorMsg = "Invalid QR code format. Please scan a valid location QR code."
         setError(errorMsg)
-
         toast({
           title: "Invalid QR Code",
           description: errorMsg,
           variant: "destructive",
+          duration: 8000,
+        })
+        return
+      }
+
+      const validation = validateQRCode(qrData)
+      if (!validation.isValid) {
+        const errorMsg = validation.reason || "Invalid or expired QR code"
+        setError(errorMsg)
+        toast({
+          title: "Invalid QR Code",
+          description: errorMsg,
+          variant: "destructive",
+          duration: 8000,
+        })
+        return
+      }
+
+      console.log("[v0] Getting GPS location for QR code verification...")
+
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error("GPS location timeout. Please ensure location services are enabled."))
+          }, 15000)
+
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              clearTimeout(timeout)
+              resolve(pos)
+            },
+            (err) => {
+              clearTimeout(timeout)
+              let errorMessage = "Unable to get your location. "
+
+              if (err.code === 1) {
+                errorMessage += "Please enable location permissions in your browser/phone settings."
+              } else if (err.code === 2) {
+                errorMessage += "Location unavailable. Please check your GPS/WiFi settings."
+              } else if (err.code === 3) {
+                errorMessage += "Location request timed out. Please try again."
+              } else {
+                errorMessage += err.message || "Please enable location services."
+              }
+
+              reject(new Error(errorMessage))
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 0,
+            },
+          )
+        })
+
+        const userLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }
+
+        console.log("[v0] GPS location obtained:", userLocation)
+
+        const response = await fetch("/api/attendance/qr-checkin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location_id: qrData.location_id,
+            qr_timestamp: new Date().toISOString(),
+            userLatitude: userLocation.latitude,
+            userLongitude: userLocation.longitude,
+            device_info: {
+              browser: navigator.userAgent,
+              platform: navigator.platform,
+            },
+          }),
+        })
+
+        const result = await response.json()
+        console.log("[v0] QR check-in API response:", result)
+
+        if (!response.ok) {
+          let errorMsg = "Failed to check in"
+
+          if (response.status === 403) {
+            // Distance error
+            if (result.distance && result.locationName) {
+              errorMsg = `You are ${result.distance}m away from ${result.locationName}. You must be within 40 meters to check in using QR code.`
+            } else if (result.message) {
+              errorMsg = result.message
+            } else if (result.error) {
+              errorMsg = result.error
+            }
+          } else if (response.status === 400) {
+            errorMsg = result.error || result.message || "Invalid QR code or location"
+          } else if (response.status === 401) {
+            errorMsg = "You are not logged in. Please log in and try again."
+          } else {
+            errorMsg = result.error || result.message || "An error occurred during check-in"
+          }
+
+          console.error("[v0] QR check-in failed:", errorMsg)
+          setError(errorMsg)
+
+          toast({
+            title: "Check-In Failed",
+            description: errorMsg,
+            variant: "destructive",
+            duration: 10000,
+          })
+          return
+        }
+
+        const successMsg =
+          result.message || `Successfully checked in at ${result.data?.location_tracking?.location_name || "location"}`
+        setSuccess(successMsg)
+
+        toast({
+          title: "Check-In Successful",
+          description: successMsg,
+          variant: "default",
           duration: 5000,
+        })
+
+        console.log("[v0] QR check-in successful")
+        onScanSuccess(qrData)
+      } catch (gpsError) {
+        console.error("[v0] GPS error:", gpsError)
+
+        const errorMsg =
+          gpsError instanceof Error
+            ? gpsError.message
+            : "Unable to get your location. Please enable location services and try again."
+
+        setError(errorMsg)
+
+        toast({
+          title: "Location Required",
+          description: errorMsg,
+          variant: "destructive",
+          duration: 10000,
         })
       }
     } catch (error) {
       console.error("[v0] QR processing error:", error)
-      const errorMsg = "Failed to process QR code"
+
+      const errorMsg = error instanceof Error ? error.message : "Failed to process QR code. Please try again."
+
       setError(errorMsg)
 
       toast({
         title: "Error",
         description: errorMsg,
         variant: "destructive",
-        duration: 5000,
+        duration: 8000,
       })
     }
   }
