@@ -1442,6 +1442,7 @@ export function AttendanceRecorder({
                     setShowQRScanner(true)
                     setQrScanMode(canCheckIn ? "checkin" : "checkout")
                   }}
+                  size="sm"
                   variant="outline"
                   className="w-full h-14 sm:h-12 text-base sm:text-sm bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700"
                 >
@@ -1660,10 +1661,10 @@ export function AttendanceRecorder({
           <CardTitle className="text-lg">Location Status</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {userProfile && userProfile.assigned_location_id && (
+          {userProfile?.assigned_location_id && locations && locations.length > 0 && (
             <>
               {assignedLocationInfo ? (
-                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg">
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-blue-700 dark:text-blue-300 font-medium">Your Assigned Location</span>
                     {assignedLocationInfo.isAtAssignedLocation ? (
