@@ -1,9 +1,10 @@
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
+    const { createClient: createRegularClient } = await import("@/lib/supabase/server")
+    const supabase = await createRegularClient()
 
     const {
       data: { user },
@@ -60,7 +61,22 @@ export async function POST(request: Request) {
       }
     })
 
-    const { data, error } = await supabase.from("staff_warnings").insert(warnings).select()
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("[v0] Send warnings: Missing Supabase credentials")
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+
+    const { data, error } = await supabaseAdmin.from("staff_warnings").insert(warnings).select()
 
     if (error) {
       console.error("[v0] Failed to send warnings:", error)
