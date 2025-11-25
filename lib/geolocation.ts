@@ -152,15 +152,15 @@ export async function getBrowserTolerance(geoSettings?: GeoSettings): Promise<nu
   // PC users get increased tolerance for GPS accuracy issues
   switch (browserInfo.name.toLowerCase()) {
     case "chrome":
-      return 2000 // Increased from 500 to 2000 meters for PC Chrome users
+      return 600 // Reduced from 2000 to 600 meters for PC Chrome users
     case "edge":
       return 100 // Edge remains at 100 meters
     case "firefox":
-      return 2000 // Increased from 500 to 2000 meters for PC Firefox users
+      return 600 // Reduced from 2000 to 600 meters for PC Firefox users
     case "safari":
-      return 2000 // Increased from 100 to 2000 meters for PC Safari users
+      return 600 // Reduced from 2000 to 600 meters for PC Safari users
     case "opera":
-      return 2000 // Increased from 100 to 2000 meters for PC Opera users
+      return 600 // Reduced from 2000 to 600 meters for PC Opera users
     default:
       return 100
   }

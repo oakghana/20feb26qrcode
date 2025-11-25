@@ -109,9 +109,8 @@ export async function POST(request: NextRequest) {
       districtName = district?.name
     }
 
-    // Create or update device session
     let deviceSessionId = null
-    if (device_info) {
+    if (device_info?.device_id) {
       // First try to find existing session
       const { data: existingSession } = await supabase
         .from("device_sessions")
@@ -125,9 +124,9 @@ export async function POST(request: NextRequest) {
         const { data: updatedSession } = await supabase
           .from("device_sessions")
           .update({
-            device_name: device_info.device_name,
-            device_type: device_info.device_type,
-            browser_info: device_info.browser_info,
+            device_name: device_info.device_name || null,
+            device_type: device_info.device_type || null,
+            browser_info: device_info.browser_info || null,
             ip_address: request.ip || null,
             is_active: true,
             last_activity: new Date().toISOString(),
@@ -140,15 +139,15 @@ export async function POST(request: NextRequest) {
           deviceSessionId = updatedSession.id
         }
       } else {
-        // Create new session
-        const { data: newSession } = await supabase
+        // Create new session only if we have a valid device_id
+        const { data: newSession, error: sessionError } = await supabase
           .from("device_sessions")
           .insert({
             user_id: user.id,
             device_id: device_info.device_id,
-            device_name: device_info.device_name,
-            device_type: device_info.device_type,
-            browser_info: device_info.browser_info,
+            device_name: device_info.device_name || null,
+            device_type: device_info.device_type || null,
+            browser_info: device_info.browser_info || null,
             ip_address: request.ip || null,
             is_active: true,
             last_activity: new Date().toISOString(),
@@ -156,7 +155,10 @@ export async function POST(request: NextRequest) {
           .select("id")
           .maybeSingle()
 
-        if (newSession) {
+        if (sessionError) {
+          console.error("[v0] Device session creation error:", sessionError)
+          // Continue without device session - it's optional
+        } else if (newSession) {
           deviceSessionId = newSession.id
         }
       }
