@@ -18,8 +18,8 @@ import { getDeviceInfo } from "@/lib/device-info"
 import type { QRCodeData } from "@/lib/qr-code"
 import { useRealTimeLocations } from "@/hooks/use-real-time-locations"
 import { createClient } from "@/lib/supabase/client"
-import { toast } from "@/components/ui/use-toast" // Imported toast
-import { findNearestLocation } from "@/lib/geolocation" // Declared findNearestLocation
+import { toast } from "@/hooks/use-toast"
+import { findNearestLocation } from "@/lib/geolocation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MapPin, LogIn, LogOut, QrCode, RefreshCw, Loader2, AlertTriangle, CheckCircle2, Clock } from "lucide-react"
@@ -609,14 +609,14 @@ export function AttendanceRecorder({
       const browserInfo = detectBrowser()
       console.log("[v0] Browser detected:", browserInfo.name)
 
-      if (!locations || locations.length === 0) {
+      if (!realTimeLocations || realTimeLocations.length === 0) {
         setError("No QCC locations found")
         setIsLoading(false)
         return
       }
 
       // Find nearest location
-      const nearest = locations.reduce(
+      const nearest = realTimeLocations.reduce(
         (closest, loc) => {
           const dist = calculateDistance(location.latitude, location.longitude, loc.latitude, loc.longitude)
           if (!closest || dist < closest.distance) {
@@ -685,16 +685,27 @@ export function AttendanceRecorder({
       })
       setRecentCheckIn(true)
 
-      const message = nearest.location.name
-        ? `Checked in successfully at ${nearest.location.name}!`
-        : "Checked in successfully!"
-      setSuccessDialogMessage(message)
+      const checkInTime = new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      })
+
+      const detailedMessage = `Check-in successful at ${checkInTime}\nLocation: ${nearest.location.name}\nGPS: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}\nDistance: ${Math.round(proximityCheck.distance)}m`
+
+      setSuccessDialogMessage(detailedMessage)
       setShowSuccessDialog(true)
 
       toast({
         title: "Check-in successful!",
-        description: message,
+        description: `${checkInTime} at ${nearest.location.name}`,
+        duration: 5000,
       })
+
+      // Update the GPS location badge to show check-in status
+      setSuccessMessage(detailedMessage.replace(/\n/g, " • "))
+      // </CHANGE>
 
       setTimeout(() => {
         setRecentCheckIn(false)
@@ -738,13 +749,13 @@ export function AttendanceRecorder({
       const location = await getCurrentLocation()
       setUserLocation(location)
 
-      if (!locations || locations.length === 0) {
+      if (!realTimeLocations || realTimeLocations.length === 0) {
         setError("No QCC locations found")
         setIsLoading(false)
         return
       }
 
-      const checkoutValidation = validateCheckoutLocation(location, locations, proximitySettings)
+      const checkoutValidation = validateCheckoutLocation(location, realTimeLocations, proximitySettings)
 
       if (!checkoutValidation.canCheckOut) {
         setError(checkoutValidation.message)
@@ -761,8 +772,9 @@ export function AttendanceRecorder({
 
       let nearestLocation = null
 
-      if (locations.length > 1) {
-        const locationDistances = locations
+      if (realTimeLocations.length > 1) {
+        // Use realTimeLocations here
+        const locationDistances = realTimeLocations // Use realTimeLocations here
           .map((loc) => {
             const distance = calculateDistance(location.latitude, location.longitude, loc.latitude, loc.longitude)
             return { location: loc, distance: Math.round(distance) }
@@ -785,15 +797,15 @@ export function AttendanceRecorder({
 
         // Automatically select the best location for check-out
         if (userProfile?.assigned_location_id && assignedLocationInfo?.isAtAssignedLocation) {
-          nearestLocation = locations.find((loc) => loc.id === userProfile.assigned_location_id)
+          nearestLocation = realTimeLocations.find((loc) => loc.id === userProfile.assigned_location_id) // Use realTimeLocations here
           console.log("[v0] Automatically using assigned location for check-out:", nearestLocation?.name)
         } else {
           nearestLocation = locationDistances[0]?.location
           console.log("[v0] Automatically using nearest location for check-out:", nearestLocation?.name)
         }
       } else {
-        const nearest = findNearestLocation(location, locations)
-        nearestLocation = nearest?.location || locations[0]
+        const nearest = findNearestLocation(location, realTimeLocations) // Use realTimeLocations here
+        nearestLocation = nearest?.location || realTimeLocations[0] // Use realTimeLocations here
       }
 
       const deviceInfo = getDeviceInfo()
@@ -1030,25 +1042,104 @@ export function AttendanceRecorder({
     <div className="space-y-6">
       {/* GPS Status Banner */}
       {userLocation && (
-        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <div
+          className={`border-2 rounded-lg p-4 ${
+            localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time
+              ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+              : "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time ? (
+              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+            ) : (
+              <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            )}
+            <div className="flex-1 space-y-2">
+              {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time ? (
                 <div>
-                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">GPS Location Active</p>
+                  <p className="text-sm font-bold text-green-900 dark:text-green-100">✓ Checked In Successfully</p>
+                  <p className="text-sm font-semibold text-green-700 dark:text-green-300 mt-1">
+                    {localTodayAttendance.check_in_location_name}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    Time:{" "}
+                    {new Date(localTodayAttendance.check_in_time).toLocaleTimeString("en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: true,
+                    })}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    GPS: {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    Accuracy: {userLocation.accuracy?.toFixed(0)}m
+                  </p>
+                  <p className="text-xs text-green-700 dark:text-green-300 mt-2 font-medium">
+                    Remember to check out when you leave!
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Your Current Location</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                    GPS: {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
+                  </p>
                   <p className="text-xs text-blue-700 dark:text-blue-300">
                     Accuracy: {userLocation.accuracy?.toFixed(0)}m
                   </p>
                 </div>
-              </div>
-              <Button onClick={getCurrentLocationData} variant="outline" size="sm" disabled={isLoading}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
+              )}
+
+              {/* Show nearest location */}
+              {(() => {
+                if (!realTimeLocations || realTimeLocations.length === 0) return null
+
+                const locationsWithDistance = realTimeLocations.map((loc) => ({
+                  location: loc,
+                  distance: calculateDistance(
+                    userLocation.latitude,
+                    userLocation.longitude,
+                    loc.latitude,
+                    loc.longitude,
+                  ),
+                }))
+
+                // Handle case where locationsWithDistance might be empty if realTimeLocations is empty
+                if (locationsWithDistance.length === 0) return null
+
+                const nearest = locationsWithDistance.reduce((min, curr) => (curr.distance < min.distance ? curr : min))
+
+                const isNearby = nearest.distance <= 2000 // 2000m for PC browsers
+
+                return (
+                  <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
+                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                      {isNearby ? "✓ At Location" : "Nearest Location"}
+                    </p>
+                    <p className="text-base font-bold text-blue-700 dark:text-blue-200 mt-1">{nearest.location.name}</p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                      {nearest.distance < 1000
+                        ? `${nearest.distance.toFixed(0)}m away`
+                        : `${(nearest.distance / 1000).toFixed(2)}km away`}
+                    </p>
+                  </div>
+                )
+              })()}
             </div>
-          </CardContent>
-        </Card>
+            <Button
+              onClick={getCurrentLocationData}
+              variant="ghost"
+              size="sm"
+              disabled={isLoading}
+              className="flex-shrink-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Warning Messages */}
@@ -1096,74 +1187,9 @@ export function AttendanceRecorder({
         </CardHeader>
         <CardContent className="space-y-4">
           {/* ADDED: current GPS location display above check-in buttons */}
-          {userLocation && (
-            <div className="bg-blue-50 dark:bg-blue-950/20 border-2 border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div>
-                    <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Your Current Location</p>
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                      GPS: {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
-                    </p>
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
-                      Accuracy: {userLocation.accuracy?.toFixed(0)}m
-                    </p>
-                  </div>
+          {/* This section is now handled by the enhanced GPS Status Banner above */}
 
-                  {/* Show nearest location */}
-                  {(() => {
-                    if (!realTimeLocations || realTimeLocations.length === 0) return null
-
-                    const locationsWithDistance = realTimeLocations.map((loc) => ({
-                      location: loc,
-                      distance: calculateDistance(
-                        userLocation.latitude,
-                        userLocation.longitude,
-                        loc.latitude,
-                        loc.longitude,
-                      ),
-                    }))
-
-                    // Handle case where locationsWithDistance might be empty if realTimeLocations is empty
-                    if (locationsWithDistance.length === 0) return null
-
-                    const nearest = locationsWithDistance.reduce((min, curr) =>
-                      curr.distance < min.distance ? curr : min,
-                    )
-
-                    const isNearby = nearest.distance <= 2000 // 2000m for PC browsers
-
-                    return (
-                      <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
-                        <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                          {isNearby ? "✓ At Location" : "Nearest Location"}
-                        </p>
-                        <p className="text-base font-bold text-blue-700 dark:text-blue-200 mt-1">
-                          {nearest.location.name}
-                        </p>
-                        <p className="text-xs text-blue-600 dark:text-blue-400">
-                          {nearest.distance < 1000
-                            ? `${nearest.distance.toFixed(0)}m away`
-                            : `${(nearest.distance / 1000).toFixed(2)}km away`}
-                        </p>
-                      </div>
-                    )
-                  })()}
-                </div>
-                <Button
-                  onClick={getCurrentLocationData}
-                  variant="ghost"
-                  size="sm"
-                  disabled={isLoading}
-                  className="flex-shrink-0"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
-            </div>
-          )}
-
+          {/* Actions Section Buttons */}
           {!isCheckedIn && (
             <Button
               onClick={handleCheckIn}

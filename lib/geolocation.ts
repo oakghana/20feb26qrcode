@@ -820,3 +820,51 @@ export async function getAveragedLocation(samples = 3): Promise<LocationData> {
     timestamp: Date.now(),
   }
 }
+
+export async function reverseGeocode(latitude: number, longitude: number): Promise<string> {
+  try {
+    // Use Nominatim (OpenStreetMap) for reverse geocoding - free and no API key required
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          "User-Agent": "QCC-Attendance-App",
+        },
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error("Reverse geocoding failed")
+    }
+
+    const data = await response.json()
+
+    // Extract meaningful location name
+    const address = data.address || {}
+    const locationParts = []
+
+    if (address.building || address.office) {
+      locationParts.push(address.building || address.office)
+    }
+    if (address.road || address.street) {
+      locationParts.push(address.road || address.street)
+    }
+    if (address.suburb || address.neighbourhood) {
+      locationParts.push(address.suburb || address.neighbourhood)
+    }
+    if (address.city || address.town || address.village) {
+      locationParts.push(address.city || address.town || address.village)
+    }
+
+    const locationName =
+      locationParts.length > 0
+        ? locationParts.slice(0, 3).join(", ")
+        : data.display_name?.split(",").slice(0, 3).join(",") || "Unknown Location"
+
+    console.log("[v0] Reverse geocoded location:", locationName)
+    return locationName
+  } catch (error) {
+    console.error("[v0] Reverse geocoding error:", error)
+    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+  }
+}
