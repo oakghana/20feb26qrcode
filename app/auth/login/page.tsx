@@ -530,7 +530,7 @@ export default function LoginPage() {
                     <Input
                       id="identifier"
                       type="text"
-                      placeholder="ohemengappiah@qccgh.com"
+                      placeholder="Enter your corporate email"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
                       required
@@ -557,8 +557,9 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/70 hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary rounded p-1"
                         aria-label={showPassword ? "Hide password" : "Show password"}
+                        tabIndex={0}
                       >
                         {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
@@ -689,7 +690,7 @@ export default function LoginPage() {
             <div className="mt-6 text-center border-t border-border pt-6">
               <p className="text-sm font-medium text-foreground">Quality Control Company Limited</p>
               <p className="text-xs text-muted-foreground mt-1">Intranet Portal - Powered by IT Department</p>
-              <p className="text-xs text-muted-foreground mt-2 font-mono">v.1.9.113 22/11/25</p>
+              <p className="text-xs text-muted-foreground mt-2 font-mono text-center">V.2.0</p>
             </div>
           </CardContent>
         </Card>

@@ -795,6 +795,12 @@ export function AttendanceRecorder({
 
       const result = await response.json()
 
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("check-in-complete"))
+      }
+
+      console.log("[v0] Check-in successful:", result)
+
       if (result.success && result.data) {
         console.log("[v0] Check-in successful:", result.data)
 
@@ -987,6 +993,7 @@ export function AttendanceRecorder({
         })
 
         setEarlyCheckoutReason("")
+        setPendingCheckoutData(null) // Clear pending data after successful checkout
 
         setTimeout(() => {
           fetchTodayAttendance()
@@ -1132,7 +1139,7 @@ export function AttendanceRecorder({
         })
 
         setEarlyCheckoutReason("")
-        setPendingCheckoutData({ location: null, nearestLocation: null })
+        setPendingCheckoutData(null)
 
         setTimeout(() => {
           fetchTodayAttendance()
@@ -1146,7 +1153,7 @@ export function AttendanceRecorder({
         message: err instanceof Error ? err.message : "Failed to record checkout. Please try again.",
         type: "error",
       })
-      setShowEarlyCheckoutDialog(true)
+      setShowEarlyCheckoutDialog(true) // Keep dialog open if there's an error
     } finally {
       setIsLoading(false)
     }
@@ -1207,6 +1214,7 @@ export function AttendanceRecorder({
 
   const handleLocationSelect = (location: GeofenceLocation) => {
     console.log("Location selected:", location.name)
+    // Logic to handle location selection, e.g., pre-filling a form or triggering an action
   }
 
   return (
@@ -1559,13 +1567,13 @@ export function AttendanceRecorder({
               </Button>
             )}
 
-            <div className="pt-4 border-t border-border">
+            <div className="space-y-3 opacity-40 pointer-events-none">
               <p className="text-sm text-muted-foreground text-center mb-3">Alternative Method</p>
               <Button
                 variant="outline"
                 size="lg"
-                onClick={() => setShowLocationCodeDialog(true)}
-                className="w-full h-12 md:h-14 text-sm md:text-base"
+                disabled
+                className="w-full h-12 md:h-14 text-sm md:text-base cursor-not-allowed bg-transparent"
               >
                 <MapPin className="mr-2 h-4 w-4 md:h-5 md:w-5" />
                 Enter Location Code Manually
@@ -1575,7 +1583,12 @@ export function AttendanceRecorder({
               </p>
             </div>
 
-            <Button onClick={() => setShowScanner(true)} variant="outline" size="lg" className="w-full h-12 md:h-14">
+            <Button
+              variant="outline"
+              size="lg"
+              disabled
+              className="w-full h-12 md:h-14 opacity-40 cursor-not-allowed bg-transparent"
+            >
               <QrCode className="h-5 w-5 md:h-6 md:w-6 mr-2" />
               Use QR Code Scanner
             </Button>
