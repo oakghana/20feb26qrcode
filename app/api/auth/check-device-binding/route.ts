@@ -1,0 +1,142 @@
+import { createClient } from "@/lib/supabase/server"
+import { type NextRequest, NextResponse } from "next/server"
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = await createClient()
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { device_id, device_info } = body
+
+    if (!device_id) {
+      return NextResponse.json({ error: "Device ID is required" }, { status: 400 })
+    }
+
+    const getValidIpAddress = () => {
+      const possibleIps = [
+        request.ip,
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
+        request.headers.get("x-real-ip"),
+        request.headers.get("cf-connecting-ip"),
+      ]
+
+      for (const ip of possibleIps) {
+        if (ip && ip !== "unknown" && ip !== "::1" && ip !== "127.0.0.1") {
+          if (/^(\d{1,3}\.){3}\d{1,3}$/.test(ip) || /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/.test(ip)) {
+            return ip
+          }
+        }
+      }
+      return null
+    }
+
+    const ipAddress = getValidIpAddress()
+
+    const { data: existingBinding, error: bindingError } = await supabase
+      .from("device_user_bindings")
+      .select("user_id, user_profiles!inner(first_name, last_name, email, department_id)")
+      .eq("device_id", device_id)
+      .eq("is_active", true)
+      .maybeSingle()
+
+    if (bindingError) {
+      console.error("[v0] Error checking device binding:", bindingError)
+    }
+
+    if (existingBinding && existingBinding.user_id !== user.id) {
+      console.log("[v0] Device binding violation detected:", {
+        device_id,
+        attempted_user: user.id,
+        bound_user: existingBinding.user_id,
+      })
+
+      // Log the violation
+      await supabase.from("device_security_violations").insert({
+        device_id,
+        ip_address: ipAddress,
+        attempted_user_id: user.id,
+        bound_user_id: existingBinding.user_id,
+        violation_type: "login_attempt",
+        device_info: device_info || null,
+      })
+
+      // Get current user info for notification
+      const { data: currentUserProfile } = await supabase
+        .from("user_profiles")
+        .select("first_name, last_name, email, department_id")
+        .eq("id", user.id)
+        .single()
+
+      // Get department head to notify
+      if (currentUserProfile?.department_id) {
+        const { data: deptHead } = await supabase
+          .from("user_profiles")
+          .select("id")
+          .eq("department_id", currentUserProfile.department_id)
+          .eq("role", "department_head")
+          .eq("is_active", true)
+          .maybeSingle()
+
+        if (deptHead) {
+          await supabase.from("staff_notifications").insert({
+            recipient_id: deptHead.id,
+            sender_id: user.id,
+            sender_role: "system",
+            sender_label: "Security Alert",
+            notification_type: "security_violation",
+            message: `Security Alert: ${currentUserProfile.first_name} ${currentUserProfile.last_name} (${currentUserProfile.email}) attempted to login using a device already registered to ${existingBinding.user_profiles.first_name} ${existingBinding.user_profiles.last_name}. This may indicate device sharing or unauthorized access. Please investigate.`,
+            is_read: false,
+          })
+        }
+      }
+
+      return NextResponse.json({
+        allowed: false,
+        violation: true,
+        message: `This device is already registered to another staff member. Each device can only be used by one person. Please contact your supervisor or IT department.`,
+        bound_to_email: existingBinding.user_profiles.email,
+      })
+    }
+
+    if (!existingBinding) {
+      // Create new binding
+      await supabase.from("device_user_bindings").insert({
+        device_id,
+        ip_address: ipAddress,
+        user_id: user.id,
+        device_info: device_info || null,
+        is_active: true,
+        last_seen_at: new Date().toISOString(),
+      })
+    } else {
+      // Update existing binding
+      await supabase
+        .from("device_user_bindings")
+        .update({
+          ip_address: ipAddress,
+          last_seen_at: new Date().toISOString(),
+          device_info: device_info || null,
+        })
+        .eq("device_id", device_id)
+        .eq("user_id", user.id)
+    }
+
+    return NextResponse.json({
+      allowed: true,
+      violation: false,
+      message: "Device verified successfully",
+    })
+  } catch (error) {
+    console.error("[v0] Device binding check error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}

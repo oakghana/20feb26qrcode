@@ -3,6 +3,7 @@
 import type React from "react"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { clearAttendanceCache } from "@/lib/utils/attendance-cache"
+import { getDeviceInfo } from "@/lib/device-info"
 
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -100,158 +101,58 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("[v0] Sign-in button clicked - handleLogin triggered")
-    const supabase = createClient()
     setIsLoading(true)
     setError(null)
 
     try {
-      console.log("[v0] Attempting login with identifier:", identifier)
-
-      const demoUsers = [
-        { email: "admin.system@qccgh.com", staff: "5000001", name: "System Admin" },
-        { email: "admin.hr@qccgh.com", staff: "5000002", name: "HR Admin" },
-        { email: "admin.ops@qccgh.com", staff: "5000003", name: "Operations Admin" },
-        { email: "hod.academic@qccgh.com", staff: "4000001", name: "Academic Affairs HOD" },
-        { email: "hod.student@qccgh.com", staff: "4000002", name: "Student Affairs HOD" },
-        { email: "hod.finance@qccgh.com", staff: "4000003", name: "Finance HOD" },
-        { email: "admin.user@qccgh.com", staff: "1000001", name: "Test Admin" },
-        { email: "staff.user@qccgh.com", staff: "2000001", name: "Test Staff" },
-        { email: "hod.user@qccgh.com", staff: "3000001", name: "Test HOD" },
-      ]
-
-      const demoUser = demoUsers.find((user) => identifier === user.email || identifier === user.staff)
-
-      if (demoUser) {
-        console.log("[v0] Demo user login detected:", demoUser.name)
-
-        // Check if this demo user has signed up yet
-        const { data: authCheck, error: authError } = await supabase.auth.signInWithPassword({
-          email: demoUser.email,
-          password,
-        })
-
-        if (authError && authError.message.includes("Invalid login credentials")) {
-          showError(
-            `Demo Account: ${demoUser.name} needs activation. Please sign up first at /auth/signup with Email: ${demoUser.email} and Password: pa$$w0rd`,
-            "Account Activation Required",
-          )
-          console.log("[v0] Demo user needs to sign up first:", demoUser.email)
-          return
-        }
-
-        if (authError) {
-          console.log("[v0] Demo user login error:", authError)
-          showError(`Demo login error: ${authError.message}`, "Login Failed")
-          return
-        }
-
-        console.log("[v0] Demo user authenticated successfully:", authCheck)
-        // Continue with normal approval check below
-      }
-
-      if (identifier === "QCC@qccgh.onmicrosoft.com") {
-        console.log("[v0] QCC Admin login detected - checking if account exists")
-
-        // Check if admin has signed up yet
-        const { data: authUser, error: authError } = await supabase.auth.signInWithPassword({
-          email: identifier,
-          password,
-        })
-
-        if (authError && authError.message.includes("Invalid login credentials")) {
-          showError(
-            "QCC Admin account not found. Please sign up first at the signup page with email: QCC@qccgh.onmicrosoft.com and password: admin",
-            "Account Not Found",
-          )
-          console.log("[v0] QCC Admin needs to sign up first")
-          return
-        }
-
-        if (authError) {
-          console.log("[v0] QCC Admin login error:", authError)
-          showError(`Admin login error: ${authError.message}`, "Login Failed")
-          return
-        }
-
-        console.log("[v0] QCC Admin authenticated successfully:", authUser)
-      }
-
+      const supabase = createClient()
       let email = identifier
 
-      // If identifier doesn't contain @, it's a staff number - look up the email
+      // If identifier doesn't contain @, look up email from staff number
       if (!identifier.includes("@")) {
-        const demoByStaff = demoUsers.find((user) => identifier === user.staff)
-        if (demoByStaff) {
-          email = demoByStaff.email
-          console.log("[v0] Demo staff number resolved to email:", email)
-        } else {
-          const response = await fetch("/api/auth/lookup-staff", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ identifier }),
-          })
-
-          const result = await response.json()
-
-          if (!response.ok) {
-            showFieldError("Staff Number", result.error || "Staff number not found")
-            return
-          }
-
-          email = result.email
-          console.log("[v0] Staff number resolved to email:", email)
-        }
-      }
-
-      let data, error
-      if (identifier === "QCC@qccgh.onmicrosoft.com") {
-        // Already authenticated above, just get the session
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-        data = sessionData
-        error = sessionError
-        console.log("[v0] QCC Admin session data:", data)
-      } else {
-        const authResult = await supabase.auth.signInWithPassword({
-          email,
-          password,
+        const response = await fetch("/api/auth/lookup-staff", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identifier }),
         })
-        data = authResult.data
-        error = authResult.error
+
+        if (!response.ok) {
+          const result = await response.json()
+          showFieldError("Staff Number", result.error || "Staff number not found")
+          return
+        }
+
+        const result = await response.json()
+        email = result.email
       }
 
-      console.log("[v0] Login response:", { data, error })
+      // Single authentication call
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
       if (error) {
-        console.log("[v0] Login error details:", error)
-
+        // Log failed attempt
         if (data?.user?.id) {
           await logLoginActivity(data.user.id, "login_failed", false, "password")
         }
 
-        const errorMessage = error.message
+        // Handle specific error types
         if (error.message.includes("Invalid login credentials")) {
-          if (email === "admin.user@qccgh.com" || email === "staff.user@qccgh.com" || email === "hod.user@qccgh.com") {
-            showError(
-              `Account not activated. Please sign up first at /auth/signup with email: ${email} and password: pa$$w0rd to activate your account.`,
-              "Account Activation Required",
-            )
-          } else {
-            showFieldError("Credentials", "Invalid credentials. Please check your staff number/email and password.")
-          }
+          showFieldError("Credentials", "Invalid credentials. Please check your staff number/email and password.")
         } else if (error.message.includes("Email not confirmed")) {
           showWarning(
             "Please check your email and click the confirmation link before logging in.",
             "Email Confirmation Required",
           )
-        } else if (error.message.includes("User not found")) {
-          showFieldError("Account", "No account found. Please contact your administrator or sign up first.")
         } else {
-          showError(errorMessage, "Login Failed")
+          showError(error.message, "Login Failed")
         }
         return
       }
 
+      // Check user approval status
       if (data?.user?.id) {
         const approvalCheck = await checkUserApproval(data.user.id)
 
@@ -265,21 +166,40 @@ export default function LoginPage() {
           return
         }
 
+        const deviceInfo = getDeviceInfo()
+        const deviceCheckResponse = await fetch("/api/auth/check-device-binding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            device_id: deviceInfo.device_id,
+            device_info: deviceInfo,
+          }),
+        })
+
+        const deviceCheck = await deviceCheckResponse.json()
+
+        if (!deviceCheck.allowed) {
+          await logLoginActivity(data.user.id, "login_blocked_device_violation", false, "password")
+          await supabase.auth.signOut()
+          showError(
+            deviceCheck.message || "This device is registered to another user. Your supervisor has been notified.",
+            "Device Security Violation",
+          )
+          return
+        }
+
+        // Log successful login
         await logLoginActivity(data.user.id, "login_success", true, "password")
       }
 
+      // Clear attendance cache
       clearAttendanceCache()
-      console.log("[v0] Attendance cache cleared on login")
 
-      console.log("[v0] Login successful, redirecting to dashboard")
-      showSuccess("Login successful! Redirecting to dashboard...", "Welcome Back")
+      showSuccess("Login successful! Redirecting...", "Welcome Back")
 
-      // Wait a moment for the success message to show, then do a full page reload
-      setTimeout(() => {
-        window.location.href = "/dashboard"
-      }, 500)
+      // Quick redirect without delay
+      window.location.href = "/dashboard"
     } catch (error: unknown) {
-      console.log("[v0] Caught error:", error)
       showError(error instanceof Error ? error.message : "An error occurred during login", "Login Error")
     } finally {
       setIsLoading(false)

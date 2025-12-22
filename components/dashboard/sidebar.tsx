@@ -39,6 +39,7 @@ import {
   RefreshCw,
   AlertCircle,
   Archive,
+  ShieldAlert,
 } from "lucide-react"
 import Image from "next/image"
 
@@ -135,6 +136,13 @@ const navigationItems = [
     href: "/dashboard/warnings-archive",
     icon: Archive,
     roles: ["admin", "department_head"],
+    category: "admin",
+  },
+  {
+    title: "Device Security",
+    href: "/dashboard/device-violations",
+    icon: ShieldAlert,
+    roles: ["admin", "it-admin", "department_head"],
     category: "admin",
   },
   {

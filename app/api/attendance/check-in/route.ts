@@ -18,6 +18,52 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { latitude, longitude, location_id, device_info, qr_code_used, qr_timestamp } = body
 
+    if (device_info?.device_id) {
+      const getValidIpAddress = () => {
+        const possibleIps = [
+          request.ip,
+          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
+          request.headers.get("x-real-ip"),
+        ]
+        for (const ip of possibleIps) {
+          if (ip && ip !== "unknown" && ip !== "::1" && ip !== "127.0.0.1") {
+            return ip
+          }
+        }
+        return null
+      }
+
+      const ipAddress = getValidIpAddress()
+
+      // Check if device is bound to a different user
+      const { data: existingBinding } = await supabase
+        .from("device_user_bindings")
+        .select("user_id")
+        .eq("device_id", device_info.device_id)
+        .eq("is_active", true)
+        .maybeSingle()
+
+      if (existingBinding && existingBinding.user_id !== user.id) {
+        // Log violation
+        await supabase.from("device_security_violations").insert({
+          device_id: device_info.device_id,
+          ip_address: ipAddress,
+          attempted_user_id: user.id,
+          bound_user_id: existingBinding.user_id,
+          violation_type: "checkin_attempt",
+          device_info: device_info,
+        })
+
+        return NextResponse.json(
+          {
+            error:
+              "This device is registered to another staff member. You cannot check in from this device. Your supervisor has been notified.",
+          },
+          { status: 403 },
+        )
+      }
+    }
+
     if (!qr_code_used && (!latitude || !longitude)) {
       return NextResponse.json({ error: "Location coordinates are required for GPS check-in" }, { status: 400 })
     }
