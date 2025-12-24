@@ -40,6 +40,7 @@ import {
   AlertCircle,
   Archive,
   ShieldAlert,
+  Smartphone,
 } from "lucide-react"
 import Image from "next/image"
 
@@ -143,6 +144,13 @@ const navigationItems = [
     href: "/dashboard/device-violations",
     icon: ShieldAlert,
     roles: ["admin", "it-admin", "department_head"],
+    category: "admin",
+  },
+  {
+    title: "Weekly Device Sharing",
+    href: "/dashboard/weekly-device-sharing",
+    icon: Smartphone,
+    roles: ["admin", "department_head"],
     category: "admin",
   },
   {

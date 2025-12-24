@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, Shield, Clock } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { AlertTriangle, Shield, Clock, ArrowLeft } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
 
 interface Violation {
   id: string
@@ -15,6 +17,7 @@ interface Violation {
     last_name: string
     email: string
     employee_id: string
+    department_id: string
   }
   bound_user: {
     first_name: string
@@ -36,6 +39,7 @@ export default function DeviceViolationsClient({
 }) {
   const [violations, setViolations] = useState<Violation[]>([])
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     fetchViolations()
@@ -78,6 +82,11 @@ export default function DeviceViolationsClient({
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      <Button variant="ghost" className="mb-4" onClick={() => router.push("/dashboard")}>
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back to Dashboard
+      </Button>
+
       <div className="flex items-center gap-3">
         <Shield className="h-8 w-8 text-destructive" />
         <div>

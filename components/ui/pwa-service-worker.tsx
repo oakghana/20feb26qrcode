@@ -4,6 +4,16 @@ import { useEffect } from "react"
 
 export function PWAServiceWorker() {
   useEffect(() => {
+    const isPreview =
+      window.location.hostname.includes("vusercontent.net") ||
+      window.location.hostname.includes("localhost") ||
+      process.env.NODE_ENV === "development"
+
+    if (isPreview) {
+      console.log("[PWA] Preview/development environment detected, skipping service worker registration")
+      return
+    }
+
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       const setupPWAEvents = () => {
         // Handle beforeinstallprompt event globally
@@ -194,17 +204,7 @@ export function PWAServiceWorker() {
       }
 
       const initializePWA = () => {
-        const isPreview =
-          window.location.hostname.includes("vusercontent.net") ||
-          window.location.hostname.includes("localhost") ||
-          process.env.NODE_ENV === "development"
-
-        if (isPreview) {
-          console.log("[PWA] Preview/development environment detected, skipping service worker registration")
-        } else {
-          registerServiceWorker()
-        }
-
+        registerServiceWorker()
         return setupPWAEvents()
       }
 

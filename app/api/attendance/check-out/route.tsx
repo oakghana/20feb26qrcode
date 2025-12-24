@@ -44,7 +44,36 @@ export async function POST(request: NextRequest) {
     }
 
     if (attendanceRecord.check_out_time) {
-      return NextResponse.json({ error: "Already checked out today" }, { status: 400 })
+      // Log this as a security violation - attempt to check out twice
+      const deviceId = request.headers.get("x-device-id") || "unknown"
+      const ipAddress = request.ip || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null
+
+      await supabase
+        .from("device_security_violations")
+        .insert({
+          device_id: deviceId,
+          ip_address: ipAddress,
+          attempted_user_id: user.id,
+          bound_user_id: user.id,
+          violation_type: "double_checkout_attempt",
+          device_info: {
+            userAgent: request.headers.get("user-agent"),
+            timestamp: new Date().toISOString(),
+          },
+        })
+        .catch((err) => {
+          // Ignore if table doesn't exist yet
+          if (err.code !== "PGRST205") {
+            console.error("[v0] Failed to log checkout violation:", err)
+          }
+        })
+
+      return NextResponse.json(
+        {
+          error: `DUPLICATE CHECK-OUT BLOCKED: You have already checked out today at ${new Date(attendanceRecord.check_out_time).toLocaleTimeString()}. Only one check-out per day is allowed. This attempt has been logged as a security violation.`,
+        },
+        { status: 400 },
+      )
     }
 
     const checkInDate = new Date(attendanceRecord.check_in_time).toISOString().split("T")[0]
