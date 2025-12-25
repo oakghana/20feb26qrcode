@@ -32,31 +32,31 @@ export async function GET(request: NextRequest) {
 
     const { data: deviceSessions, error: sessionsError } = await supabase
       .from("device_sessions")
-      .select(
-        `
-        device_id,
-        ip_address,
-        user_id,
-        created_at,
-        user_profiles!inner (
-          id,
-          first_name,
-          last_name,
-          email,
-          department_id,
-          departments (
-            name
-          )
-        )
-      `,
-      )
+      .select("device_id, ip_address, user_id, created_at")
       .gte("created_at", sevenDaysAgo.toISOString())
       .order("created_at", { ascending: false })
 
     if (sessionsError) {
-      console.error("Error fetching device sessions:", sessionsError)
-      return NextResponse.json({ error: "Failed to fetch device sessions" }, { status: 500 })
+      console.error("[v0] Error fetching device sessions:", sessionsError)
+      return NextResponse.json({ error: "Failed to fetch device sessions", data: [] }, { status: 200 })
     }
+
+    if (!deviceSessions || deviceSessions.length === 0) {
+      return NextResponse.json({ data: [] })
+    }
+
+    const userIds = [...new Set(deviceSessions.map((s) => s.user_id))]
+    const { data: userProfiles, error: profilesError } = await supabase
+      .from("user_profiles")
+      .select("id, first_name, last_name, email, department_id, departments(name)")
+      .in("id", userIds)
+
+    if (profilesError) {
+      console.error("[v0] Error fetching user profiles:", profilesError)
+      return NextResponse.json({ error: "Failed to fetch user profiles", data: [] }, { status: 200 })
+    }
+
+    const profileMap = new Map(userProfiles?.map((p) => [p.id, p]) || [])
 
     const deviceMap = new Map<
       string,
@@ -75,13 +75,16 @@ export async function GET(request: NextRequest) {
       }
     >()
 
-    for (const session of deviceSessions || []) {
+    for (const session of deviceSessions) {
       const key = session.device_id || session.ip_address
       if (!key) continue
 
+      const userProfile = profileMap.get(session.user_id)
+      if (!userProfile) continue
+
       // Filter by department for department heads
       if (profile.role === "department_head") {
-        if (session.user_profiles.department_id !== profile.department_id) {
+        if (userProfile.department_id !== profile.department_id) {
           continue
         }
       }
@@ -100,10 +103,10 @@ export async function GET(request: NextRequest) {
         device.users.add(session.user_id)
         device.userDetails.push({
           user_id: session.user_id,
-          first_name: session.user_profiles.first_name,
-          last_name: session.user_profiles.last_name,
-          email: session.user_profiles.email,
-          department_name: session.user_profiles.departments?.name || "Unknown",
+          first_name: userProfile.first_name,
+          last_name: userProfile.last_name,
+          email: userProfile.email,
+          department_name: userProfile.departments?.name || "Unknown",
           last_used: session.created_at,
         })
       }
