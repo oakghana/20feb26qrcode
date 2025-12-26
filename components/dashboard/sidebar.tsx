@@ -367,10 +367,54 @@ export function Sidebar({ user, profile }: SidebarProps) {
                 {adminItems.map((item) => {
                   const Icon = item.icon
                   const isActive = pathname === item.href || item.subItems?.some((subItem) => pathname === subItem.href)
+
+                  if (item.subItems) {
+                    // Items with subItems use dropdown menu
+                    return (
+                      <DropdownMenu key={item.href}>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className={cn(
+                              "w-full justify-start gap-3 h-auto p-4 rounded-xl transition-all duration-300 touch-manipulation min-h-[56px]",
+                              isActive ? "bg-primary text-primary-foreground hover:bg-primary/90" : "hover:bg-muted/50",
+                            )}
+                          >
+                            <Icon className="h-5 w-5 flex-shrink-0" />
+                            <span className="flex-1 font-medium text-left">{item.title}</span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-300 group-hover:translate-x-1" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-64 shadow-xl border-border/50 bg-background/95 backdrop-blur-xl"
+                        >
+                          {item.subItems.map((subItem) => (
+                            <DropdownMenuItem asChild key={subItem.href}>
+                              <Link
+                                href={subItem.href}
+                                className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-muted/50 rounded-lg transition-all duration-200 touch-manipulation min-h-[44px]"
+                              >
+                                <span className="font-medium">{subItem.title}</span>
+                              </Link>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )
+                  }
+
+                  // Regular items without subItems use Link
                   return (
-                    <div
+                    <Link
                       key={item.href}
-                      className="group flex items-center gap-3 px-4 py-4 rounded-xl text-sm font-medium transition-all duration-300 relative overflow-hidden touch-manipulation min-h-[48px]"
+                      href={item.href}
+                      className={cn(
+                        "group flex items-center gap-3 px-4 py-4 rounded-xl text-sm font-medium transition-all duration-300 relative overflow-hidden touch-manipulation min-h-[48px]",
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                          : "hover:bg-muted/50 text-foreground",
+                      )}
                     >
                       <Icon
                         className={cn(
@@ -383,35 +427,7 @@ export function Sidebar({ user, profile }: SidebarProps) {
                       {isActive && (
                         <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-50" />
                       )}
-                      {item.subItems && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              className="w-full justify-start gap-3 h-auto p-4 hover:bg-muted/50 rounded-lg transition-all duration-200 touch-manipulation min-h-[56px]"
-                            >
-                              <span className="font-medium">{item.title}</span>
-                              <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-300 group-hover:translate-x-1" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            className="w-64 shadow-xl border-border/50 bg-background/95 backdrop-blur-xl"
-                          >
-                            {item.subItems.map((subItem) => (
-                              <DropdownMenuItem asChild key={subItem.href}>
-                                <Link
-                                  href={subItem.href}
-                                  className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-muted/50 rounded-lg transition-all duration-200 touch-manipulation min-h-[44px]"
-                                >
-                                  <span className="font-medium">{subItem.title}</span>
-                                </Link>
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
+                    </Link>
                   )
                 })}
               </div>
