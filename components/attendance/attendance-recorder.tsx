@@ -1690,7 +1690,7 @@ export function AttendanceRecorder({
                       </Button>
                       {!locationValidation?.canCheckOut && (
                         <p className="text-xs text-red-500 mt-2 text-center">
-                          Location validation required. Distance: {locationValidation?.distance?.toFixed(0)}m
+                          You are outside the approved location range. Please move closer to a QCC location to check out.
                         </p>
                       )}
                     </>
