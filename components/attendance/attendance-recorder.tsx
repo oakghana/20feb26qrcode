@@ -499,7 +499,7 @@ export function AttendanceRecorder({
         const now = new Date()
         const hoursSinceCheckIn = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60)
 
-        setCheckoutTimeReached(hoursSinceCheckIn >= 1)
+        setCheckoutTimeReached(hoursSinceCheckIn >= 2)
       } else {
         setCheckoutTimeReached(false)
       }
