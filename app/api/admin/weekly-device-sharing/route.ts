@@ -26,15 +26,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden: Admin or Department Head access required" }, { status: 403 })
     }
 
-    // Get device sessions from the last 7 days
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    // Get filter parameters from query string
+    const { searchParams } = new URL(request.url)
+    const locationId = searchParams.get("location_id")
+    const departmentId = searchParams.get("department_id")
+    const startDate = searchParams.get("start_date")
+    const endDate = searchParams.get("end_date")
 
-    const { data: deviceSessions, error: sessionsError } = await supabase
+    // Set date range (default to last 7 days)
+    const defaultStartDate = new Date()
+    defaultStartDate.setDate(defaultStartDate.getDate() - 7)
+    
+    const filterStartDate = startDate ? new Date(startDate) : defaultStartDate
+    const filterEndDate = endDate ? new Date(endDate) : new Date()
+
+    const sevenDaysAgo = defaultStartDate;
+
+    let deviceSessionsQuery = supabase
       .from("device_sessions")
       .select("device_id, ip_address, user_id, created_at")
-      .gte("created_at", sevenDaysAgo.toISOString())
+      .gte("created_at", filterStartDate.toISOString())
+      .lte("created_at", filterEndDate.toISOString())
       .order("created_at", { ascending: false })
+
+    const { data: deviceSessions, error: sessionsError } = await deviceSessionsQuery
 
     if (sessionsError) {
       console.error("[v0] Error fetching device sessions:", sessionsError)
@@ -46,10 +61,22 @@ export async function GET(request: NextRequest) {
     }
 
     const userIds = [...new Set(deviceSessions.map((s) => s.user_id))]
-    const { data: userProfiles, error: profilesError } = await supabase
+    let userProfilesQuery = supabase
       .from("user_profiles")
-      .select("id, first_name, last_name, email, department_id, departments(name)")
+      .select("id, first_name, last_name, email, department_id, assigned_location_id, departments(name)")
       .in("id", userIds)
+    
+    // Apply department filter
+    if (departmentId) {
+      userProfilesQuery = userProfilesQuery.eq("department_id", departmentId)
+    }
+    
+    // Apply location filter
+    if (locationId) {
+      userProfilesQuery = userProfilesQuery.eq("assigned_location_id", locationId)
+    }
+
+    const { data: userProfiles, error: profilesError } = await userProfilesQuery
 
     if (profilesError) {
       console.error("[v0] Error fetching user profiles:", profilesError)

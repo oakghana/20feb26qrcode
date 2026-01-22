@@ -208,7 +208,40 @@ export function HRExcuseDutyClient() {
   }, [])
 
   const viewDocument = useCallback((fileUrl: string) => {
-    window.open(fileUrl, "_blank", "width=800,height=600,scrollbars=yes,resizable=yes")
+    // If it's a base64 data URL, convert to Blob for better PDF rendering
+    if (fileUrl.startsWith("data:")) {
+      try {
+        // Extract the base64 data and mime type
+        const [header, base64Data] = fileUrl.split(",")
+        const mimeType = header.match(/:(.*?);/)?.[1] || "application/pdf"
+        
+        // Convert base64 to binary
+        const binaryString = atob(base64Data)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+        
+        // Create Blob and object URL
+        const blob = new Blob([bytes], { type: mimeType })
+        const objectUrl = URL.createObjectURL(blob)
+        
+        // Open in new window
+        window.open(objectUrl, "_blank", "width=800,height=600,scrollbars=yes,resizable=yes")
+        
+        // Clean up object URL after 1 minute
+        setTimeout(() => {
+          URL.revokeObjectURL(objectUrl)
+        }, 60000)
+      } catch (error) {
+        console.error("[v0] Error converting base64 to Blob:", error)
+        // Fallback to direct open
+        window.open(fileUrl, "_blank", "width=800,height=600,scrollbars=yes,resizable=yes")
+      }
+    } else {
+      // Regular URL, open directly
+      window.open(fileUrl, "_blank", "width=800,height=600,scrollbars=yes,resizable=yes")
+    }
   }, [])
 
   const { pendingCount, approvedCount, archivedCount } = useMemo(() => {

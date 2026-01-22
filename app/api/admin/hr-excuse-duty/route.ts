@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     const { data: excuseDocs, error } = await query.order("created_at", { ascending: false })
 
     if (error) {
-      console.error("HR Excuse duty API - Query error:", error.message)
+      console.error("[v0] HR Excuse duty API - Query error:", error.message)
       return NextResponse.json({ error: "Failed to fetch excuse documents" }, { status: 500 })
     }
 

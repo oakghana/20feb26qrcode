@@ -957,8 +957,7 @@ export function AttendanceRecorder({
     // Tema Port: Allow checkout at/after 4 PM, require reason before 4 PM
     // Other locations: Allow checkout at/after 5 PM, require reason before 5 PM
     const earlyCheckoutThreshold = isTemaPort ? 16 : 17 // 4 PM for Tema Port, 5 PM for others
-    const isBeforeCheckoutTime = checkoutHour < earlyCheckoutThreshold || 
-                                  (checkoutHour === earlyCheckoutThreshold && checkoutMinutes === 0)
+    const isBeforeCheckoutTime = checkoutHour < earlyCheckoutThreshold
     
     console.log("[v0] Checkout validation:", {
       location: assignedLocationName,

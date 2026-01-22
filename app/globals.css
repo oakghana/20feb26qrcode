@@ -199,3 +199,20 @@
     transform: translateY(100%);
   }
 }
+
+/* Utility classes for animations to prevent Tailwind auto-generation errors */
+.animate-slide-out-to-right {
+  animation: slide-out-to-right 0.2s ease-out;
+}
+
+.animate-slide-out-to-left {
+  animation: slide-out-to-left 0.2s ease-out;
+}
+
+.animate-slide-out-to-top {
+  animation: slide-out-to-top 0.2s ease-out;
+}
+
+.animate-slide-out-to-bottom {
+  animation: slide-out-to-bottom 0.2s ease-out;
+}
