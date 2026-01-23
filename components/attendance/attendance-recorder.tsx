@@ -1949,7 +1949,17 @@ export function AttendanceRecorder({
                 Early Check-Out Notice
               </CardTitle>
               <CardDescription>
-                You are checking out before {assignedLocationInfo?.name?.toLowerCase().includes("tema port") ? "4:00 PM" : "5:00 PM"}. Please provide a reason.
+                You are checking out before {(() => {
+                  const assignedLocation = realTimeLocations?.find(loc => loc.id === userProfile?.assigned_location_id)
+                  const checkOutEndTime = assignedLocation?.check_out_end_time || "17:00"
+                  
+                  // Convert 24-hour format to 12-hour format with AM/PM
+                  const [hours, minutes] = checkOutEndTime.split(":").map(Number)
+                  const period = hours >= 12 ? "PM" : "AM"
+                  const displayHours = hours % 12 || 12
+                  
+                  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
+                })()}. Please provide a reason.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
