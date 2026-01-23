@@ -174,15 +174,45 @@ export async function POST(request: NextRequest) {
     const checkOutTime = new Date()
     const workHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60)
 
+    // Get user's assigned location to determine Tema Port status
+    const { data: userProfileData } = await supabase
+      .from("user_profiles")
+      .select(`
+        assigned_location_id,
+        assigned_location:geofence_locations!user_profiles_assigned_location_id_fkey (
+          id,
+          name
+        )
+      `)
+      .eq("id", user.id)
+      .maybeSingle()
+
+    // Check if user is assigned to Tema Port (working hours: 7 AM - 4 PM)
+    const assignedLocationName = userProfileData?.assigned_location?.name?.toLowerCase() || ""
+    const isTemaPort = assignedLocationName.includes("tema port")
+    
     const checkOutHour = checkOutTime.getHours()
-    const isEarlyCheckout = checkOutHour < 17
+    // Tema Port: 4 PM threshold, Others: 5 PM threshold
+    const earlyCheckoutThreshold = isTemaPort ? 16 : 17
+    const isEarlyCheckout = checkOutHour < earlyCheckoutThreshold
+    
     let earlyCheckoutWarning = null
 
+    console.log("[v0] API Checkout validation:", {
+      userId: user.id,
+      assignedLocation: assignedLocationName,
+      isTemaPort,
+      checkOutHour,
+      threshold: earlyCheckoutThreshold,
+      isEarlyCheckout,
+    })
+
     if (isEarlyCheckout) {
+      const endTimeDisplay = isTemaPort ? "4:00 PM" : "5:00 PM"
       earlyCheckoutWarning = {
-        message: `Early checkout detected at ${checkOutTime.toLocaleTimeString()}. Standard work hours end at 5:00 PM.`,
+        message: `Early checkout detected at ${checkOutTime.toLocaleTimeString()}. Standard work hours end at ${endTimeDisplay}.`,
         checkoutTime: checkOutTime.toISOString(),
-        standardEndTime: "17:00:00",
+        standardEndTime: isTemaPort ? "16:00:00" : "17:00:00",
       }
     }
 
