@@ -166,10 +166,15 @@ export async function POST(request: NextRequest) {
           
           deviceSharingWarning = {
             type: "device_sharing",
-            message: `Device sharing detected during checkout: ${device_info.device_id} was used by ${previousUserName} (${previousUserProfile.employee_id}) ${timeSinceLastUse} min ago.`
+            message: `Device sharing detected during checkout: ${device_info.device_type} (${device_info.device_name}, MAC ${device_info.device_id}) was used by ${previousUserName} (${previousUserProfile.employee_id}) ${timeSinceLastUse} min ago.`,
+            deviceDetails: {
+              mac_address: device_info.device_id,
+              device_type: device_info.device_type,
+              device_name: device_info.device_name
+            }
           }
 
-          console.warn("[v0] ⚠️ CHECKOUT - Device Sharing:", deviceSharingWarning.message)
+          console.warn(`[v0] ⚠️ CHECKOUT - Device Sharing: ${device_info.device_type} (${device_info.device_name}, MAC ${device_info.device_id}) used by ${previousUserName}`)
 
           await supabase.from("audit_logs").insert({
             user_id: user.id,
@@ -181,10 +186,13 @@ export async function POST(request: NextRequest) {
               previous_user: recentDeviceSession.user_id,
               previous_user_name: previousUserName,
               time_since_last_use_minutes: timeSinceLastUse,
-              device_id: device_info.device_id,
+              device_mac_address: device_info.device_id,
+              device_type: device_info.device_type,
+              device_name: device_info.device_name,
               current_ip: ipAddress,
               previous_ip: recentDeviceSession.ip_address,
-              detection_method: "device_fingerprint"
+              detection_method: "device_fingerprint",
+              browser_info: device_info.browser_info
             },
             ip_address: ipAddress || null,
             user_agent: request.headers.get("user-agent"),
@@ -203,10 +211,15 @@ export async function POST(request: NextRequest) {
           
           deviceSharingWarning = {
             type: "ip_sharing",
-            message: `IP sharing detected during checkout: Network ${ipAddress} was used by ${sharerName} (${ipSharerProfile.employee_id}) ${timeSinceLastUse} min ago with different device.`
+            message: `IP sharing detected during checkout: Network ${ipAddress} was used by ${sharerName} (${ipSharerProfile.employee_id}) ${timeSinceLastUse} min ago. Current device: ${device_info.device_type} (${device_info.device_name}, MAC ${device_info.device_id}).`,
+            deviceDetails: {
+              mac_address: device_info.device_id,
+              device_type: device_info.device_type,
+              device_name: device_info.device_name
+            }
           }
 
-          console.warn("[v0] ⚠️ CHECKOUT - IP Sharing:", deviceSharingWarning.message)
+          console.warn(`[v0] ⚠️ CHECKOUT - IP Sharing: Current ${device_info.device_type} (${device_info.device_name}, MAC ${device_info.device_id}) | Previous MAC: ${ipSharingSession.device_id}`)
 
           await supabase.from("audit_logs").insert({
             user_id: user.id,
@@ -218,10 +231,13 @@ export async function POST(request: NextRequest) {
               previous_user: ipSharingSession.user_id,
               previous_user_name: sharerName,
               time_since_last_use_minutes: timeSinceLastUse,
-              current_device: device_info.device_id,
-              previous_device: ipSharingSession.device_id,
+              current_device_mac: device_info.device_id,
+              current_device_type: device_info.device_type,
+              current_device_name: device_info.device_name,
+              previous_device_mac: ipSharingSession.device_id,
               shared_ip: ipAddress,
-              detection_method: "ip_address"
+              detection_method: "ip_address",
+              browser_info: device_info.browser_info
             },
             ip_address: ipAddress || null,
             user_agent: request.headers.get("user-agent"),

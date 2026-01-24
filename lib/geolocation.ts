@@ -456,7 +456,17 @@ export function validateAttendanceLocation(
 } {
   const deviceInfo = detectDevice()
   const internalProximityDistance = deviceInfo.isMobile || deviceInfo.isTablet ? 100 : 2000
-  const displayDistance = 100 // What we show to users in UI messages
+  const displayDistance = 50 // What we show to users in UI messages (trade secret)
+
+  console.log("[v0] Check-in validation - Device Detection:", {
+    deviceType: deviceInfo.device_type,
+    deviceName: deviceInfo.device_name,
+    isMobile: deviceInfo.isMobile,
+    isTablet: deviceInfo.isTablet,
+    isDesktop: deviceInfo.isDesktop,
+    proximityRadius: internalProximityDistance,
+    userAgent: deviceInfo.browser_info
+  })
 
   const nearest = findNearestLocation(userLocation, qccLocations)
 
@@ -477,6 +487,14 @@ export function validateAttendanceLocation(
     .sort((a, b) => a.distance - b.distance)
 
   const availableLocations = allLocationsWithDistance.filter(({ distance }) => distance <= internalProximityDistance)
+
+  console.log("[v0] Check-in validation - Locations:", {
+    nearestLocation: allLocationsWithDistance[0]?.location.name,
+    nearestDistance: allLocationsWithDistance[0]?.distance,
+    proximityRadius: internalProximityDistance,
+    availableLocationsCount: availableLocations.length,
+    allLocations: allLocationsWithDistance.map(l => `${l.location.name}: ${l.distance}m`)
+  })
 
   const canCheckIn = availableLocations.length > 0
 

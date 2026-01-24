@@ -167,12 +167,17 @@ export async function POST(request: NextRequest) {
               previousUser: previousUserName,
               previousEmployeeId: previousUserProfile.employee_id,
               timeSinceLastUse: timeSinceLastUse,
-              message: `⚠️ DEVICE SHARING DETECTED: This device (${device_info.device_id}) was recently used by ${previousUserName} (${previousUserProfile.employee_id}) ${timeSinceLastUse} minutes ago. Your department head will be notified.`,
-              detectionMethod: "device_fingerprint"
+              message: `⚠️ DEVICE SHARING DETECTED: This ${device_info.device_type} (${device_info.device_name}) with MAC ${device_info.device_id} was recently used by ${previousUserName} (${previousUserProfile.employee_id}) ${timeSinceLastUse} minutes ago. Your department head will be notified.`,
+              detectionMethod: "device_fingerprint",
+              deviceDetails: {
+                mac_address: device_info.device_id,
+                device_type: device_info.device_type,
+                device_name: device_info.device_name
+              }
             }
 
             console.warn(
-              `[v0] ⚠️ DEVICE SHARING - Fingerprint Match: Device ${device_info.device_id} | IP ${ipAddress} | Current: ${user.id} | Previous: ${previousUserName} (${previousUserProfile.employee_id})`,
+              `[v0] ⚠️ DEVICE SHARING - Fingerprint Match: ${device_info.device_type} (${device_info.device_name}) | MAC ${device_info.device_id} | IP ${ipAddress} | Current: ${user.id} | Previous: ${previousUserName} (${previousUserProfile.employee_id})`,
             )
 
             await supabase.from("audit_logs").insert({
@@ -185,10 +190,13 @@ export async function POST(request: NextRequest) {
                 previous_user: recentDeviceSession.user_id,
                 previous_user_name: previousUserName,
                 time_since_last_use_minutes: timeSinceLastUse,
-                device_id: device_info.device_id,
+                device_mac_address: device_info.device_id,
+                device_type: device_info.device_type,
+                device_name: device_info.device_name,
                 current_ip: ipAddress,
                 previous_ip: recentDeviceSession.ip_address,
-                detection_method: "device_fingerprint"
+                detection_method: "device_fingerprint",
+                browser_info: device_info.browser_info
               },
               ip_address: ipAddress || null,
               user_agent: request.headers.get("user-agent"),
@@ -212,12 +220,17 @@ export async function POST(request: NextRequest) {
               previousUser: sharerName,
               previousEmployeeId: ipSharerProfile.employee_id,
               timeSinceLastUse: timeSinceLastUse,
-              message: `⚠️ IP SHARING DETECTED: Same network (${ipAddress}) was used by ${sharerName} (${ipSharerProfile.employee_id}) ${timeSinceLastUse} minutes ago with a different device. This may indicate device switching. Your department head will be notified.`,
-              detectionMethod: "ip_address"
+              message: `⚠️ IP SHARING DETECTED: Same network (${ipAddress}) was used by ${sharerName} (${ipSharerProfile.employee_id}) ${timeSinceLastUse} minutes ago with a different device. Current: ${device_info.device_type} (${device_info.device_name}, MAC ${device_info.device_id}). Your department head will be notified.`,
+              detectionMethod: "ip_address",
+              deviceDetails: {
+                mac_address: device_info.device_id,
+                device_type: device_info.device_type,
+                device_name: device_info.device_name
+              }
             }
 
             console.warn(
-              `[v0] ⚠️ IP SHARING - Network Match: IP ${ipAddress} | Current Device: ${device_info.device_id} | Previous Device: ${ipSharingSession.device_id} | Current: ${user.id} | Previous: ${sharerName} (${ipSharerProfile.employee_id})`,
+              `[v0] ⚠️ IP SHARING - Network Match: IP ${ipAddress} | Current: ${device_info.device_type} (${device_info.device_name}, MAC ${device_info.device_id}) | Previous MAC: ${ipSharingSession.device_id} | Current User: ${user.id} | Previous: ${sharerName} (${ipSharerProfile.employee_id})`,
             )
 
             await supabase.from("audit_logs").insert({
@@ -230,10 +243,13 @@ export async function POST(request: NextRequest) {
                 previous_user: ipSharingSession.user_id,
                 previous_user_name: sharerName,
                 time_since_last_use_minutes: timeSinceLastUse,
-                current_device: device_info.device_id,
-                previous_device: ipSharingSession.device_id,
+                current_device_mac: device_info.device_id,
+                current_device_type: device_info.device_type,
+                current_device_name: device_info.device_name,
+                previous_device_mac: ipSharingSession.device_id,
                 shared_ip: ipAddress,
-                detection_method: "ip_address"
+                detection_method: "ip_address",
+                browser_info: device_info.browser_info
               },
               ip_address: ipAddress || null,
               user_agent: request.headers.get("user-agent"),
