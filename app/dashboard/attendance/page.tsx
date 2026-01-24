@@ -5,9 +5,11 @@ import { LocationPreviewCard } from "@/components/attendance/location-preview-ca
 import { LeaveStatusCard } from "@/components/leave/leave-status-card"
 import { StaffStatusBadge } from "@/components/attendance/staff-status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/server"
-import { Clock, History } from "lucide-react"
+import { Clock, History, ArrowLeft, Home } from "lucide-react"
 import { redirect } from "next/navigation"
+import Link from "next/link"
 
 export const metadata = {
   title: "Attendance | QCC Electronic Attendance",
@@ -72,14 +74,25 @@ export default async function AttendancePage() {
     <DashboardLayout>
       <div className="space-y-8">
         <div className="space-y-3">
+          {/* Back to Dashboard Button - Always visible */}
+          <div className="flex items-center gap-2 mb-4">
+            <Button variant="outline" size="sm" asChild className="gap-2 hover:bg-primary/5">
+              <Link href="/dashboard">
+                <ArrowLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Back to Dashboard</span>
+                <Home className="h-4 w-4 sm:hidden" />
+              </Link>
+            </Button>
+          </div>
+          
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-lg">
                 <Clock className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h1 className="text-4xl font-heading font-bold text-foreground tracking-tight">Attendance</h1>
-                <p className="text-lg text-muted-foreground font-medium mt-1">
+                <h1 className="text-3xl sm:text-4xl font-heading font-bold text-foreground tracking-tight">Attendance</h1>
+                <p className="text-base sm:text-lg text-muted-foreground font-medium mt-1">
                   Record your daily attendance and view your history at QCC locations
                 </p>
               </div>
