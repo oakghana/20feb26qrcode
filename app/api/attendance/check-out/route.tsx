@@ -278,6 +278,30 @@ export async function POST(request: NextRequest) {
       allowManualOverride: settingsData?.geo_settings?.allowManualOverride ?? false,
     }
 
+    // Fetch device radius settings from database
+    const { data: deviceRadiusSettings } = await supabase
+      .from("device_radius_settings")
+      .select("device_type, check_out_radius_meters")
+      .eq("is_active", true)
+
+    // Get device type from request headers (sent by client)
+    const deviceType = request.headers.get("x-device-type") || "desktop"
+    
+    // Find the checkout radius for this device type, default to 1000m if not found
+    let deviceCheckOutRadius = 1000
+    if (deviceRadiusSettings && deviceRadiusSettings.length > 0) {
+      const deviceRadiusSetting = deviceRadiusSettings.find((s: any) => s.device_type === deviceType)
+      if (deviceRadiusSetting) {
+        deviceCheckOutRadius = deviceRadiusSetting.check_out_radius_meters
+      }
+    }
+
+    console.log("[v0] Checkout - Device radius settings:", {
+      deviceType,
+      checkOutRadius: deviceCheckOutRadius,
+      foundSettings: deviceRadiusSettings?.length || 0,
+    })
+
     let checkoutLocationData = null
 
     if (!qr_code_used && latitude && longitude) {
@@ -287,12 +311,12 @@ export async function POST(request: NextRequest) {
         accuracy: 10,
       }
 
-      const validation = validateCheckoutLocation(userLocation, qccLocations, proximitySettings)
+      const validation = validateCheckoutLocation(userLocation, qccLocations, deviceCheckOutRadius)
 
       if (!validation.canCheckOut) {
         return NextResponse.json(
           {
-            error: `Check-out requires being within ${proximitySettings.checkInProximityRange}m of any QCC location. ${validation.message}`,
+            error: `You are currently out of range. Check-out requires being within range of your assigned QCC location. ${validation.message}`,
           },
           { status: 400 },
         )

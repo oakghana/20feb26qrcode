@@ -1164,6 +1164,7 @@ export function AttendanceRecorder({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-device-type": deviceInfo.device_type || "desktop",
         },
         body: JSON.stringify({
           latitude: locationData.latitude,
@@ -1237,6 +1238,7 @@ export function AttendanceRecorder({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-device-type": deviceInfo.device_type || "desktop",
         },
         body: JSON.stringify(requestBody),
       })
