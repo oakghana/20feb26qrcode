@@ -1128,6 +1128,14 @@ export function AttendanceRecorder({
           checkOutRadius = deviceRadiusSettings.desktop.checkOut
         }
       }
+      
+      // RE-VALIDATE LOCATION before showing early checkout modal
+      // User must be within range even for early checkout
+      const earlyCheckoutLocationValidation = validateCheckoutLocation(locationData, realTimeLocations || [], checkOutRadius)
+      if (!earlyCheckoutLocationValidation.canCheckOut) {
+        throw new Error(`You are out of range. ${earlyCheckoutLocationValidation.message}`)
+      }
+      
       // Fallback to proximity settings if device radius not available
       const effectiveCheckOutRadius = checkOutRadius ?? proximitySettings.checkInProximityRange
 
