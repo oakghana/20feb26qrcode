@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { MapPin, Clock, Navigation, CheckCircle, XCircle, RefreshCw } from "lucide-react"
 import { getCurrentLocation, calculateDistance } from "@/lib/geolocation"
 import { getDeviceInfo } from "@/lib/device-info"
+import { useDeviceRadiusSettings } from "@/hooks/use-device-radius-settings"
 import type { GeofenceLocation } from "@/types/geofence"
 
 interface LocationPreviewCardProps {
@@ -25,6 +26,7 @@ export function LocationPreviewCard({ assignedLocation, locations = [] }: Locati
     distance: number
     isInRange: boolean
   } | null>(null)
+  const { settings: deviceRadiusSettings } = useDeviceRadiusSettings()
 
   useEffect(() => {
     loadLocation()
@@ -34,7 +36,7 @@ export function LocationPreviewCard({ assignedLocation, locations = [] }: Locati
     if (userLocation && locations.length > 0) {
       findNearestLocation()
     }
-  }, [userLocation, locations])
+  }, [userLocation, locations, deviceRadiusSettings])
 
   const loadLocation = async () => {
     try {
@@ -50,13 +52,27 @@ export function LocationPreviewCard({ assignedLocation, locations = [] }: Locati
     if (!userLocation || locations.length === 0) return
 
     const deviceInfo = getDeviceInfo()
-    let proximityRadius = 100
-    if (deviceInfo.isMobile || deviceInfo.isTablet) {
-      proximityRadius = 100
-    } else if (deviceInfo.isLaptop) {
-      proximityRadius = 700
+    // Use admin-configured device radius settings
+    let proximityRadius = 100 // Fallback default
+    if (deviceRadiusSettings) {
+      if (deviceInfo.device_type === "mobile") {
+        proximityRadius = deviceRadiusSettings.mobile.checkIn
+      } else if (deviceInfo.device_type === "tablet") {
+        proximityRadius = deviceRadiusSettings.tablet.checkIn
+      } else if (deviceInfo.device_type === "laptop") {
+        proximityRadius = deviceRadiusSettings.laptop.checkIn
+      } else if (deviceInfo.device_type === "desktop") {
+        proximityRadius = deviceRadiusSettings.desktop.checkIn
+      }
     } else {
-      proximityRadius = 2000 // Desktop PC
+      // Fallback to defaults if settings not loaded yet
+      if (deviceInfo.isMobile || deviceInfo.isTablet) {
+        proximityRadius = 400
+      } else if (deviceInfo.isLaptop) {
+        proximityRadius = 500
+      } else {
+        proximityRadius = 2000
+      }
     }
 
     const distancesArray = locations
