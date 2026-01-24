@@ -455,7 +455,15 @@ export function validateAttendanceLocation(
   availableLocations?: Array<{ location: GeofenceLocation; distance: number }>
 } {
   const deviceInfo = detectDevice()
-  const internalProximityDistance = deviceInfo.isMobile || deviceInfo.isTablet ? 100 : 2000
+  // Proximity distances: 100m for mobile/tablet, 700m for laptop, 2000m for desktop PC
+  let internalProximityDistance = 100
+  if (deviceInfo.isMobile || deviceInfo.isTablet) {
+    internalProximityDistance = 100
+  } else if (deviceInfo.isLaptop) {
+    internalProximityDistance = 700
+  } else {
+    internalProximityDistance = 2000 // Desktop PC
+  }
   const displayDistance = 50 // What we show to users in UI messages (trade secret)
 
   console.log("[v0] Check-in validation - Device Detection:", {
@@ -463,6 +471,7 @@ export function validateAttendanceLocation(
     deviceName: deviceInfo.device_name,
     isMobile: deviceInfo.isMobile,
     isTablet: deviceInfo.isTablet,
+    isLaptop: deviceInfo.isLaptop,
     isDesktop: deviceInfo.isDesktop,
     proximityRadius: internalProximityDistance,
     userAgent: deviceInfo.browser_info
@@ -573,8 +582,15 @@ export function validateCheckoutLocation(
   accuracyWarning?: string
 } {
   const deviceInfo = detectDevice()
-  // Actual validation: 200m for mobile/tablet, 1000m for desktop/laptop
-  const internalProximityDistance = deviceInfo.isMobile || deviceInfo.isTablet ? 200 : 1000
+  // Actual validation: 200m for mobile/tablet, 700m for laptop, 1000m for desktop PC
+  let internalProximityDistance = 200
+  if (deviceInfo.isMobile || deviceInfo.isTablet) {
+    internalProximityDistance = 200
+  } else if (deviceInfo.isLaptop) {
+    internalProximityDistance = 700
+  } else {
+    internalProximityDistance = 1000 // Desktop PC
+  }
   const displayDistance = 100 // Always show 100m to users (trade secret)
 
   const nearest = findNearestLocation(userLocation, qccLocations)

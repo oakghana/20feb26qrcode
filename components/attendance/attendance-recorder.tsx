@@ -31,6 +31,7 @@ import {
   CheckCircle2,
   Clock,
   Info,
+  Laptop,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { LocationCodeDialog } from "@/components/dialogs/location-code-dialog"
@@ -40,6 +41,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Label } from "@/components/ui/label"
 import { clearAttendanceCache, shouldClearCache, setCachedDate } from "@/lib/utils/attendance-cache"
 import { cn } from "@/lib/utils" // Import cn
+import { DeviceActivityHistory } from "@/components/attendance/device-activity-history"
 
 interface GeofenceLocation {
   id: string
@@ -196,6 +198,7 @@ export function AttendanceRecorder({
 
   const [isCheckInProcessing, setIsCheckInProcessing] = useState(false)
   const [lastCheckInAttempt, setLastCheckInAttempt] = useState<number>(0)
+  const [deviceInfo, setDeviceInfo] = useState(() => getDeviceInfo())
 
   // Check if cache should be cleared (new day)
   useEffect(() => {
@@ -427,6 +430,9 @@ export function AttendanceRecorder({
     const capabilities = detectWindowsLocationCapabilities()
     setWindowsCapabilities(capabilities)
     console.log("[v0] Windows location capabilities detected:", capabilities)
+
+    // Initialize device info
+    setDeviceInfo(getDeviceInfo())
 
     const autoLoadLocation = async () => {
       try {
@@ -823,8 +829,15 @@ export function AttendanceRecorder({
           }))
           .sort((a, b) => a.distance - b.distance)
 
-        // Use device-specific proximity radius: 100m for mobile/tablet, 2000m for desktop/laptop
-        const deviceProximityRadius = deviceInfo.isMobile || deviceInfo.isTablet ? 100 : 2000
+        // Use device-specific proximity radius: 100m for mobile/tablet, 700m for laptop, 2000m for desktop PC
+        let deviceProximityRadius = 100
+        if (deviceInfo.isMobile || deviceInfo.isTablet) {
+          deviceProximityRadius = 100
+        } else if (deviceInfo.isLaptop) {
+          deviceProximityRadius = 700
+        } else {
+          deviceProximityRadius = 2000 // Desktop PC
+        }
         const displayRadius = 50 // Trade secret - what we show to users
         
         console.log("[v0] Check-in proximity validation:", {
@@ -832,6 +845,7 @@ export function AttendanceRecorder({
           distance: distances[0]?.distance,
           deviceProximityRadius,
           deviceType: deviceInfo.device_type,
+          isLaptop: deviceInfo.isLaptop,
           isWithinRange: distances.length > 0 && distances[0].distance <= deviceProximityRadius
         })
 
@@ -1829,85 +1843,54 @@ export function AttendanceRecorder({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl md:text-2xl">Location Status</CardTitle>
+          <CardTitle className="text-xl md:text-2xl">Device & Activity Summary</CardTitle>
+          <p className="text-sm text-muted-foreground">Current device and recent attendance history</p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border p-4 md:p-6">
-            <div className="flex items-start justify-between">
-                <div className="space-y-1 flex-1">
-                  <p className="text-sm font-medium text-muted-foreground">Your Assigned Location</p>
-                  <p className="text-lg md:text-xl font-semibold">{assignedLocationInfo?.name || "Loading..."}</p>
-                  {assignedLocationInfo && (
-                    <>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <MapPin className="h-4 w-4" />
-                        <span>Distance: {(assignedLocationInfo.distance / 1000).toFixed(2)}km away</span>
-                      </div>
-                      {(assignedLocationInfo.check_in_start_time || assignedLocationInfo.check_out_end_time) && (
-                        <div className="flex items-center gap-2 text-sm font-medium text-foreground mt-2">
-                          <Clock className="h-4 w-4" />
-                          <span>
-                            Working Hours: {assignedLocationInfo.check_in_start_time || "8:00"} - {assignedLocationInfo.check_out_end_time || "17:00"}
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  )}
+        <CardContent className="space-y-6">
+          {/* Current Device Information */}
+          <div className="rounded-lg border bg-muted/30 p-4 md:p-6">
+            <div className="flex items-start gap-4">
+              <div className="rounded-full bg-primary/10 p-3">
+                <Laptop className="h-6 w-6 text-primary" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-lg">Current Device</h3>
+                  <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">
+                    Active
+                  </Badge>
                 </div>
-              {assignedLocationInfo && (
-                <Badge variant={assignedLocationInfo.isAtAssignedLocation ? "default" : "secondary"}>
-                  {assignedLocationInfo.isAtAssignedLocation ? "At Location" : "Remote Location"}
-                </Badge>
-              )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Device Type</p>
+                    <p className="text-sm font-medium">{deviceInfo.device_type || 'Desktop'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Device Name</p>
+                    <p className="text-sm font-medium">{deviceInfo.device_name || 'Windows PC'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">MAC Address</p>
+                    <p className="text-sm font-mono text-xs">{deviceInfo.device_id || 'N/A'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Browser</p>
+                    <p className="text-sm font-medium truncate">{deviceInfo.browser_info?.split(' ')[0] || 'Unknown'}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
+          {/* Recent Activity History (Last 2 Days) */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-foreground">Quick Select Location</p>
-              <MapPin className="h-4 w-4 text-muted-foreground" />
+              <h3 className="font-semibold text-lg">Recent Activity</h3>
+              <Badge variant="secondary" className="text-xs">Last 2 Days</Badge>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {realTimeLocations && realTimeLocations.length > 0 ? (
-                realTimeLocations.map((location) => {
-                  const distance = userLocation
-                    ? calculateDistance(
-                        userLocation.latitude,
-                        userLocation.longitude,
-                        location.latitude,
-                        location.longitude,
-                      )
-                    : null
-
-                  return (
-                    <Button
-                      key={location.id}
-                      onClick={() => handleLocationSelect(location)}
-                      variant="outline"
-                      className="h-auto p-4 justify-start text-left"
-                    >
-                      <div className="flex-1">
-                        <p className="font-semibold text-base">{location.name}</p>
-                        {distance !== null && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {distance < 1000 ? `${distance.toFixed(0)}m` : `${(distance / 1000).toFixed(2)}km`}
-                          </p>
-                        )}
-                      </div>
-                    </Button>
-                  )
-                })
-              ) : (
-                <div className="col-span-full text-center py-8 text-muted-foreground">
-                  <MapPin className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No locations available</p>
-                </div>
-              )}
-            </div>
+            
+            <DeviceActivityHistory userId={userProfile?.id} />
           </div>
-
-
         </CardContent>
       </Card>
 

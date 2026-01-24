@@ -68,6 +68,8 @@ export function getDeviceInfo(): DeviceInfo {
 
   // Get device name
   let deviceName = "Unknown Device"
+  let isLaptop = false
+  
   if (/iPhone/i.test(navigator.userAgent)) {
     deviceName = "iPhone"
   } else if (/iPad/i.test(navigator.userAgent)) {
@@ -75,9 +77,24 @@ export function getDeviceInfo(): DeviceInfo {
   } else if (/Android/i.test(navigator.userAgent)) {
     deviceName = "Android Device"
   } else if (/Windows/i.test(navigator.userAgent)) {
-    deviceName = "Windows PC"
+    // Distinguish between Windows laptop and desktop PC
+    // Laptops typically have battery, lower screen resolution, or touch capability
+    const hasTouch = navigator.maxTouchPoints > 0
+    const screenWidth = window.screen.width
+    const screenHeight = window.screen.height
+    const pixelDensity = window.devicePixelRatio || 1
+    
+    // Heuristics: laptops typically have smaller screens, higher pixel density, or touch
+    isLaptop = hasTouch || screenWidth <= 1920 || pixelDensity > 1.25
+    deviceName = isLaptop ? "Windows Laptop" : "Windows Desktop PC"
   } else if (/Mac/i.test(navigator.userAgent)) {
-    deviceName = "Mac"
+    // Distinguish between MacBook and Mac desktop (iMac, Mac Mini, Mac Pro)
+    const hasTouch = navigator.maxTouchPoints > 0
+    const screenWidth = window.screen.width
+    
+    // MacBooks typically have smaller screens (up to 16" = ~3456px wide max)
+    isLaptop = hasTouch || screenWidth <= 3456
+    deviceName = isLaptop ? "MacBook" : "Mac Desktop"
   }
 
   return {
@@ -88,5 +105,6 @@ export function getDeviceInfo(): DeviceInfo {
     isMobile,
     isTablet,
     isDesktop: !isMobile && !isTablet,
+    isLaptop,
   }
 }
