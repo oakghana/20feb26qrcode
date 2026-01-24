@@ -76,9 +76,33 @@ export function LocationPreviewCard({ assignedLocation, locations = [] }: Locati
 
   const reverseGeocode = async (lat: number, lng: number) => {
     try {
+      // Add user agent header to comply with Nominatim usage policy
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'QCC-Attendance-App/1.0'
+          }
+        }
       )
+      
+      // Check if response is OK
+      if (!response.ok) {
+        console.error("[v0] Reverse geocoding failed with status:", response.status)
+        // Use simple coordinates-based fallback
+        const region = lat > 5.6 && lat < 5.7 ? "Greater Accra Region" : "Ghana"
+        setDetectedArea(region)
+        return
+      }
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        console.error("[v0] Reverse geocoding returned non-JSON response")
+        const region = lat > 5.6 && lat < 5.7 ? "Greater Accra Region" : "Ghana"
+        setDetectedArea(region)
+        return
+      }
+
       const data = await response.json()
       
       // Build a detailed address string with street name
@@ -98,11 +122,13 @@ export function LocationPreviewCard({ assignedLocation, locations = [] }: Locati
         addressParts.push(data.address.city || data.address.state)
       }
       
-      const detailedAddress = addressParts.length > 0 ? addressParts.join(", ") : data.display_name || "Unknown Location"
+      const detailedAddress = addressParts.length > 0 ? addressParts.join(", ") : data.display_name || "Location detected"
       setDetectedArea(detailedAddress)
     } catch (error) {
       console.error("[v0] Failed to reverse geocode:", error)
-      setDetectedArea("Location detected")
+      // Fallback to simple region based on coordinates
+      const region = lat > 5.6 && lat < 5.7 ? "Greater Accra Region" : "Location detected"
+      setDetectedArea(region)
     }
   }
 

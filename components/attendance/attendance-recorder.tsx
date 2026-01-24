@@ -633,8 +633,31 @@ export function AttendanceRecorder({
 
       console.log("[v0] Distance to each location:", locationDistances)
 
-      const validation = validateAttendanceLocation(userLocation, realTimeLocations, proximitySettings)
-      const checkoutValidation = validateCheckoutLocation(userLocation, realTimeLocations, proximitySettings)
+      // Get device-specific radius from settings based on device type
+      const deviceInfo = getDeviceInfo()
+      let checkInRadius: number | undefined
+      let checkOutRadius: number | undefined
+      
+      if (deviceRadiusSettings) {
+        if (deviceInfo.device_type === "mobile") {
+          checkInRadius = deviceRadiusSettings.mobile.checkIn
+          checkOutRadius = deviceRadiusSettings.mobile.checkOut
+        } else if (deviceInfo.device_type === "tablet") {
+          checkInRadius = deviceRadiusSettings.tablet.checkIn
+          checkOutRadius = deviceRadiusSettings.tablet.checkOut
+        } else if (deviceInfo.device_type === "laptop") {
+          checkInRadius = deviceRadiusSettings.laptop.checkIn
+          checkOutRadius = deviceRadiusSettings.laptop.checkOut
+        } else if (deviceInfo.device_type === "desktop") {
+          checkInRadius = deviceRadiusSettings.desktop.checkIn
+          checkOutRadius = deviceRadiusSettings.desktop.checkOut
+        }
+      }
+
+      console.log("[v0] Using device radius:", { checkInRadius, checkOutRadius, deviceType: deviceInfo.device_type })
+
+      const validation = validateAttendanceLocation(userLocation, realTimeLocations, proximitySettings, checkInRadius)
+      const checkoutValidation = validateCheckoutLocation(userLocation, realTimeLocations, checkOutRadius)
 
       console.log("[v0] Location validation result:", validation)
       console.log("[v0] Check-out validation result:", checkoutValidation)
@@ -666,7 +689,7 @@ export function AttendanceRecorder({
         accuracyWarning,
       })
     }
-  }, [userLocation, realTimeLocations, proximitySettings, windowsCapabilities])
+  }, [userLocation, realTimeLocations, proximitySettings, windowsCapabilities, deviceRadiusSettings])
 
   const fetchUserProfile = async () => {
     try {
@@ -1578,13 +1601,12 @@ export function AttendanceRecorder({
                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                         {checkingMessage || "Checking In..."}
                       </>
-                    ) : (
-                      <>
-                        <LogIn className="mr-2 h-5 w-5" />
-                        Check In
-                        <span className="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded-full">Protected</span>
-                      </>
-                    )}
+                ) : (
+                  <>
+                    <LogIn className="mr-2 h-5 w-5" />
+                    Check In
+                  </>
+                )}
                   </div>
                 </Button>
               )}

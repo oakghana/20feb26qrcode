@@ -72,7 +72,7 @@ export function DeviceRadiusSettings({ initialSettings }: DeviceRadiusSettingsPr
 
       toast({
         title: "Settings Updated",
-        description: "Device radius settings have been updated successfully.",
+        description: "Device radius settings have been updated successfully. All connected users will receive the updated settings in real-time.",
       })
     } catch (error) {
       console.error("[v0] Error updating device radius settings:", error)
