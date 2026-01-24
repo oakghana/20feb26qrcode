@@ -53,17 +53,17 @@ export function AdminLocationsOverview({ locations }: AdminLocationsOverviewProp
     if (!userLocation) return
 
     const deviceInfo = getDeviceInfo()
-    // Use admin-configured device radius settings
+    // Use admin-configured device radius settings for CHECKOUT consistency
     let proximityRadius = 100 // Fallback default
     if (deviceRadiusSettings) {
       if (deviceInfo.device_type === "mobile") {
-        proximityRadius = deviceRadiusSettings.mobile.checkIn
+        proximityRadius = deviceRadiusSettings.mobile.checkOut
       } else if (deviceInfo.device_type === "tablet") {
-        proximityRadius = deviceRadiusSettings.tablet.checkIn
+        proximityRadius = deviceRadiusSettings.tablet.checkOut
       } else if (deviceInfo.device_type === "laptop") {
-        proximityRadius = deviceRadiusSettings.laptop.checkIn
+        proximityRadius = deviceRadiusSettings.laptop.checkOut
       } else if (deviceInfo.device_type === "desktop") {
-        proximityRadius = deviceRadiusSettings.desktop.checkIn
+        proximityRadius = deviceRadiusSettings.desktop.checkOut
       }
     } else {
       // Fallback to defaults if settings not loaded yet
@@ -72,7 +72,7 @@ export function AdminLocationsOverview({ locations }: AdminLocationsOverviewProp
       } else if (deviceInfo.isLaptop) {
         proximityRadius = 500
       } else {
-        proximityRadius = 2000
+        proximityRadius = 1000 // Desktop checkout radius
       }
     }
 
