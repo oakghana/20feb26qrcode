@@ -5,6 +5,7 @@ import { LocationPreviewCard } from "@/components/attendance/location-preview-ca
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { createClient } from "@/lib/supabase/server"
 import { Clock, History } from "lucide-react"
+import { redirect } from "next/navigation"
 
 export const metadata = {
   title: "Attendance | QCC Electronic Attendance",
@@ -17,7 +18,7 @@ export default async function AttendancePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return null
+  if (!user) redirect("/auth/login")
 
   const today = new Date().toISOString().split("T")[0]
   const { data: todayAttendance } = await supabase

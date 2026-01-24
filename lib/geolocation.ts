@@ -5,6 +5,11 @@ export interface LocationData {
   timestamp?: number
 }
 
+// Cache location for stable validation (reduces GPS fluctuation issues)
+let cachedLocation: LocationData | null = null
+let cacheTimestamp = 0
+const CACHE_DURATION = 30000 // 30 seconds cache
+
 export interface GeofenceLocation {
   id: string
   name: string
@@ -202,7 +207,13 @@ export async function isWithinBrowserProximity(
   }
 }
 
-export async function getCurrentLocation(): Promise<LocationData> {
+export async function getCurrentLocation(useCache = false): Promise<LocationData> {
+  // Return cached location if available and fresh
+  if (useCache && cachedLocation && Date.now() - cacheTimestamp < CACHE_DURATION) {
+    console.log("[v0] Using cached location:", cachedLocation)
+    return cachedLocation
+  }
+
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error("Geolocation is not supported by your browser"))
@@ -214,12 +225,13 @@ export async function getCurrentLocation(): Promise<LocationData> {
 
     const highAccuracyOptions: PositionOptions = {
       enableHighAccuracy: true,
-      timeout: capabilities.isWindows ? 15000 : 12000, // Increased timeout for better GPS lock
+      timeout: capabilities.isWindows ? 20000 : 15000, // Longer timeout for better GPS lock
       maximumAge: 0, // Always get fresh location, never use cached
     }
 
     let attempts = 0
-    const maxAttempts = 2
+    const maxAttempts = 3 // More attempts for better accuracy
+    let bestPosition: GeolocationPosition | null = null
 
     const tryGetLocation = (options: PositionOptions) => {
       attempts++
@@ -236,24 +248,46 @@ export async function getCurrentLocation(): Promise<LocationData> {
             source: capabilities.isWindows ? "Windows Location Services" : "Browser Geolocation",
           })
 
-          if (accuracy > 2000 && attempts < maxAttempts) {
-            console.log("[v0] Poor accuracy detected, retrying with fallback settings...")
-            // Try again with less strict settings
-            const fallbackOptions: PositionOptions = {
-              enableHighAccuracy: false, // Use network-based location
-              timeout: 8000,
-              maximumAge: 5000, // Allow slightly cached location
-            }
-            setTimeout(() => tryGetLocation(fallbackOptions), 1000)
+          // Keep track of best position
+          if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+            bestPosition = position
+          }
+
+          // If accuracy is still poor and we have attempts left, try again
+          if (accuracy > 1000 && attempts < maxAttempts) {
+            console.log("[v0] Poor accuracy detected, retrying with different settings...")
+            // Alternate between high accuracy and network-based
+            const retryOptions: PositionOptions = attempts % 2 === 0 
+              ? {
+                  enableHighAccuracy: true,
+                  timeout: 20000,
+                  maximumAge: 0,
+                }
+              : {
+                  enableHighAccuracy: false, // Use network-based location
+                  timeout: 10000,
+                  maximumAge: 3000,
+                }
+            setTimeout(() => tryGetLocation(retryOptions), 1500)
             return
           }
 
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
+          // Use best position we got
+          const finalPosition = bestPosition || position
+          console.log("[v0] Using final position with accuracy:", finalPosition.coords.accuracy)
+
+          const locationData: LocationData = {
+            latitude: finalPosition.coords.latitude,
+            longitude: finalPosition.coords.longitude,
+            accuracy: finalPosition.coords.accuracy,
             timestamp: Date.now(),
-          })
+          }
+
+          // Cache the location for stable validation
+          cachedLocation = locationData
+          cacheTimestamp = Date.now()
+
+          resolve(locationData)
         },
         (error) => {
           console.error(`[v0] Location error on attempt ${attempts}:`, error)
@@ -602,7 +636,12 @@ export function validateCheckoutLocation(
     }
   }
 
-  const canCheckOut = nearest.distance <= internalProximityDistance
+  // More lenient validation: if accuracy is poor but distance is reasonable, still allow
+  const effectiveProximity = userLocation.accuracy > 1000 
+    ? internalProximityDistance + userLocation.accuracy * 0.5 // Add 50% of accuracy as buffer
+    : internalProximityDistance
+
+  const canCheckOut = nearest.distance <= effectiveProximity
 
   let message: string
 
@@ -615,7 +654,7 @@ export function validateCheckoutLocation(
   let accuracyWarning: string | undefined
   const capabilities = detectWindowsLocationCapabilities()
 
-  if (userLocation.accuracy > 30) {
+  if (userLocation.accuracy > 100) {
     accuracyWarning = capabilities.isWindows
       ? `GPS accuracy is low (${Math.round(userLocation.accuracy)}m). For better accuracy with ${displayDistance}m proximity range on Windows:
 • Check Windows Location Services settings
