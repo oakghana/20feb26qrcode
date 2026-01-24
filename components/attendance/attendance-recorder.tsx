@@ -1722,17 +1722,21 @@ export function AttendanceRecorder({
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Active Session Timer - Show when checked in but not checked out */}
-            {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (
-              <ActiveSessionTimer
-                checkInTime={localTodayAttendance.check_in_time}
-                checkInLocation={
-                  realTimeLocations?.find((loc) => loc.id === localTodayAttendance.check_in_location_id)?.name ||
-                  "Unknown Location"
-                }
-                checkOutLocation={assignedLocationInfo?.name}
-                minimumWorkMinutes={120}
-              />
-            )}
+            {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (() => {
+              const checkInLocationData = realTimeLocations?.find(
+                (loc) => loc.id === localTodayAttendance.check_in_location_id
+              )
+              return (
+                <ActiveSessionTimer
+                  checkInTime={localTodayAttendance.check_in_time}
+                  checkInLocation={checkInLocationData?.name || "Unknown Location"}
+                  checkOutLocation={assignedLocationInfo?.name}
+                  minimumWorkMinutes={120}
+                  locationCheckInTime={checkInLocationData?.check_in_start_time}
+                  locationCheckOutTime={checkInLocationData?.check_out_end_time}
+                />
+              )
+            })()}
 
             {/* Check-in/Check-out Buttons */}
             <div className="space-y-4">
@@ -1763,80 +1767,37 @@ export function AttendanceRecorder({
                 </Button>
               )}
 
-              {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (
+              {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && checkoutTimeReached && (
                 <>
-                  {checkoutTimeReached ? (
-                    <>
-                      <Button
-                        onClick={handleCheckOut}
-                        disabled={
-                          !locationValidation?.canCheckOut || isCheckingIn || isProcessing || recentCheckOut || isLoading
-                        }
-                        variant="destructive"
-                        className="w-full transition-all duration-300 bg-red-600 hover:bg-red-700 text-white"
-                        size="lg"
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                            Checking Out...
-                          </>
-                        ) : (
-                          <>
-                            <LogOut className="mr-2 h-5 w-5" />
-                            Check Out Now
-                          </>
-                        )}
-                      </Button>
-                      {!locationValidation?.canCheckOut && (
-                        <p className="text-xs text-red-500 mt-2 text-center">
-                          You are outside the approved location range. Please move closer to a QCC location to check out.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <div className="w-full p-4 bg-muted/50 border-2 border-dashed border-border rounded-lg text-center">
-                      <Clock className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm font-medium text-foreground mb-1">Check-Out Available Soon</p>
-                      <p className="text-xs text-muted-foreground">
-                        {minutesUntilCheckout !== null && minutesUntilCheckout > 0
-                          ? `Available in ${minutesUntilCheckout} minute${minutesUntilCheckout !== 1 ? "s" : ""}`
-                          : "Calculating..."}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Minimum 2 hours required between check-in and check-out
-                      </p>
-                    </div>
+                  <Button
+                    onClick={handleCheckOut}
+                    disabled={
+                      !locationValidation?.canCheckOut || isCheckingIn || isProcessing || recentCheckOut || isLoading
+                    }
+                    variant="destructive"
+                    className="w-full transition-all duration-300 bg-red-600 hover:bg-red-700 text-white"
+                    size="lg"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Checking Out...
+                      </>
+                    ) : (
+                      <>
+                        <LogOut className="mr-2 h-5 w-5" />
+                        Check Out Now
+                      </>
+                    )}
+                  </Button>
+                  {!locationValidation?.canCheckOut && (
+                    <p className="text-xs text-red-500 mt-2 text-center">
+                      You are outside the approved location range. Please move closer to a QCC location to check out.
+                    </p>
                   )}
                 </>
               )}
             </div>
-
-            <div className="space-y-3 opacity-40 pointer-events-none">
-              <p className="text-sm text-muted-foreground text-center mb-3">Alternative Method</p>
-              <Button
-                variant="outline"
-                size="lg"
-                disabled
-                className="w-full h-12 md:h-14 text-sm md:text-base cursor-not-allowed bg-transparent"
-              >
-                <MapPin className="mr-2 h-4 w-4 md:h-5 md:w-5" />
-                Enter Location Code Manually
-              </Button>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                Tap your location below for instant check-in - no camera needed!
-              </p>
-            </div>
-
-            <Button
-              variant="outline"
-              size="lg"
-              disabled
-              className="w-full h-12 md:h-14 opacity-40 cursor-not-allowed bg-transparent"
-            >
-              <QrCode className="h-5 w-5 md:h-6 md:w-6 mr-2" />
-              Use QR Code Scanner
-            </Button>
 
             <Button
               onClick={handleRefreshLocations}

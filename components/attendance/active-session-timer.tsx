@@ -11,6 +11,8 @@ interface ActiveSessionTimerProps {
   checkInLocation: string
   checkOutLocation?: string
   minimumWorkMinutes?: number
+  locationCheckInTime?: string | null
+  locationCheckOutTime?: string | null
 }
 
 export function ActiveSessionTimer({
@@ -18,6 +20,8 @@ export function ActiveSessionTimer({
   checkInLocation,
   checkOutLocation,
   minimumWorkMinutes = 120,
+  locationCheckInTime,
+  locationCheckOutTime,
 }: ActiveSessionTimerProps) {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [timeUntilCheckout, setTimeUntilCheckout] = useState<{
@@ -148,15 +152,51 @@ export function ActiveSessionTimer({
           </div>
         )}
 
-        {/* Checkout Location Info */}
-        {checkOutLocation && (
-          <div className="pt-2 border-t">
+        {/* Location Working Hours & Checkout Info */}
+        <div className="pt-2 border-t space-y-3">
+          {(locationCheckInTime || locationCheckOutTime) && (
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-4">
+              <div className="flex items-start gap-3">
+                <div className="bg-blue-500 rounded-full p-2 mt-0.5">
+                  <Clock className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <p className="font-semibold text-sm text-blue-900 dark:text-blue-100">
+                    {checkInLocation} Working Hours
+                  </p>
+                  <div className="flex items-center gap-4 text-sm">
+                    {locationCheckInTime && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-700 dark:text-blue-300 font-medium">Check-In:</span>
+                        <span className="font-mono font-semibold text-blue-900 dark:text-blue-100">
+                          {locationCheckInTime}
+                        </span>
+                      </div>
+                    )}
+                    {locationCheckOutTime && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-700 dark:text-blue-300 font-medium">Check-Out:</span>
+                        <span className="font-mono font-semibold text-blue-900 dark:text-blue-100">
+                          {locationCheckOutTime}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                    Remember to check out before the location's closing time
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {checkOutLocation && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <MapPin className="h-4 w-4" />
               <span>Checkout location: {checkOutLocation}</span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </CardContent>
     </Card>
   )
