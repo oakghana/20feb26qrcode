@@ -1406,199 +1406,16 @@ export function AttendanceRecorder({
   return (
     <div className={cn("space-y-6", className)}>
       {flashMessage && (
-        <FlashMessage
-          message={flashMessage.message}
-          type={flashMessage.type}
-          duration={50000}
-          onClose={() => setFlashMessage(null)}
-        />
-      )}
-
-      {/* Add checking status display in the UI */}
-      {isCheckingIn && checkingMessage && (
-        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
-          <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
-            <div>
-              <p className="font-medium text-blue-900">{checkingMessage}</p>
-              {(recentCheckIn || recentCheckOut) && (
-                <p className="text-sm text-blue-700 mt-1">
-                  Status will automatically update in{" "}
-                  {Math.ceil((REFRESH_PAUSE_DURATION - (Date.now() % REFRESH_PAUSE_DURATION)) / 1000)} seconds
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* {isOnLeave && (
-        <Alert className="border-amber-200 bg-amber-50">
-          <Info className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-900">On Leave</AlertTitle>
-          <AlertDescription className="text-amber-800">
-            You are currently marked as {leaveStatus === "on_leave" ? "on leave" : "on sick leave"}. Check-in and
-            check-out are disabled during your leave period.
-          </AlertDescription>
-        </Alert>
-      )} */}
-
-      {userLocation && (
-        <div
-          className={`border-2 rounded-lg p-4 transition-all ${
-            localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time
-              ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-green-300 dark:border-green-700"
-              : "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time ? (
-              <>
-                <div className="h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 className="h-7 w-7 text-green-600 dark:text-green-400" />
-                </div>
-                <div className="flex-1 space-y-3">
-                  <div>
-                    <p className="text-lg font-bold text-green-900 dark:text-green-100">✓ Checked In Successfully</p>
-                    <p className="text-base font-semibold text-green-700 dark:text-green-300 mt-1">
-                      📍 {localTodayAttendance.check_in_location_name}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 p-3 bg-white/50 dark:bg-black/20 rounded-lg border border-green-200 dark:border-green-800">
-                    <div>
-                      <p className="text-xs text-green-600 dark:text-green-400 font-medium">Check-in Time</p>
-                      <p className="text-sm font-bold text-green-900 dark:text-green-100">
-                        {new Date(localTodayAttendance.check_in_time).toLocaleTimeString("en-US", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                          hour12: true,
-                        })}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-green-600 dark:text-green-400 font-medium">Date</p>
-                      <p className="text-sm font-bold text-green-900 dark:text-green-100">
-                        {new Date(localTodayAttendance.check_in_time).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-green-600 dark:text-green-400 font-medium">GPS Coordinates</p>
-                      <p className="text-xs font-mono text-green-900 dark:text-green-100">
-                        {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-green-600 dark:text-green-400 font-medium">GPS Accuracy</p>
-                      <p className="text-sm font-bold text-green-900 dark:text-green-100">
-                        {userLocation.accuracy?.toFixed(0)}m
-                      </p>
-                    </div>
-                  </div>
-
-                  {refreshTimer !== null && (
-                    <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300">
-                      <Info className="h-3 w-3" />
-                      <span>Updating status in {refreshTimer} seconds...</span>
-                    </div>
-                  )}
-
-                  <p className="text-sm text-green-700 dark:text-green-300 font-medium">
-                    ⚠️ Remember to check out when you leave!
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div>
-                    <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Your Current Location</p>
-                    {detectedLocationName && (
-                      <p className="text-sm font-semibold text-blue-800 dark:text-blue-200 mt-1 flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {detectedLocationName}
-                      </p>
-                    )}
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                      GPS: {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
-                    </p>
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
-                      Accuracy: {userLocation.accuracy?.toFixed(0)}m
-                    </p>
-                  </div>
-
-                  {(() => {
-                    if (!realTimeLocations || realTimeLocations.length === 0) return null
-
-                    const locationsWithDistance = realTimeLocations.map((loc) => ({
-                      ...loc,
-                      distance: calculateDistance(
-                        userLocation.latitude,
-                        userLocation.longitude,
-                        loc.latitude,
-                        loc.longitude,
-                      ),
-                    }))
-
-                    const nearest = locationsWithDistance.sort((a, b) => a.distance - b.distance)[0]
-
-                    return (
-                      <p className="text-xs text-blue-700 dark:text-blue-300">
-                        Nearest: {nearest.name} (
-                        {nearest.distance < 1000
-                          ? `${nearest.distance.toFixed(0)}m`
-                          : `${(nearest.distance / 1000).toFixed(1)}km`}
-                        )
-                      </p>
-                    )
-                  })()}
-                </div>
-              </>
-            )}
-            <Button
-              onClick={getCurrentLocationData}
-              variant="ghost"
-              size="sm"
-              disabled={isLoading}
-              className="flex-shrink-0"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <Card className="bg-destructive/10 border-destructive/20 dark:bg-destructive/50 dark:border-destructive/60">
+        <Card className="mb-4 border-l-4 border-l-green-500 bg-green-50 dark:bg-green-900/60 dark:border-green-500/50">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-                <div>
-                  <p className="text-sm font-medium text-destructive">Error</p>
-                  <p className="text-xs text-destructive">{error}</p>
-                </div>
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 bg-green-100 dark:bg-green-800/60 rounded-full p-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-300" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {successMessage && (
-        <Card className="bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                <div>
+              <div className="flex-1">
+                <div className="space-y-1">
                   <p className="text-sm font-medium text-green-900 dark:text-green-100">Success</p>
-                  <p className="text-xs text-green-800 dark:text-green-200">{successMessage}</p>
+                  <p className="text-xs text-green-800 dark:text-green-100">{successMessage}</p>
                 </div>
               </div>
             </div>
@@ -1680,22 +1497,22 @@ export function AttendanceRecorder({
       )}
 
       {localTodayAttendance?.device_sharing_warning && (
-        <Alert className="bg-yellow-50 border-yellow-400 dark:bg-yellow-900/20 dark:border-yellow-700 mb-4">
-          <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-          <AlertTitle className="text-yellow-800 dark:text-yellow-300 font-semibold">
+        <Alert className="bg-yellow-50 border-yellow-400 dark:bg-yellow-900/60 dark:border-yellow-500/50 mb-4">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-300" />
+          <AlertTitle className="text-yellow-800 dark:text-yellow-100 font-semibold">
             ⚠️ Shared Device Detected
           </AlertTitle>
-          <AlertDescription className="text-yellow-700 dark:text-yellow-300">
+          <AlertDescription className="text-yellow-700 dark:text-yellow-200">
             {localTodayAttendance.device_sharing_warning}
           </AlertDescription>
         </Alert>
       )}
 
       {minutesUntilCheckout !== null && minutesUntilCheckout > 0 && isCheckedIn && !isCheckedOut && (
-        <Alert className="bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800">
-          <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-          <AlertTitle className="text-yellow-800 dark:text-yellow-300">Check-Out Pending</AlertTitle>
-          <AlertDescription className="text-yellow-700 dark:text-yellow-300">
+        <Alert className="bg-yellow-50 border-yellow-200 dark:bg-yellow-900/60 dark:border-yellow-500/50">
+          <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-300" />
+          <AlertTitle className="text-yellow-800 dark:text-yellow-100">Check-Out Pending</AlertTitle>
+          <AlertDescription className="text-yellow-700 dark:text-yellow-200">
             You can check out in {minutesUntilCheckout} minute{minutesUntilCheckout !== 1 ? "s" : ""}. A minimum of 2
             hours is required between check-in and check-out.
           </AlertDescription>

@@ -1,0 +1,227 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { MapPin, Clock, Navigation, CheckCircle, XCircle, RefreshCw } from "lucide-react"
+import { getCurrentLocation, calculateDistance } from "@/lib/geolocation"
+import { getDeviceInfo } from "@/lib/device-info"
+import type { GeofenceLocation } from "@/types/geofence"
+
+interface LocationPreviewCardProps {
+  assignedLocation?: GeofenceLocation | null
+  locations?: GeofenceLocation[]
+}
+
+export function LocationPreviewCard({ assignedLocation, locations = [] }: LocationPreviewCardProps) {
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; accuracy: number } | null>(
+    null,
+  )
+  const [detectedArea, setDetectedArea] = useState<string>("")
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [nearestLocation, setNearestLocation] = useState<{
+    location: GeofenceLocation
+    distance: number
+    isInRange: boolean
+  } | null>(null)
+
+  useEffect(() => {
+    loadLocation()
+  }, [])
+
+  useEffect(() => {
+    if (userLocation && locations.length > 0) {
+      findNearestLocation()
+    }
+  }, [userLocation, locations])
+
+  const loadLocation = async () => {
+    try {
+      const location = await getCurrentLocation()
+      setUserLocation(location)
+      reverseGeocode(location.latitude, location.longitude)
+    } catch (error) {
+      console.error("[v0] Failed to load location:", error)
+    }
+  }
+
+  const findNearestLocation = () => {
+    if (!userLocation || locations.length === 0) return
+
+    const deviceInfo = getDeviceInfo()
+    let proximityRadius = 100
+    if (deviceInfo.isMobile || deviceInfo.isTablet) {
+      proximityRadius = 100
+    } else if (deviceInfo.isLaptop) {
+      proximityRadius = 700
+    } else {
+      proximityRadius = 2000 // Desktop PC
+    }
+
+    const distancesArray = locations
+      .map((loc) => ({
+        location: loc,
+        distance: calculateDistance(userLocation.latitude, userLocation.longitude, loc.latitude, loc.longitude),
+        isInRange: false,
+      }))
+      .sort((a, b) => a.distance - b.distance)
+
+    if (distancesArray.length > 0) {
+      const nearest = distancesArray[0]
+      nearest.isInRange = nearest.distance <= proximityRadius
+      setNearestLocation(nearest)
+    }
+  }
+
+  const reverseGeocode = async (lat: number, lng: number) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`,
+      )
+      const data = await response.json()
+      const area =
+        data.address?.suburb ||
+        data.address?.neighbourhood ||
+        data.address?.village ||
+        data.address?.town ||
+        data.address?.city ||
+        "Unknown Area"
+      setDetectedArea(area)
+    } catch (error) {
+      console.error("[v0] Failed to reverse geocode:", error)
+      setDetectedArea("Location detected")
+    }
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await loadLocation()
+    setIsRefreshing(false)
+  }
+
+  if (!userLocation) {
+    return (
+      <Card className="border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/40 dark:to-cyan-950/40">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+                <Navigation className="h-6 w-6 text-blue-600 dark:text-blue-400 animate-pulse" />
+              </div>
+              <div>
+                <p className="font-semibold text-blue-900 dark:text-blue-100">Loading location...</p>
+                <p className="text-sm text-blue-700 dark:text-blue-300">Please wait</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/40 dark:to-cyan-950/40 overflow-hidden">
+      <CardContent className="p-0">
+        <div className="flex flex-col md:flex-row">
+          {/* Left Section - Current Location */}
+          <div className="flex-1 p-6 border-b md:border-b-0 md:border-r border-blue-200 dark:border-blue-800">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="h-10 w-10 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center">
+                  <MapPin className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100">Your Current Location</h3>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">Live GPS tracking</p>
+                </div>
+              </div>
+              <Button size="sm" variant="ghost" onClick={handleRefresh} disabled={isRefreshing} className="h-8 w-8 p-0">
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-3">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Detected Area</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">{detectedArea}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-3">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">GPS Accuracy</p>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{Math.round(userLocation.accuracy)}m</p>
+                </div>
+                <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-3">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Status</p>
+                  <Badge
+                    variant="outline"
+                    className="bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/30"
+                  >
+                    Active
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Section - Assigned Location & Nearest Location */}
+          <div className="flex-1 p-6 space-y-4">
+            {/* Assigned Location */}
+            {assignedLocation && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">Your Assigned Location</h4>
+                </div>
+                <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-4 space-y-2">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{assignedLocation.name}</p>
+                  <div className="flex items-center gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600 dark:text-gray-400">Check-In: </span>
+                      <span className="font-semibold text-blue-700 dark:text-blue-300">
+                        {assignedLocation.check_in_start_time || "07:00"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 dark:text-gray-400">Check-Out: </span>
+                      <span className="font-semibold text-blue-700 dark:text-blue-300">
+                        {assignedLocation.check_out_end_time || "17:00"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Nearest Location */}
+            {nearestLocation && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Navigation className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">Nearest QCC Location</h4>
+                </div>
+                <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">{nearestLocation.location.name}</p>
+                    {nearestLocation.isInRange ? (
+                      <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/30 flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        Within Range
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30 flex items-center gap-1">
+                        <XCircle className="h-3 w-3" />
+                        Out of Range
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}

@@ -1,6 +1,7 @@
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { AttendanceRecorder } from "@/components/attendance/attendance-recorder"
 import { PersonalAttendanceHistory } from "@/components/attendance/personal-attendance-history"
+import { LocationPreviewCard } from "@/components/attendance/location-preview-card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { createClient } from "@/lib/supabase/server"
 import { Clock, History } from "lucide-react"
@@ -43,6 +44,22 @@ export default async function AttendancePage() {
       }
     : null
 
+  // Fetch user profile to get assigned location
+  const { data: userProfile } = await supabase
+    .from("user_profiles")
+    .select("assigned_location_id")
+    .eq("id", user.id)
+    .single()
+
+  // Fetch all locations and assigned location details
+  const { data: locations } = await supabase
+    .from("geofence_locations")
+    .select("*")
+    .eq("is_active", true)
+    .order("name")
+
+  const assignedLocation = locations?.find((loc) => loc.id === userProfile?.assigned_location_id) || null
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -79,6 +96,7 @@ export default async function AttendancePage() {
           </TabsList>
 
           <TabsContent value="today" className="space-y-6 mt-8">
+            <LocationPreviewCard assignedLocation={assignedLocation} locations={locations || []} />
             <AttendanceRecorder todayAttendance={enhancedAttendance} />
           </TabsContent>
 
