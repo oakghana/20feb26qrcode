@@ -48,7 +48,8 @@ export function LeaveStatusCard({
         formData.append("document", data.documentFile)
       }
 
-      const response = await fetch("/api/leave/submit-approved", {
+      // Call server-side API to handle leave submission with Supabase updates
+      const response = await fetch("/api/leave/activate", {
         method: "POST",
         body: formData,
       })

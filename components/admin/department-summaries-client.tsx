@@ -37,6 +37,10 @@ interface Summary {
   attendanceRate: string
   status: string
   hasCheckedOutToday: boolean
+  isActive?: boolean
+  leaveStatus?: string
+  leaveStartDate?: string
+  leaveEndDate?: string
 }
 
 interface AttendanceDetail {
@@ -126,6 +130,29 @@ export function DepartmentSummariesClient({ userRole, departmentId }: Department
 
   const filterSummaries = () => {
     let filtered = [...summaries]
+
+    // SMART LEAVE FILTERING: Exclude inactive staff on leave from analytics
+    filtered = filtered.filter((staff) => {
+      // Include only if staff is active
+      if (!staff.isActive) {
+        return false
+      }
+
+      // Exclude if currently on active leave
+      if (staff.leaveStatus === "active" && staff.leaveStartDate && staff.leaveEndDate) {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const leaveStart = new Date(staff.leaveStartDate)
+        const leaveEnd = new Date(staff.leaveEndDate)
+
+        // Exclude from analytics if within leave period
+        if (today >= leaveStart && today <= leaveEnd) {
+          return false
+        }
+      }
+
+      return true
+    })
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase()

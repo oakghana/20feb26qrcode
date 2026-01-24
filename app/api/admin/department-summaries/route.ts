@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     // Build query based on role
     let staffQuery = supabase
       .from("user_profiles")
-      .select("id, first_name, last_name, email, employee_id, departments(name)")
+      .select("id, first_name, last_name, email, employee_id, is_active, leave_status, leave_start_date, leave_end_date, departments(name)")
       .eq("is_active", true)
 
     // Department heads only see their department
@@ -125,6 +125,10 @@ export async function GET(request: Request) {
         status:
           daysWorked >= expectedDays ? "excellent" : daysWorked >= expectedDays * 0.8 ? "good" : "needs attention",
         hasCheckedOutToday,
+        isActive: staffMember.is_active,
+        leaveStatus: staffMember.leave_status,
+        leaveStartDate: staffMember.leave_start_date,
+        leaveEndDate: staffMember.leave_end_date,
       }
     })
 

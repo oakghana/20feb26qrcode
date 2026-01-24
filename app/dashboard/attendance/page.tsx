@@ -82,7 +82,7 @@ export default async function AttendancePage() {
         {/* Leave Status Card - Shows if user is on leave */}
         {userProfile?.leave_status && (
           <LeaveStatusCard
-            leaveStatus={userProfile.leave_status as "active" | "pending" | "rejected" | null}
+            leaveStatus={userProfile.leave_status as "active" | "pending" | "approved" | "rejected" | null}
             leaveStartDate={userProfile.leave_start_date}
             leaveEndDate={userProfile.leave_end_date}
             leaveReason={userProfile.leave_reason}

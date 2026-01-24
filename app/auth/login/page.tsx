@@ -33,8 +33,6 @@ export default function LoginPage() {
 
   const logLoginActivity = async (userId: string, action: string, success: boolean, method: string) => {
     try {
-      console.log("[v0] Logging login activity:", { userId, action, success, method })
-
       const response = await fetch("/api/auth/login-log", {
         method: "POST",
         headers: {
@@ -53,19 +51,12 @@ export default function LoginPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
-        console.error("[v0] Login activity logging failed:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData,
-        })
         // Don't throw error - login should continue even if logging fails
         return
       }
 
       const result = await response.json()
-      console.log("[v0] Login activity logged successfully:", result)
     } catch (error) {
-      console.error("[v0] Failed to log login activity:", error)
       // Don't throw error - login should continue even if logging fails
     }
   }
@@ -219,7 +210,7 @@ export default function LoginPage() {
       showSuccess("Login successful! Redirecting...", "Welcome Back")
 
       // Quick redirect without delay
-      window.location.href = "/dashboard"
+      window.location.href = "/dashboard/attendance"
     } catch (error: unknown) {
       showError(error instanceof Error ? error.message : "An error occurred during login", "Login Error")
     } finally {
@@ -431,7 +422,7 @@ export default function LoginPage() {
 
       // Wait a moment for the success message to show, then do a full page reload
       setTimeout(() => {
-        window.location.href = "/dashboard"
+        window.location.href = "/dashboard/attendance"
       }, 500)
     } catch (error: unknown) {
       console.error("[v0] OTP verification exception:", error)

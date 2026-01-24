@@ -13,6 +13,34 @@ export interface AttendanceSummary {
 }
 
 /**
+ * SMART FILTER: Exclude inactive staff from departmental analytics
+ * Staff marked inactive due to leave should not affect department metrics
+ */
+export function filterActiveStaffForAnalytics(staff: any[]): any[] {
+  return staff.filter((member) => {
+    // Include only active staff
+    if (!member.is_active) {
+      return false
+    }
+
+    // If staff is currently on active leave, exclude from analytics
+    if (member.leave_status === "active" && member.leave_start_date && member.leave_end_date) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const leaveStart = new Date(member.leave_start_date)
+      const leaveEnd = new Date(member.leave_end_date)
+      
+      // Exclude if currently within leave period
+      if (today >= leaveStart && today <= leaveEnd) {
+        return false
+      }
+    }
+
+    return true
+  })
+}
+
+/**
  * Calculate attendance percentage excluding leave days
  */
 export function calculateAttendancePercentage(params: {

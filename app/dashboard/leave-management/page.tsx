@@ -76,11 +76,12 @@ export default function LeaveManagementPage() {
 
   const handleApprove = async (userId: string, startDate: string, endDate: string) => {
     const supabase = createClient()
-    // Change status to "approved" so staff can submit with document
+    // Change status to "approved" and mark as INACTIVE during leave period
     await supabase
       .from("user_profiles")
       .update({
         leave_status: "approved",
+        is_active: false, // MARK STAFF AS INACTIVE DURING LEAVE
         updated_at: new Date().toISOString(),
       })
       .eq("id", userId)
@@ -105,10 +106,12 @@ export default function LeaveManagementPage() {
 
   const handleReject = async (userId: string) => {
     const supabase = createClient()
+    // Reject leave and mark staff as ACTIVE again
     await supabase
       .from("user_profiles")
       .update({
         leave_status: "rejected",
+        is_active: true, // REACTIVATE STAFF WHEN LEAVE IS REJECTED
         updated_at: new Date().toISOString(),
       })
       .eq("id", userId)
