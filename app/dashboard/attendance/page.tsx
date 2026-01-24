@@ -64,7 +64,8 @@ export default async function AttendancePage() {
   const assignedLocation = locations?.find((loc) => loc.id === userProfile?.assigned_location_id) || null
 
   // Determine if staff is currently on leave
-  const isOnLeave = userProfile?.leave_status === "active"
+  // 'active' means at post/working, 'on_leave' or 'sick_leave' means on leave
+  const isOnLeave = userProfile?.leave_status === "on_leave" || userProfile?.leave_status === "sick_leave"
   const isCheckedIn = !!enhancedAttendance && !enhancedAttendance.check_out_time
 
   return (
@@ -86,15 +87,15 @@ export default async function AttendancePage() {
             <StaffStatusBadge
               isCheckedIn={isCheckedIn}
               isOnLeave={isOnLeave}
-              leaveStatus={userProfile?.leave_status as "active" | "pending" | "approved" | "rejected" | null}
+              leaveStatus={userProfile?.leave_status as "active" | "pending" | "approved" | "rejected" | "on_leave" | "sick_leave" | null}
             />
           </div>
         </div>
 
-        {/* Leave Status Card - Shows if user is on leave */}
-        {userProfile?.leave_status && (
+        {/* Leave Status Card - Shows if user is on leave (not when status is 'active' which means at post) */}
+        {userProfile?.leave_status && userProfile.leave_status !== "active" && (
           <LeaveStatusCard
-            leaveStatus={userProfile.leave_status as "active" | "pending" | "approved" | "rejected" | null}
+            leaveStatus={userProfile.leave_status as "active" | "pending" | "approved" | "rejected" | "on_leave" | "sick_leave" | null}
             leaveStartDate={userProfile.leave_start_date}
             leaveEndDate={userProfile.leave_end_date}
             leaveReason={userProfile.leave_reason}
