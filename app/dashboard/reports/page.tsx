@@ -14,7 +14,7 @@ export default async function ReportsPage() {
   // Check if user has admin or department_head role
   const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", user.id).single()
 
-  if (!profile || !["admin", "department_head"].includes(profile.role)) {
+  if (!profile || !["admin", "regional_manager", "department_head"].includes(profile.role)) {
     redirect("/dashboard")
   }
 

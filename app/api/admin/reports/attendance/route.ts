@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       .eq("id", user.id)
       .single()
 
-    if (!profile || !["admin", "department_head", "staff"].includes(profile.role)) {
+    if (!profile || !["admin", "regional_manager", "department_head", "staff"].includes(profile.role)) {
       console.error("[v0] Reports API - Insufficient permissions:", profile?.role)
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
@@ -125,6 +125,10 @@ export async function GET(request: NextRequest) {
         const user = userMap.get(record.user_id)
         return user?.department_id === profile.department_id
       })
+    } else if (profile.role === "regional_manager") {
+      // Regional managers can see all records nationwide (no filtering needed)
+      // but could optionally filter by region if that data is available
+      filteredRecords = attendanceRecords
     } else if (profile.role === "staff") {
       // Staff can only see their own records (already filtered in query above)
       filteredRecords = attendanceRecords

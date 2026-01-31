@@ -6,30 +6,83 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CheckCircle2, XCircle, Clock, Calendar } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Calendar,
+  Loader2,
+  AlertCircle,
+  Plus,
+  Send,
+} from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { format } from "date-fns"
 
 interface LeaveRequest {
   id: string
   user_id: string
-  staff_name: string
-  leave_status: "pending" | "active" | "approved" | "rejected"
-  leave_start_date: string
-  leave_end_date: string
-  leave_reason: string
-  department: string
+  start_date: string
+  end_date: string
+  reason: string
+  leave_type: string
+  status: "pending" | "approved" | "dismissed"
+  created_at: string
+  user_name?: string
+  department?: string
+}
+
+interface LeaveNotification {
+  id: string
+  leave_request_id: string
+  user_id: string
+  status: "pending" | "approved" | "dismissed"
+  leave_requests: LeaveRequest
 }
 
 export default function LeaveManagementPage() {
-  const [requests, setRequests] = useState<LeaveRequest[]>([])
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [userDepartment, setUserDepartment] = useState<string | null>(null)
+  const [staffRequests, setStaffRequests] = useState<LeaveRequest[]>([])
+  const [managerNotifications, setManagerNotifications] = useState<LeaveNotification[]>([])
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [processingId, setProcessingId] = useState<string | null>(null)
+  const [newLeaveOpen, setNewLeaveOpen] = useState(false)
+  const [dismissalReason, setDismissalReason] = useState("")
   const supabase = createClient()
 
+  const [formData, setFormData] = useState({
+    start_date: "",
+    end_date: "",
+    leave_type: "annual",
+    reason: "",
+  })
+
   useEffect(() => {
-    fetchLeaveRequests()
+    fetchData()
   }, [])
 
-  const fetchLeaveRequests = async () => {
+  const fetchData = async () => {
     try {
       const {
         data: { user },
@@ -37,254 +90,519 @@ export default function LeaveManagementPage() {
 
       if (!user) return
 
-      // Get user's department
-      const { data: userProfile } = await supabase
+      const { data: profile } = await supabase
         .from("user_profiles")
-        .select("department_id")
+        .select("role, department_id")
         .eq("id", user.id)
         .single()
 
-      if (!userProfile?.department_id) {
+      if (!profile) {
         setLoading(false)
         return
       }
 
-      // Fetch all pending/active/approved leave requests in this department
-      const { data: leaveRequests } = await supabase
-        .from("user_profiles")
-        .select("id, first_name, last_name, leave_status, leave_start_date, leave_end_date, leave_reason, departments(name)")
-        .eq("department_id", userProfile.department_id)
-        .in("leave_status", ["pending", "active", "approved"])
+      setUserRole(profile.role)
+      setUserDepartment(profile.department_id)
 
-      if (leaveRequests) {
-        const formatted = leaveRequests.map((req: any) => ({
-          id: req.id,
-          user_id: req.id,
-          staff_name: `${req.first_name} ${req.last_name}`,
-          leave_status: req.leave_status,
-          leave_start_date: req.leave_start_date,
-          leave_end_date: req.leave_end_date,
-          leave_reason: req.leave_reason,
-          department: req.departments?.name || "Unknown",
-        }))
-        setRequests(formatted)
+      // Fetch staff's own leave requests
+      if (["staff"].includes(profile.role)) {
+        const { data: requests } = await supabase
+          .from("leave_requests")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+
+        setStaffRequests(requests || [])
       }
+
+      // Fetch pending notifications for managers
+      if (["admin", "regional_manager", "department_head"].includes(profile.role)) {
+        let query = supabase
+          .from("leave_notifications")
+          .select("*, leave_requests(*)")
+          .eq("status", "pending")
+
+        if (profile.role === "department_head") {
+          // Department heads see requests from their department staff
+          query = query.not("status", "eq", "dismissed")
+        } else if (profile.role === "regional_manager") {
+          // Regional managers see all pending requests
+          query = query.not("status", "eq", "dismissed")
+        }
+        // Admin sees all
+
+        const { data: notifications } = await query.order("created_at", { ascending: false })
+        setManagerNotifications(notifications || [])
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleApprove = async (userId: string, startDate: string, endDate: string) => {
-    const supabase = createClient()
-    // Change status to "approved" and mark as INACTIVE during leave period
-    await supabase
-      .from("user_profiles")
-      .update({
-        leave_status: "approved",
-        is_active: false, // MARK STAFF AS INACTIVE DURING LEAVE
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", userId)
-
-    // Send notification
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from("staff_notifications").insert({
-        recipient_id: userId,
-        sender_id: user.id,
-        sender_role: "department_head",
-        sender_label: "Department Head",
-        notification_type: "leave_approved",
-        message: `Your leave request for ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()} has been approved! Submit your supporting document to activate the leave.`,
-      })
+  const handleSubmitLeave = async () => {
+    if (!formData.start_date || !formData.end_date || !formData.reason) {
+      alert("Please fill in all required fields")
+      return
     }
 
-    fetchLeaveRequests()
-  }
-
-  const handleReject = async (userId: string) => {
-    const supabase = createClient()
-    // Reject leave and mark staff as ACTIVE again
-    await supabase
-      .from("user_profiles")
-      .update({
-        leave_status: "rejected",
-        is_active: true, // REACTIVATE STAFF WHEN LEAVE IS REJECTED
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", userId)
-
-    // Send notification
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from("staff_notifications").insert({
-        recipient_id: userId,
-        sender_id: user.id,
-        sender_role: "department_head",
-        sender_label: "Department Head",
-        notification_type: "leave_rejected",
-        message: "Your leave request has been declined.",
-      })
+    if (new Date(formData.start_date) >= new Date(formData.end_date)) {
+      alert("End date must be after start date")
+      return
     }
 
-    fetchLeaveRequests()
+    setSubmitting(true)
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      const response = await fetch("/api/leave/request-leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          start_date: formData.start_date,
+          end_date: formData.end_date,
+          reason: formData.reason,
+          leave_type: formData.leave_type,
+        }),
+      })
+
+      if (response.ok) {
+        setFormData({ start_date: "", end_date: "", leave_type: "annual", reason: "" })
+        setNewLeaveOpen(false)
+        await fetchData()
+        alert("Leave request submitted successfully!")
+      }
+    } catch (error) {
+      console.error("Error submitting leave:", error)
+      alert("Failed to submit leave request")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const pendingRequests = requests.filter((r) => r.leave_status === "pending")
-  const activeRequests = requests.filter((r) => r.leave_status === "active")
+  const handleApprove = async (notificationId: string) => {
+    setProcessingId(notificationId)
+    try {
+      const response = await fetch("/api/leave/approve-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notification_id: notificationId,
+          action: "approve",
+        }),
+      })
+
+      if (response.ok) {
+        await fetchData()
+      }
+    } catch (error) {
+      console.error("Error approving leave:", error)
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const handleDismiss = async (notificationId: string, reason: string) => {
+    setProcessingId(notificationId)
+    try {
+      const response = await fetch("/api/leave/approve-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notification_id: notificationId,
+          action: "dismiss",
+          reason: reason || "Request dismissed",
+        }),
+      })
+
+      if (response.ok) {
+        await fetchData()
+        setDismissalReason("")
+      }
+    } catch (error) {
+      console.error("Error dismissing leave:", error)
+    } finally {
+      setProcessingId(null)
+    }
+  }
 
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading leave requests...</p>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Loading leave management...</p>
+          </div>
         </div>
       </DashboardLayout>
     )
   }
 
+  const pendingRequests = staffRequests.filter((r) => r.status === "pending")
+  const approvedRequests = staffRequests.filter((r) => r.status === "approved")
+  const pendingNotifications = managerNotifications.filter((n) => n.status === "pending")
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
         <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Calendar className="h-6 w-6 text-blue-600" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Calendar className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-heading font-bold text-foreground tracking-tight">Leave Management</h1>
+                <p className="text-lg text-muted-foreground font-medium mt-1">
+                  {["staff"].includes(userRole || "")
+                    ? "Request and track your leave"
+                    : "Manage leave requests from your team"}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-4xl font-heading font-bold text-foreground tracking-tight">Leave Management</h1>
-              <p className="text-lg text-muted-foreground font-medium mt-1">Review and manage leave requests from your department</p>
-            </div>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="border-2 border-amber-200 bg-amber-50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Clock className="w-4 h-4 text-amber-600" />
-                Pending Requests
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-amber-600">{pendingRequests.length}</p>
-            </CardContent>
-          </Card>
+            {["staff"].includes(userRole || "") && (
+              <Dialog open={newLeaveOpen} onOpenChange={setNewLeaveOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Request Leave
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Request Leave</DialogTitle>
+                    <DialogDescription>
+                      Submit a new leave request for approval by your manager
+                    </DialogDescription>
+                  </DialogHeader>
 
-          <Card className="border-2 border-green-200 bg-green-50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-600" />
-                Active Leaves
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-green-600">{activeRequests.length}</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Tabs defaultValue="pending" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="pending">Pending ({pendingRequests.length})</TabsTrigger>
-            <TabsTrigger value="active">Active ({activeRequests.length})</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="pending" className="space-y-4">
-            {pendingRequests.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <p className="text-muted-foreground">No pending leave requests</p>
-                </CardContent>
-              </Card>
-            ) : (
-              pendingRequests.map((request) => (
-                <Card key={request.id} className="border-2">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-lg">{request.staff_name}</CardTitle>
-                        <CardDescription>{request.department}</CardDescription>
-                      </div>
-                      <Badge className="bg-amber-600">Pending</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Start Date</p>
-                        <p className="font-semibold">{new Date(request.leave_start_date).toLocaleDateString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">End Date</p>
-                        <p className="font-semibold">{new Date(request.leave_end_date).toLocaleDateString()}</p>
-                      </div>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="leave_type">Leave Type</Label>
+                      <Select value={formData.leave_type} onValueChange={(value) => setFormData({ ...formData, leave_type: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="annual">Annual Leave</SelectItem>
+                          <SelectItem value="sick">Sick Leave</SelectItem>
+                          <SelectItem value="maternity">Maternity Leave</SelectItem>
+                          <SelectItem value="paternity">Paternity Leave</SelectItem>
+                          <SelectItem value="unpaid">Unpaid Leave</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Reason</p>
-                      <p className="text-sm">{request.leave_reason}</p>
+                      <Label htmlFor="start_date">Start Date</Label>
+                      <Input
+                        id="start_date"
+                        type="date"
+                        value={formData.start_date}
+                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                      />
                     </div>
 
-                    <div className="flex gap-2 pt-4 border-t">
-                      <Button
-                        onClick={() => handleApprove(request.user_id, request.leave_start_date, request.leave_end_date)}
-                        size="sm"
-                        className="flex-1 bg-green-600 hover:bg-green-700"
-                      >
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Approve
-                      </Button>
-                      <Button onClick={() => handleReject(request.user_id)} size="sm" variant="destructive" className="flex-1">
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Decline
-                      </Button>
+                    <div>
+                      <Label htmlFor="end_date">End Date</Label>
+                      <Input
+                        id="end_date"
+                        type="date"
+                        value={formData.end_date}
+                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                      />
                     </div>
-                  </CardContent>
-                </Card>
-              ))
+
+                    <div>
+                      <Label htmlFor="reason">Reason</Label>
+                      <Textarea
+                        id="reason"
+                        placeholder="Provide a reason for your leave request..."
+                        value={formData.reason}
+                        onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                        rows={4}
+                      />
+                    </div>
+
+                    <Button onClick={handleSubmitLeave} disabled={submitting} className="w-full gap-2">
+                      {submitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4" />
+                          Submit Request
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
-          </TabsContent>
+          </div>
+        </div>
 
-          <TabsContent value="active" className="space-y-4">
-            {activeRequests.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <p className="text-muted-foreground">No active leaves</p>
-                </CardContent>
-              </Card>
+        {["staff"].includes(userRole || "") && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="border-amber-200 bg-amber-50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-600" />
+                  Pending Requests
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-amber-600">{pendingRequests.length}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-green-200 bg-green-50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  Approved
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-green-600">{approvedRequests.length}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-blue-200 bg-blue-50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-blue-600" />
+                  Total Requested
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-blue-600">{staffRequests.length}</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {["admin", "regional_manager", "department_head"].includes(userRole || "") && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="border-amber-200 bg-amber-50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-600" />
+                  Pending Notifications
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-amber-600">{pendingNotifications.length}</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        <Tabs defaultValue={["staff"].includes(userRole || "") ? "my-requests" : "pending-approvals"} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            {["staff"].includes(userRole || "") ? (
+              <>
+                <TabsTrigger value="my-requests">My Requests ({staffRequests.length})</TabsTrigger>
+                <TabsTrigger value="approved">Approved ({approvedRequests.length})</TabsTrigger>
+              </>
             ) : (
-              activeRequests.map((request) => (
-                <Card key={request.id} className="border-2 border-green-200 bg-green-50">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle>{request.staff_name}</CardTitle>
-                        <CardDescription>{request.department}</CardDescription>
-                      </div>
-                      <Badge className="bg-green-600">Active</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Start Date</p>
-                        <p className="font-semibold">{new Date(request.leave_start_date).toLocaleDateString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">End Date</p>
-                        <p className="font-semibold">{new Date(request.leave_end_date).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+              <>
+                <TabsTrigger value="pending-approvals">Pending ({pendingNotifications.length})</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
+              </>
             )}
-          </TabsContent>
+          </TabsList>
+
+          {["staff"].includes(userRole || "") && (
+            <>
+              <TabsContent value="my-requests" className="space-y-4">
+                {staffRequests.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                      <p className="text-muted-foreground mb-4">No leave requests yet</p>
+                      <Button onClick={() => setNewLeaveOpen(true)}>Request Leave</Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  staffRequests.map((request) => (
+                    <Card key={request.id} className={`border-2 ${
+                      request.status === "pending"
+                        ? "border-amber-200"
+                        : request.status === "approved"
+                          ? "border-green-200"
+                          : "border-red-200"
+                    }`}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle>{request.leave_type.charAt(0).toUpperCase() + request.leave_type.slice(1)} Leave</CardTitle>
+                            <CardDescription>{request.reason}</CardDescription>
+                          </div>
+                          <Badge
+                            variant={
+                              request.status === "pending"
+                                ? "outline"
+                                : request.status === "approved"
+                                  ? "default"
+                                  : "destructive"
+                            }
+                          >
+                            {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Start Date</p>
+                            <p className="font-semibold">{format(new Date(request.start_date), "MMM dd, yyyy")}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">End Date</p>
+                            <p className="font-semibold">{format(new Date(request.end_date), "MMM dd, yyyy")}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </TabsContent>
+
+              <TabsContent value="approved" className="space-y-4">
+                {approvedRequests.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <CheckCircle2 className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                      <p className="text-muted-foreground">No approved leaves</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  approvedRequests.map((request) => (
+                    <Card key={request.id} className="border-2 border-green-200 bg-green-50">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg">{request.leave_type.charAt(0).toUpperCase() + request.leave_type.slice(1)} Leave</CardTitle>
+                        <CardDescription>{request.reason}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Start Date</p>
+                            <p className="font-semibold">{format(new Date(request.start_date), "MMM dd, yyyy")}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">End Date</p>
+                            <p className="font-semibold">{format(new Date(request.end_date), "MMM dd, yyyy")}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </TabsContent>
+            </>
+          )}
+
+          {["admin", "regional_manager", "department_head"].includes(userRole || "") && (
+            <>
+              <TabsContent value="pending-approvals" className="space-y-4">
+                {pendingNotifications.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <CheckCircle2 className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                      <p className="text-muted-foreground">No pending leave requests to approve</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  pendingNotifications.map((notification) => {
+                    const leave = notification.leave_requests
+                    return (
+                      <Card key={notification.id} className="border-2 border-amber-200">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle>{leave.leave_type.charAt(0).toUpperCase() + leave.leave_type.slice(1)} Leave Request</CardTitle>
+                              <CardDescription>{leave.reason}</CardDescription>
+                            </div>
+                            <Badge variant="outline">Pending Review</Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Start Date</p>
+                              <p className="font-semibold">{format(new Date(leave.start_date), "MMM dd, yyyy")}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">End Date</p>
+                              <p className="font-semibold">{format(new Date(leave.end_date), "MMM dd, yyyy")}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 pt-4 border-t">
+                            <Button
+                              onClick={() => handleApprove(notification.id)}
+                              disabled={processingId === notification.id}
+                              size="sm"
+                              className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
+                            >
+                              {processingId === notification.id ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Processing...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Approve
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              onClick={() => handleDismiss(notification.id, "Request dismissed by manager")}
+                              disabled={processingId === notification.id}
+                              size="sm"
+                              variant="destructive"
+                              className="flex-1 gap-2"
+                            >
+                              {processingId === notification.id ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Processing...
+                                </>
+                              ) : (
+                                <>
+                                  <XCircle className="h-4 w-4" />
+                                  Dismiss
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })
+                )}
+              </TabsContent>
+
+              <TabsContent value="history" className="space-y-4">
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>Historical leave request data would appear here</AlertDescription>
+                </Alert>
+              </TabsContent>
+            </>
+          )}
         </Tabs>
       </div>
     </DashboardLayout>

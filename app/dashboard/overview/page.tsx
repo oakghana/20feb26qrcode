@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { StatsCard } from "@/components/dashboard/stats-card"
 import { QuickActions } from "@/components/dashboard/quick-actions"
+import { LeaveNotificationsCard } from "@/components/leave/leave-notifications-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -166,41 +167,7 @@ export default function DashboardOverviewPage() {
           </div>
 
           <div className="lg:col-span-3">
-            <Card className="shadow-sm border-0 bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl font-heading font-semibold flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-primary" />
-                  Recent Activity
-                </CardTitle>
-                <CardDescription className="text-base">Your latest attendance records</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {todayAttendance ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4 p-6 bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl border border-primary/10">
-                      <div className="w-3 h-3 bg-primary rounded-full animate-pulse"></div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-foreground">Checked in today</p>
-                        <p className="text-sm text-muted-foreground font-medium">
-                          {new Date(todayAttendance.check_in_time).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <Clock className="h-5 w-5 text-primary" />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Clock className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-lg font-medium text-muted-foreground">No attendance recorded today</p>
-                    <p className="text-sm text-muted-foreground mt-2">Use the quick actions to check in</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <LeaveNotificationsCard />
           </div>
         </div>
 

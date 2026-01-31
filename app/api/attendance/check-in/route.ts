@@ -89,8 +89,26 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle()
 
-    // Leave status checking removed - columns don't exist in database yet
-    // Will be re-enabled when leave management is implemented
+    // Check if user is on leave
+    const today = new Date().toISOString().split("T")[0]
+    const { data: leaveStatus } = await supabase
+      .from("leave_status")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("status", "on_leave")
+      .gte("end_date", today)
+      .lte("start_date", today)
+      .maybeSingle()
+
+    if (leaveStatus) {
+      return NextResponse.json(
+        {
+          error: `You are currently on approved leave from ${new Date(leaveStatus.start_date).toLocaleDateString()} to ${new Date(leaveStatus.end_date).toLocaleDateString()}. You cannot check in during this period. Please contact your manager if you believe this is incorrect.`,
+          onLeave: true,
+        },
+        { status: 403 }
+      )
+    }
 
     const body = await request.json()
     const { latitude, longitude, location_id, device_info, qr_code_used, qr_timestamp } = body

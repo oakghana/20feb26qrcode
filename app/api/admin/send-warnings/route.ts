@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
     const { data: profile } = await supabase.from("user_profiles").select("*").eq("id", user.id).single()
 
-    if (!profile || !["admin", "department_head"].includes(profile.role)) {
+    if (!profile || !["admin", "regional_manager", "department_head"].includes(profile.role)) {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
@@ -41,9 +41,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to fetch recipient details" }, { status: 500 })
     }
 
-    const senderLabel = profile.role === "admin" ? "Management of QCC" : "Department Head"
+    // Filter out users who are on approved leave
+    const today = new Date().toISOString().split("T")[0]
+    const { data: usersOnLeave } = await supabase
+      .from("leave_status")
+      .select("user_id")
+      .eq("status", "on_leave")
+      .gte("end_date", today)
+      .lte("start_date", today)
 
-    const warnings = (recipients || []).map((recipient) => {
+    const onLeaveUserIds = new Set((usersOnLeave || []).map(l => l.user_id))
+    
+    const filteredRecipients = (recipients || []).filter(r => !onLeaveUserIds.has(r.id))
+
+    const senderLabel = profile.role === "admin" ? "Management of QCC" : profile.role === "regional_manager" ? "Regional Manager" : "Department Head"
+
+    const warnings = (filteredRecipients || []).map((recipient) => {
       // Replace [STAFF_NAME] placeholder with recipient's first name
       const personalizedMessage = message.trim().replace(/\[STAFF_NAME\]/g, recipient.first_name)
 

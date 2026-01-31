@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Clock, QrCode, Calendar, Zap, ArrowRight, Home } from "lucide-react"
+import { Clock, Calendar, Zap, ArrowRight, Home } from "lucide-react"
 import Link from "next/link"
 
 export function QuickActions() {
@@ -30,15 +30,15 @@ export function QuickActions() {
       iconColor: "text-green-600",
     },
     {
-      title: "Scan QR Code",
-      description: "Quick attendance for events and special activities",
-      href: "/scan",
-      icon: QrCode,
-      gradient: "from-orange-50 via-orange-100 to-orange-150",
-      hoverGradient: "hover:from-orange-100 hover:via-orange-150 hover:to-orange-200",
-      border: "border-orange-200 hover:border-orange-300",
-      iconBg: "bg-gradient-to-br from-orange-100 to-orange-200",
-      iconColor: "text-orange-600",
+      title: "Request Leave",
+      description: "Submit a leave notification for approval by your manager",
+      href: "/dashboard/leave-management",
+      icon: Calendar,
+      gradient: "from-purple-50 via-purple-100 to-purple-150",
+      hoverGradient: "hover:from-purple-100 hover:via-purple-150 hover:to-purple-200",
+      border: "border-purple-200 hover:border-purple-300",
+      iconBg: "bg-gradient-to-br from-purple-100 to-purple-200",
+      iconColor: "text-purple-600",
     },
     {
       title: "View Schedule",
