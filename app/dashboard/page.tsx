@@ -23,6 +23,12 @@ import {
   Star
 } from "lucide-react"
 import Link from "next/link"
+import dynamic from "next/dynamic"
+
+const RequestLeaveButtonWrapper = dynamic(
+  () => import("@/components/leave/request-leave-button").then((mod) => mod.RequestLeaveButton),
+  { ssr: false }
+)
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 
@@ -383,12 +389,9 @@ export default async function DashboardPage() {
                     <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-sm mx-auto">
                       Submit leave requests for approval by your manager
                     </p>
-                    <Button asChild size="lg" className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 shadow-lg hover:shadow-xl transition-all duration-300">
-                      <Link href="/dashboard/leave-management">
-                        <Zap className="h-5 w-5 mr-2" />
-                        Request Leave
-                      </Link>
-                    </Button>
+                    <div className="flex items-center justify-center">
+                      <RequestLeaveButtonWrapper />
+                    </div>
                   </div>
                 )}
               </CardContent>

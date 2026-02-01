@@ -76,6 +76,15 @@ export function LeaveManagementClient({
   initialStaffRequests,
   initialManagerNotifications,
 }: LeaveManagementClientProps) {
+  const allowedRequestRoles = [
+    "staff",
+    "nsp",
+    "intern",
+    "it-admin",
+    "regional_manager",
+    "admin",
+    "department_head",
+  ]
   const [staffRequests, setStaffRequests] = useState<LeaveRequest[]>(initialStaffRequests)
   const [managerNotifications, setManagerNotifications] = useState<LeaveNotification[]>(initialManagerNotifications)
   const [submitting, setSubmitting] = useState(false)
@@ -203,14 +212,12 @@ export function LeaveManagementClient({
               <div>
                 <h1 className="text-4xl font-heading font-bold text-foreground tracking-tight">Leave Management</h1>
                 <p className="text-lg text-muted-foreground font-medium mt-1">
-                  {["staff"].includes(userRole || "")
-                    ? "Request and track your leave"
-                    : "Manage leave requests from your team"}
+                  Register your Leave in the app
                 </p>
               </div>
             </div>
 
-            {["staff"].includes(userRole || "") && (
+            {allowedRequestRoles.includes(userRole || "") && (
               <Dialog open={newLeaveOpen} onOpenChange={setNewLeaveOpen}>
                 <DialogTrigger asChild>
                   <Button className="gap-2">

@@ -89,14 +89,7 @@ const navigationItems = [
     title: "Leave Management",
     href: "/dashboard/leave-management",
     icon: Calendar,
-    roles: ["admin", "regional_manager", "department_head"],
-    category: "admin",
-  },
-  {
-    title: "Leave Notifications",
-    href: "/dashboard/leave-notifications",
-    icon: Bell,
-    roles: ["admin", "regional_manager", "department_head"],
+    roles: ["admin", "regional_manager", "department_head", "staff", "it-admin", "nsp", "intern"],
     category: "admin",
   },
   {
