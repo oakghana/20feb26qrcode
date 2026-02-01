@@ -4,6 +4,7 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { StatsCard } from "@/components/dashboard/stats-card"
 import { QuickActions } from "@/components/dashboard/quick-actions"
 import { LeaveNotificationsCard } from "@/components/leave/leave-notifications-card"
+import ActiveLocationsCard from "@/components/admin/active-locations-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -93,6 +94,12 @@ export function DashboardOverviewClient({
             <LeaveNotificationsCard />
           </div>
         </div>
+
+        {profile?.role === "admin" && (
+          <div className="mt-6">
+            <ActiveLocationsCard />
+          </div>
+        )}
 
         <Card className="shadow-sm border-0 bg-gradient-to-br from-card to-card/50">
           <CardHeader className="pb-6">

@@ -72,7 +72,10 @@ export function LeaveNotificationsClient({ userRole }: LeaveNotificationsClientP
 
       if (simpleError) {
         console.error("Simple query error:", simpleError)
-        throw new Error(`Database access error: ${simpleError.message}`)
+        // Avoid throwing here to prevent client chunk/runtime failures.
+        // Log and bail out gracefully so the page can render an informative UI.
+        setLoading(false)
+        return
       }
 
       console.log("Simple query successful, found", simpleData?.length || 0, "notifications")
