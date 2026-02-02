@@ -324,9 +324,10 @@ export function Sidebar({ user, profile, isCollapsed, setIsCollapsed }: SidebarP
 
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl border-r border-sidebar-border/50 shadow-2xl transform transition-all duration-300 ease-out lg:translate-x-0",
-          isCollapsed ? "lg:w-20 w-64" : "w-64",
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
+          "fixed inset-y-0 left-0 z-40 bg-gradient-to-b from-sidebar to-sidebar/95 backdrop-blur-xl border-r border-sidebar-border/50 shadow-2xl transform transition-all duration-300 ease-out",
+          isCollapsed ? "w-20" : "w-64",
+          "lg:translate-x-0",
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
         <div className="flex flex-col h-full">
@@ -635,7 +636,7 @@ export function Sidebar({ user, profile, isCollapsed, setIsCollapsed }: SidebarP
               </DropdownMenu>
             ) : (
               <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   className="w-full justify-start gap-3 h-auto p-4 hover:bg-muted/50 rounded-xl transition-all duration-200 touch-manipulation min-h-[56px]"
@@ -694,6 +695,7 @@ export function Sidebar({ user, profile, isCollapsed, setIsCollapsed }: SidebarP
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            )}
           </div>
         </div>
       </div>
