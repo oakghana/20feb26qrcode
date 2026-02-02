@@ -329,7 +329,6 @@ export default async function StudentDashboardPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
     </div>
   )
 }
