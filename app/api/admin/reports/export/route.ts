@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
           Status: record.status,
           "Work Hours": record.work_hours || "0",
           Date: new Date(record.check_in_time).toLocaleDateString(),
+          Comment: record.notes || "",
+          Reason: record.early_checkout_reason || "",
         }
       })
 

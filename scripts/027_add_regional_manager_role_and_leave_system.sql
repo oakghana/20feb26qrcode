@@ -135,6 +135,7 @@ USING (recipient_id = auth.uid());
 
 -- Update staff_notifications RLS to include regional_manager
 DROP POLICY IF EXISTS "Admins and dept heads can send notifications" ON staff_notifications;
+DROP POLICY IF EXISTS "Managers can send notifications" ON staff_notifications;
 CREATE POLICY "Managers can send notifications"
 ON staff_notifications FOR INSERT
 WITH CHECK (
@@ -146,6 +147,8 @@ WITH CHECK (
 );
 
 -- Drop function if exists to avoid signature/name conflicts, then create
+-- Ensure trigger is removed before dropping the function to avoid dependency errors
+DROP TRIGGER IF EXISTS leave_status_update_trigger ON leave_requests;
 DROP FUNCTION IF EXISTS update_leave_status_on_approval();
 CREATE OR REPLACE FUNCTION update_leave_status_on_approval()
 RETURNS TRIGGER AS $$

@@ -55,6 +55,7 @@ interface AttendanceRecord {
   is_check_in_outside_location?: boolean
   is_check_out_outside_location?: boolean
   early_checkout_reason?: string
+  notes?: string
   user_profiles: {
     first_name: string
     last_name: string
@@ -1063,6 +1064,8 @@ export function AttendanceReports() {
                         <TableHead className="font-semibold text-gray-700 py-4">Check Out Location</TableHead>
                         <TableHead className="font-semibold text-gray-700 py-4 cursor-pointer" onClick={() => toggleSort('work_hours')}>Hours</TableHead>
                         <TableHead className="font-semibold text-gray-700 py-4 cursor-pointer" onClick={() => toggleSort('status')}>Status</TableHead>
+                        <TableHead className="font-semibold text-gray-700 py-4">Comment</TableHead>
+                        <TableHead className="font-semibold text-gray-700 py-4">Reason</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1094,6 +1097,28 @@ export function AttendanceReports() {
                             }
                             className="font-medium"
                           >{record.status.charAt(0).toUpperCase() + record.status.slice(1).replace('_', ' ')}</Badge></TableCell>
+                          <TableCell className="py-4">
+                            <span className="text-sm text-gray-600">
+                              {record.notes ? (
+                                <span className="max-w-xs truncate block" title={record.notes}>
+                                  {record.notes}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <span className="text-sm text-gray-600">
+                              {record.early_checkout_reason ? (
+                                <span className="max-w-xs truncate block" title={record.early_checkout_reason}>
+                                  {record.early_checkout_reason}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </span>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

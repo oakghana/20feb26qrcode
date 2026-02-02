@@ -179,6 +179,31 @@ export function LeaveNotificationsClient() {
       const { data, error } = await query
       if (error) {
         console.error("Supabase leave_requests query error:", serialize(error))
+
+        const msg = (error && (error.message || error.details)) || ''
+        const isMissingRelation = (error && (error.code === 'PGRST200')) || /Could not find a relationship/i.test(msg) || /Could not find the '\w+' column/i.test(msg)
+
+        if (isMissingRelation) {
+          // Fallback: query leave_requests without nested FK selections
+          try {
+            const { data: simpleData, error: simpleErr } = await supabase
+              .from('leave_requests')
+              .select('*')
+              .order('created_at', { ascending: false })
+
+            if (simpleErr) {
+              console.error('Fallback simple leave_requests query failed:', serialize(simpleErr))
+              throw simpleErr
+            }
+
+            setNotifications(simpleData || [])
+            return
+          } catch (fallbackError) {
+            console.error('Fallback query also failed:', serialize(fallbackError))
+            throw fallbackError
+          }
+        }
+
         throw error
       }
 
