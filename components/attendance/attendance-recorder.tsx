@@ -1518,43 +1518,7 @@ export function AttendanceRecorder({
         </Alert>
       )}
 
-      {/* Location Permission Section */}
-      {!locationPermissionStatusSimplified.granted && !isCompletedForDay && (
-        <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-500/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-yellow-800 dark:text-yellow-100">
-              <AlertTriangle className="h-5 w-5" />
-              GPS Location Required
-            </CardTitle>
-            <CardDescription className="text-yellow-700 dark:text-yellow-200">
-              {locationPermissionStatusSimplified.message}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={getCurrentLocationData}
-              disabled={isLoading || isCheckingIn}
-              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
-              size="lg"
-            >
-              {isLoading ? (
-                <>
-                  <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
-                  Getting Location...
-                </>
-              ) : (
-                <>
-                  <MapPin className="mr-2 h-5 w-5" />
-                  Get Current Location
-                </>
-              )}
-            </Button>
-            <p className="text-xs text-yellow-600 dark:text-yellow-300 mt-2 text-center">
-              Allow location access when prompted by your browser
-            </p>
-          </CardContent>
-        </Card>
-      )}
+
 
       {/* Actions Section */}
       {!isCompletedForDay && (
@@ -1866,6 +1830,43 @@ export function AttendanceRecorder({
             </CardContent>
           </Card>
         </div>
+      )}
+      {/* GPS Location Required badge moved to bottom */}
+      {!locationPermissionStatusSimplified.granted && !isCompletedForDay && (
+        <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-500/50 mt-8">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-yellow-800 dark:text-yellow-100">
+              <AlertTriangle className="h-5 w-5" />
+              GPS Location Required
+            </CardTitle>
+            <CardDescription className="text-yellow-700 dark:text-yellow-200">
+              {locationPermissionStatusSimplified.message}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={getCurrentLocationData}
+              disabled={isLoading || isCheckingIn}
+              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
+              size="lg"
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
+                  Getting Location...
+                </>
+              ) : (
+                <>
+                  <MapPin className="mr-2 h-5 w-5" />
+                  Get Current Location
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-yellow-600 dark:text-yellow-300 mt-2 text-center">
+              Allow location access when prompted by your browser
+            </p>
+          </CardContent>
+        </Card>
       )}
     </div>
   )

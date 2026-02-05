@@ -500,8 +500,15 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      // In development return more details to help debugging; avoid leaking DB internals in production
+      const devDetails = process.env.NODE_ENV === "production" ? undefined : {
+        message: attendanceError.message,
+        code: attendanceError.code,
+        details: attendanceError.details || attendanceError.hint || null,
+      }
+
       return NextResponse.json(
-        { error: "Failed to record attendance" },
+        { error: "Failed to record attendance", dbError: devDetails },
         {
           status: 500,
           headers: {

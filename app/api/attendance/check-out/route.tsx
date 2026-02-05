@@ -471,7 +471,14 @@ export async function POST(request: NextRequest) {
 
     if (updateError) {
       console.error("[v0] Update error:", updateError)
-      return NextResponse.json({ error: `Failed to record check-out: ${updateError.message}` }, { status: 500 })
+
+      const devDetails = process.env.NODE_ENV === "production" ? undefined : {
+        message: updateError.message,
+        code: updateError.code,
+        details: updateError.details || updateError.hint || null,
+      }
+
+      return NextResponse.json({ error: "Failed to record check-out", dbError: devDetails }, { status: 500 })
     }
 
     try {
