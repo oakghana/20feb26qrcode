@@ -211,8 +211,11 @@ export default function LoginPage() {
 
       showSuccess("Login successful! Redirecting...", "Welcome Back")
 
-      // Quick redirect without delay
-      window.location.href = "/dashboard/attendance"
+      // Wait a moment for Supabase to set cookies, then do a full page reload
+      // This ensures the session is fully established before the new page loads
+      setTimeout(() => {
+        window.location.href = "/dashboard/attendance"
+      }, 300)
     } catch (error: unknown) {
       showError(error instanceof Error ? error.message : "An error occurred during login", "Login Error")
     } finally {
@@ -422,10 +425,10 @@ export default function LoginPage() {
       console.log("[v0] OTP verification successful")
       showSuccess("OTP verified successfully! Redirecting to dashboard...", "Login Successful")
 
-      // Wait a moment for the success message to show, then do a full page reload
+      // Wait a moment for Supabase to set cookies, then do a full page reload
       setTimeout(() => {
         window.location.href = "/dashboard/attendance"
-      }, 500)
+      }, 300)
     } catch (error: unknown) {
       console.error("[v0] OTP verification exception:", error)
       showFieldError("OTP Code", error instanceof Error ? error.message : "Invalid OTP code")
