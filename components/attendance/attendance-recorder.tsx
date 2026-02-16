@@ -11,7 +11,7 @@ import {
   type LocationData,
   type ProximitySettings,
   type GeoSettings,
-  reverseGeocode, // Import reverseGeocode
+  reverseGeocode,
 } from "@/lib/geolocation"
 import { getDeviceInfo } from "@/lib/device-info"
 import type { QRCodeData } from "@/lib/qr-code"
@@ -42,8 +42,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Label } from "@/components/ui/label"
 import { ToastAction } from "@/components/ui/toast"
 import { clearAttendanceCache, shouldClearCache, setCachedDate } from "@/lib/utils/attendance-cache"
-import { cn } from "@/lib/utils" // Import cn
-import { requiresLatenessReason, requiresEarlyCheckoutReason } from "@/lib/attendance-utils"
+import { cn } from "@/lib/utils"
+import { requiresLatenessReason, requiresEarlyCheckoutReason, canCheckInAtTime, canCheckOutAtTime, getCheckInDeadline, getCheckOutDeadline } from "@/lib/attendance-utils"
 import { DeviceActivityHistory } from "@/components/attendance/device-activity-history"
 import { ActiveSessionTimer } from "@/components/attendance/active-session-timer"
 
@@ -225,6 +225,31 @@ export function AttendanceRecorder({
   const [isCheckInProcessing, setIsCheckInProcessing] = useState(false)
   const [lastCheckInAttempt, setLastCheckInAttempt] = useState<number>(0)
   const [deviceInfo, setDeviceInfo] = useState(() => getDeviceInfo())
+  const [timeRestrictionWarning, setTimeRestrictionWarning] = useState<{ type: 'checkin' | 'checkout'; message: string } | null>(null)
+
+  // Check time restrictions and show warnings
+  useEffect(() => {
+    const now = new Date()
+    const userDept = userProfile?.departments
+    const userRole = userProfile?.role
+    
+    const canCheckIn = canCheckInAtTime(now, userDept, userRole)
+    const canCheckOut = canCheckOutAtTime(now, userDept, userRole)
+    
+    if (!canCheckIn && !localTodayAttendance?.check_in_time) {
+      setTimeRestrictionWarning({
+        type: 'checkin',
+        message: `Check-in is only allowed before ${getCheckInDeadline()}. Your department does not have exemptions for late check-ins.`
+      })
+    } else if (!canCheckOut && localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time) {
+      setTimeRestrictionWarning({
+        type: 'checkout',
+        message: `Check-out is only allowed before ${getCheckOutDeadline()}. Your department does not have exemptions for late check-outs.`
+      })
+    } else {
+      setTimeRestrictionWarning(null)
+    }
+  }, [userProfile, localTodayAttendance])
 
   // Check if cache should be cleared (new day)
   useEffect(() => {
@@ -1563,7 +1588,22 @@ export function AttendanceRecorder({
         </Alert>
       )}
 
-
+      {/* Time Restriction Warning */}
+      {timeRestrictionWarning && (
+        <Alert className="bg-red-50 border-red-200 dark:bg-red-900/30 dark:border-red-500/30">
+          <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+          <AlertTitle className="text-red-800 dark:text-red-200 font-semibold">
+            {timeRestrictionWarning.type === 'checkin' ? 'Check-In Window Closed' : 'Check-Out Window Closed'}
+          </AlertTitle>
+          <AlertDescription className="text-red-700 dark:text-red-300">
+            {timeRestrictionWarning.message}
+            <br />
+            <small className="text-red-600 dark:text-red-400 mt-2 block">
+              Only operational and security departments can check-in/out outside these windows.
+            </small>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Actions Section */}
       {!isCompletedForDay && (
