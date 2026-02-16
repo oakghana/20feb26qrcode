@@ -150,7 +150,7 @@ export default async function AttendancePage() {
         </Tabs>
       </div>
     </div>
-  )
+    )
   } catch (error) {
     redirect("/auth/login")
   }
