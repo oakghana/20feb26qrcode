@@ -1027,8 +1027,6 @@ export function AttendanceRecorder({
   }
 
   const handleCheckInOutsidePremises = async () => {
-    console.log("[v0] Check-in outside premises initiated")
-
     if (isCheckingIn || isProcessing) {
       toast({
         title: "Processing",
@@ -1042,15 +1040,11 @@ export function AttendanceRecorder({
     setCheckingMessage("Getting your current location...")
 
     try {
-      // Get current location
       const currentLocation = await getCurrentLocationData()
       if (!currentLocation) {
         throw new Error("Could not retrieve current location. Please ensure GPS is enabled.")
       }
 
-      console.log("[v0] Current location:", currentLocation)
-
-      // Reverse geocode to get location name/address
       let locationName = "Unknown Location"
       try {
         const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
@@ -1058,13 +1052,11 @@ export function AttendanceRecorder({
           locationName = geoResult.display_name || geoResult.address || "Unknown Location"
         }
       } catch (geoError) {
-        console.log("[v0] Reverse geocoding failed, using coordinates:", geoError)
         locationName = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
       }
 
       setCheckingMessage("Sending request to managers...")
 
-      // Send confirmation request to department heads and regional managers
       const response = await fetch("/api/attendance/check-in-outside-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1097,13 +1089,11 @@ export function AttendanceRecorder({
         action: <ToastAction altText="OK">OK</ToastAction>,
       })
 
-      // Refresh attendance status to check for confirmation
       setTimeout(() => {
         handleRefreshStatus()
       }, 2000)
 
     } catch (error: any) {
-      console.error("[v0] Check-in outside premises error:", error)
       setFlashMessage({
         message: error.message || "Failed to send confirmation request. Please try again.",
         type: "error",
