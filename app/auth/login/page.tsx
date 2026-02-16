@@ -359,6 +359,9 @@ export default function LoginPage() {
       }
 
       console.log("[v0] Verifying OTP:", otp.substring(0, 2) + "****") // Log first 2 digits only for security
+      let data: any = null
+      let error: any = null
+      
       try {
         const result = await supabase.auth.verifyOtp({
           email: otpEmail,

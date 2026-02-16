@@ -136,12 +136,11 @@ export async function POST(request: NextRequest) {
     }
 
     // CHECK TIME RESTRICTION: Check if check-out is after 6 PM (18:00)
-    const now = new Date()
-    const userProfileData = { 
+    const timeRestrictCheckData = { 
       departments: userProfile?.departments, 
       role: userProfile?.role 
     }
-    const canCheckOut = canCheckOutAtTime(now, userProfileData?.departments, userProfileData?.role)
+    const canCheckOut = canCheckOutAtTime(now, timeRestrictCheckData?.departments, timeRestrictCheckData?.role)
     
     if (!canCheckOut) {
       // Create a notification for users trying to check out after 6 PM
