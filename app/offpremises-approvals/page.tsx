@@ -1,29 +1,75 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import useSWR from 'swr'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { AlertTriangle, ArrowLeft } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, MapPin } from 'lucide-react'
 import { PendingOffPremisesRequests } from '@/components/admin/pending-offpremises-requests'
-
-const fetcher = (url: string) => fetch(url).then((res) => {
-  if (!res.ok) throw new Error('Failed to fetch')
-  return res.json()
-})
 
 export default function OffPremisesApprovalPage() {
   const router = useRouter()
-  const { data: userProfile, isLoading, error } = useSWR('/api/user/profile', fetcher)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [userProfile, setUserProfile] = useState<any>(null)
 
   useEffect(() => {
-    // Check if user is a manager/department head
-    if (userProfile && !['admin', 'department_head', 'regional_manager'].includes(userProfile.role)) {
-      router.push('/dashboard/attendance')
+    let isMounted = true
+
+    const loadUserProfile = async () => {
+      try {
+        const supabase = createClient()
+
+        // Check authentication
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+
+        if (!isMounted) return
+
+        if (authError || !authUser) {
+          router.push('/auth/login')
+          return
+        }
+
+        // Fetch user profile
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('id, role, department_id, first_name, last_name, geofence_locations')
+          .eq('id', authUser.id)
+          .single()
+
+        if (!isMounted) return
+
+        if (profileError) {
+          setError('Failed to load user profile')
+          return
+        }
+
+        // Check if user has permission to view this page
+        if (!profile || !['admin', 'department_head', 'regional_manager'].includes(profile.role)) {
+          setError('You do not have permission to view this page')
+          return
+        }
+
+        setUserProfile(profile)
+      } catch (err: any) {
+        if (isMounted) {
+          setError(err.message || 'Failed to load dashboard')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
     }
-  }, [userProfile, router])
+
+    loadUserProfile()
+
+    return () => {
+      isMounted = false
+    }
+  }, [router])
 
   if (isLoading) {
     return (
@@ -42,21 +88,7 @@ export default function OffPremisesApprovalPage() {
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
-          <AlertDescription>Failed to load dashboard. Please try again later.</AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
-
-  if (userProfile && !['admin', 'department_head', 'regional_manager'].includes(userProfile.role)) {
-    return (
-      <div className="container mx-auto py-8 px-4">
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Access Denied</AlertTitle>
-          <AlertDescription>
-            You do not have permission to view this dashboard. Only managers, department heads, and admins can review off-premises check-in requests.
-          </AlertDescription>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       </div>
     )
@@ -78,7 +110,22 @@ export default function OffPremisesApprovalPage() {
           </Button>
           
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
+            <div className="flex items-center gap-3 mb-2">
+              <MapPin className="h-6 w-6 text-blue-600" />
+              <h1 className="text-3xl font-bold">Off-Premises Check-In Approvals</h1>
+            </div>
+            <p className="text-gray-600 ml-9">
+              Review and approve staff requests for off-premises check-ins
+            </p>
+          </div>
+        </div>
+
+        {/* Pending Requests Component */}
+        <PendingOffPremisesRequests managerProfile={userProfile} />
+      </div>
+    </div>
+  )
+}
               Off-Premises Check-In Approvals
             </h1>
             <p className="text-muted-foreground">
