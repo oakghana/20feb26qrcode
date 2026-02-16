@@ -6,7 +6,6 @@ export async function updateSession(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error("[v0] Missing Supabase environment variables")
     return NextResponse.next({ request })
   }
 
@@ -38,48 +37,12 @@ export async function updateSession(request: NextRequest) {
       },
     })
 
-    // Exclude static and PWA assets from auth redirects (service worker must be fetchable at /sw.js)
-    if (
-      request.nextUrl.pathname !== "/" &&
-      request.nextUrl.pathname !== "/sw.js" &&
-      !request.nextUrl.pathname.startsWith("/auth") &&
-      !request.nextUrl.pathname.startsWith("/_next") &&
-      !request.nextUrl.pathname.startsWith("/favicon") &&
-      !request.nextUrl.pathname.startsWith("/api")
-    ) {
-      const isV0Preview = request.nextUrl.hostname.includes("vusercontent.net")
-      if (!isV0Preview) {
-        try {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser()
-
-          if (!user) {
-            const url = request.nextUrl.clone()
-            url.pathname = "/auth/login"
-            return NextResponse.redirect(url)
-          }
-        } catch (authError: any) {
-          if (authError.name === "AbortError") {
-            // Request was aborted, just continue without redirect
-            return supabaseResponse
-          }
-          // For other errors, redirect to login
-          if (process.env.NODE_ENV === "development") {
-            console.error("[v0] Auth error:", authError)
-          }
-          const url = request.nextUrl.clone()
-          url.pathname = "/auth/login"
-          return NextResponse.redirect(url)
-        }
-      }
-    }
+    // Just refresh the session to update cookies, don't enforce auth here
+    // Let individual pages handle auth checks instead
+    await supabase.auth.getUser()
 
     return supabaseResponse
   } catch (error: any) {
-    if (error.name !== "AbortError" && process.env.NODE_ENV === "development") {
-      console.error("[v0] Middleware error:", error)
-    }
     return NextResponse.next({
       request,
     })

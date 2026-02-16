@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { validateCheckoutLocation, type LocationData } from "@/lib/geolocation"
-import { requiresEarlyCheckoutReason } from "@/lib/attendance-utils"
+import { requiresEarlyCheckoutReason, canCheckOutAtTime, getCheckOutDeadline } from "@/lib/attendance-utils"
 
 export async function POST(request: NextRequest) {
   try {
@@ -133,6 +133,35 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       )
+    }
+
+    // CHECK TIME RESTRICTION: Check if check-out is after 6 PM (18:00)
+    const timeRestrictCheckData = { 
+      departments: userProfile?.departments, 
+      role: userProfile?.role 
+    }
+    const canCheckOut = canCheckOutAtTime(now, timeRestrictCheckData?.departments, timeRestrictCheckData?.role)
+    
+    if (!canCheckOut) {
+      // Create a notification for users trying to check out after 6 PM
+      await supabase
+        .from("staff_notifications")
+        .insert({
+          user_id: user.id,
+          title: "Check-out Time Exceeded",
+          message: `You attempted to check out after ${getCheckOutDeadline()}. Check-outs are only allowed until ${getCheckOutDeadline()} unless you are in an exempt department (Operational/Security).`,
+          type: "warning",
+          is_read: false,
+        })
+        .catch(() => {}) // Silently fail if notification table doesn't exist
+
+      return NextResponse.json({
+        error: `Check-out is only allowed before ${getCheckOutDeadline()}. Your department/role does not have exceptions for late check-outs.`,
+        checkOutBlocked: true,
+        currentTime: now.toLocaleTimeString(),
+        deadline: getCheckOutDeadline(),
+        notification: "Your attempt to check out after hours has been recorded."
+      }, { status: 403 })
     }
 
     // Enhanced device sharing detection for checkout

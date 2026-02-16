@@ -19,6 +19,23 @@ export function isResearchDept(dept?: DeptInfo): boolean {
   return code === "research" || name.includes("research")
 }
 
+export function isOperationalDept(dept?: DeptInfo): boolean {
+  if (!dept) return false
+  const code = (dept.code || "").toString().toLowerCase()
+  const name = (dept.name || "").toString().toLowerCase()
+  return code === "operations" || code === "operational" || name.includes("operations") || name.includes("operational")
+}
+
+export function isExemptFromTimeRestrictions(dept?: DeptInfo, role?: string | null): boolean {
+  if (!dept && !role) return false
+  // Operational and Security departments are exempt from time restrictions
+  if (isOperationalDept(dept)) return true
+  if (isSecurityDept(dept)) return true
+  // Admin roles are also exempt
+  const lowerRole = (role || "").toLowerCase()
+  return lowerRole === "admin" || lowerRole === "department_head" || lowerRole === "regional_manager"
+}
+
 export function isExemptFromAttendanceReasons(role?: string | null): boolean {
   if (!role) return false
   const lowerRole = role.toLowerCase()
@@ -49,4 +66,38 @@ export function requiresEarlyCheckoutReason(date: Date = new Date(), locationReq
   if (isWeekend(date)) return false
   if (isExemptFromAttendanceReasons(role)) return false
   return true
+}
+
+/**
+ * Check if check-in time is allowed (before 1 PM / 13:00)
+ * Operational and Security departments are exempt
+ */
+export function canCheckInAtTime(date: Date = new Date(), dept?: DeptInfo, role?: string | null): boolean {
+  if (isExemptFromTimeRestrictions(dept, role)) return true
+  const hours = date.getHours()
+  return hours < 13 // Allow check-in only before 1 PM
+}
+
+/**
+ * Check if check-out time is allowed (before 6 PM / 18:00)
+ * Operational and Security departments are exempt
+ */
+export function canCheckOutAtTime(date: Date = new Date(), dept?: DeptInfo, role?: string | null): boolean {
+  if (isExemptFromTimeRestrictions(dept, role)) return true
+  const hours = date.getHours()
+  return hours < 18 // Allow check-out only before 6 PM
+}
+
+/**
+ * Get check-in deadline time (1 PM)
+ */
+export function getCheckInDeadline(): string {
+  return "1:00 PM"
+}
+
+/**
+ * Get check-out deadline time (6 PM)
+ */
+export function getCheckOutDeadline(): string {
+  return "6:00 PM"
 }

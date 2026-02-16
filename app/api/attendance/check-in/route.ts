@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
-import { requiresLatenessReason } from "@/lib/attendance-utils"
+import { requiresLatenessReason, canCheckInAtTime, getCheckInDeadline } from "@/lib/attendance-utils"
 
 export async function POST(request: NextRequest) {
   try {
@@ -515,6 +515,17 @@ export async function POST(request: NextRequest) {
     const checkInMinutes = checkInTime.getMinutes()
     const isWeekend = checkInTime.getDay() === 0 || checkInTime.getDay() === 6
     const isLateArrival = checkInHour > 9 || (checkInHour === 9 && checkInMinutes > 0)
+
+    // CHECK TIME RESTRICTION: Check if check-in is after 1 PM (13:00)
+    const canCheckIn = canCheckInAtTime(checkInTime, userProfile?.departments, userProfile?.role)
+    if (!canCheckIn) {
+      return NextResponse.json({
+        error: `Check-in is only allowed before ${getCheckInDeadline()}. Your department/role does not have exceptions for late check-ins.`,
+        checkInBlocked: true,
+        currentTime: checkInTime.toLocaleTimeString(),
+        deadline: getCheckInDeadline(),
+      }, { status: 403 })
+    }
 
     const latenessRequired = requiresLatenessReason(checkInTime, userProfile?.departments, userProfile?.role)
     if (isLateArrival && latenessRequired && (!lateness_reason || lateness_reason.trim().length === 0)) {
