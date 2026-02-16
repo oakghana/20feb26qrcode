@@ -16,37 +16,48 @@ export const metadata = {
 }
 
 export default async function AttendancePage() {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    
+    console.log("[v0] AttendancePage: User auth check", { userId: user?.id, userEmail: user?.email })
+    
+    if (!user) {
+      console.log("[v0] AttendancePage: No user found, redirecting to login")
+      redirect("/auth/login")
+    }
 
-  const today = new Date().toISOString().split("T")[0]
-  const { data: todayAttendance } = await supabase
-    .from("attendance_records")
-    .select(`
-      *,
-      geofence_locations!check_in_location_id (
-        name
-      ),
-      checkout_location:geofence_locations!check_out_location_id (
-        name
-      )
-    `)
-    .eq("user_id", user.id)
-    .gte("check_in_time", `${today}T00:00:00`)
-    .lt("check_in_time", `${today}T23:59:59`)
-    .maybeSingle()
+    const today = new Date().toISOString().split("T")[0]
+    const { data: todayAttendance, error: attendanceError } = await supabase
+      .from("attendance_records")
+      .select(`
+        *,
+        geofence_locations!check_in_location_id (
+          name
+        ),
+        checkout_location:geofence_locations!check_out_location_id (
+          name
+        )
+      `)
+      .eq("user_id", user.id)
+      .gte("check_in_time", `${today}T00:00:00`)
+      .lt("check_in_time", `${today}T23:59:59`)
+      .maybeSingle()
 
-  const enhancedAttendance = todayAttendance
-    ? {
-        ...todayAttendance,
-        check_in_location_name: todayAttendance.geofence_locations?.name || todayAttendance.check_in_location_name,
-        check_out_location_name: todayAttendance.checkout_location?.name || todayAttendance.check_out_location_name,
-      }
-    : null
+    if (attendanceError) {
+      console.log("[v0] AttendancePage: Attendance fetch error", attendanceError)
+    }
+
+    const enhancedAttendance = todayAttendance
+      ? {
+          ...todayAttendance,
+          check_in_location_name: todayAttendance.geofence_locations?.name || todayAttendance.check_in_location_name,
+          check_out_location_name: todayAttendance.checkout_location?.name || todayAttendance.check_out_location_name,
+        }
+      : null
 
   // Fetch user profile with leave status
   const { data: userProfile } = await supabase
@@ -143,4 +154,8 @@ export default async function AttendancePage() {
       </div>
     </div>
   )
+  } catch (error) {
+    console.error("[v0] AttendancePage error:", error)
+    redirect("/auth/login")
+  }
 }

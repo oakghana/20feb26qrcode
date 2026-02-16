@@ -22,6 +22,11 @@ export async function createClient() {
     process.env.SUPABASE_ANON_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZndGFqdHF4Z2N6aGpib2F0dm9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5NzUyNDgsImV4cCI6MjA3MjU1MTI0OH0.EuuTCRC-rDoz_WHl4pwpV6_fEqrqcgGroa4nTjAEn1k"
 
+  // Debug: Log available cookies
+  const allCookies = cookieStore.getAll()
+  const authCookies = allCookies.filter(c => c.name.includes('sb') || c.name.includes('auth'))
+  console.log("[v0] Supabase Server Client - Available auth cookies:", authCookies.map(c => c.name))
+
   return createSupabaseServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       getAll() {
@@ -62,9 +67,12 @@ export async function createClientAndGetUser() {
       error,
     } = await supabase.auth.getUser()
 
+    console.log("[v0] getUser result:", { userId: user?.id, userEmail: user?.email, hasError: !!error, errorMessage: error?.message })
+
     if (error) {
       const msg = (error as any)?.message || ""
       if (/refresh token not found|invalid refresh token/i.test(msg)) {
+        console.log("[v0] Refresh token issue detected, clearing Supabase cookies")
         // Clear Supabase-related cookies (names containing 'sb' or 'supabase')
         const cookieStore = await cookies()
         const all = cookieStore.getAll()
@@ -82,6 +90,7 @@ export async function createClientAndGetUser() {
 
     return { supabase, user: (user as any) || null, authError: error || null }
   } catch (e) {
+    console.error("[v0] Error in getUser:", e)
     return { supabase, user: null, authError: e }
   }
 }
