@@ -1683,7 +1683,7 @@ export function AttendanceRecorder({
             }
             <br />
             <small className="text-red-600 dark:text-red-400 mt-2 block">
-              Admins, Regional Managers, and Department Heads can check-in/out anytime. Operational and Security departments are also exempt.
+              Please use the "Check In Outside Premises" button to request manager confirmation if you are working outside your registered location.
             </small>
           </AlertDescription>
         </Alert>
@@ -1761,10 +1761,8 @@ export function AttendanceRecorder({
                       </div>
                     </Button>
                     
-                    {/* Check In Outside Premises Button - Show when:
-                        1. User is NOT within any registered location geofence AND
-                        2. After regular check-in deadline (3 PM) */}
-                    {!locationValidation?.canCheckIn && !canCheckInAtTime(new Date(), userProfile?.departments, userProfile?.role) && (
+                    {/* Check In Outside Premises Button - Show after 3 PM check-in window closes */}
+                    {!canCheckInAtTime(new Date(), userProfile?.departments, userProfile?.role) && (
                       <Button
                         onClick={handleCheckInOutsidePremises}
                         disabled={isCheckingIn || isProcessing}
