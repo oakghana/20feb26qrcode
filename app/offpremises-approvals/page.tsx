@@ -20,65 +20,50 @@ export default function OffPremisesApprovalPage() {
 
     const loadUserProfile = async () => {
       try {
-        console.log("[v0] Starting to load user profile...")
         const supabase = createClient()
-        console.log("[v0] Supabase client created")
 
         // Check authentication
         const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-        console.log("[v0] Auth check result:", { authUser: authUser?.id, authError })
 
         if (!isMounted) return
 
         if (authError || !authUser) {
-          console.log("[v0] Not authenticated, redirecting to login")
           router.push('/auth/login')
           return
         }
 
         // Fetch user profile
-        console.log("[v0] Fetching profile for user:", authUser.id)
         const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
           .select('id, role, department_id, first_name, last_name, geofence_locations')
           .eq('id', authUser.id)
           .maybeSingle()
 
-        console.log("[v0] Profile query result:", { profile, profileError })
-
         if (!isMounted) return
 
         if (profileError) {
-          console.error("[v0] Profile error:", profileError)
           setError('Failed to load user profile')
           return
         }
 
         if (!profile) {
-          console.warn("[v0] No profile found for user:", authUser.id)
           setError('User profile not found')
           return
         }
 
-        console.log("[v0] Profile loaded:", { role: profile.role })
-
         // Check if user has permission to view this page
         if (!['admin', 'department_head', 'regional_manager'].includes(profile.role)) {
-          console.log("[v0] User not authorized:", profile.role)
           setError('You do not have permission to view this page')
           return
         }
 
-        console.log("[v0] Setting user profile and loading complete")
         setUserProfile(profile)
       } catch (err: any) {
-        console.error("[v0] Exception in loadUserProfile:", err)
         if (isMounted) {
           setError(err.message || 'Failed to load dashboard')
         }
       } finally {
         if (isMounted) {
-          console.log("[v0] Setting isLoading to false")
           setIsLoading(false)
         }
       }

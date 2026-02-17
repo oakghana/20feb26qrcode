@@ -1761,8 +1761,18 @@ export function AttendanceRecorder({
                       </div>
                     </Button>
                     
-                    {/* Check In Outside Premises Button - Show after 3 PM check-in window closes */}
-                    {!canCheckInAtTime(new Date(), userProfile?.departments, userProfile?.role) && (
+                    {/* Check In Outside Premises Button - Show when:
+                        1. User is NOT within registered location geofence AND
+                        2. User hasn't checked in yet */}
+                    {(() => {
+                      const shouldShow = !locationValidation?.canCheckIn && !localTodayAttendance?.check_in_time
+                      console.log("[v0] Check outside premises button visibility:", {
+                        locationValidation_canCheckIn: locationValidation?.canCheckIn,
+                        has_check_in_time: !!localTodayAttendance?.check_in_time,
+                        shouldShow
+                      })
+                      return shouldShow
+                    })() && (
                       <Button
                         onClick={handleCheckInOutsidePremises}
                         disabled={isCheckingIn || isProcessing}
