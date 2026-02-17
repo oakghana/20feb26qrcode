@@ -1379,10 +1379,10 @@ export function AttendanceRecorder({
 
       console.log("[v0] ✓ Check-in successful")
 
-      if (result.data) {
+      if (result.attendance) {
         // Add device sharing warning to the attendance data if present
         const attendanceWithWarning = {
-          ...result.data,
+          ...result.attendance,
           device_sharing_warning: result.deviceSharingWarning?.message || null
         }
         setLocalTodayAttendance(attendanceWithWarning)
