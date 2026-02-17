@@ -70,6 +70,14 @@ export async function createAdminClient() {
         // No-op for admin client
       },
     },
+    global: {
+      fetch: (url, options) => {
+        return fetch(url, {
+          ...options,
+          signal: undefined, // Don't use AbortSignal to prevent AbortErrors
+        })
+      },
+    },
   })
 }
 
