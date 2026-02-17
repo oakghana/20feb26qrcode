@@ -587,7 +587,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (attendanceError) {
-      console.error("Attendance error:", attendanceError)
+      console.error("[v0] Attendance insert error:", attendanceError)
 
       // Check if error is due to unique constraint violation
       if (attendanceError.code === "23505" || attendanceError.message?.includes("idx_unique_daily_checkin")) {
@@ -608,6 +608,7 @@ export async function POST(request: NextRequest) {
         details: attendanceError.details || attendanceError.hint || null,
       }
 
+      console.error("[v0] Failed to record attendance - returning error response")
       return NextResponse.json(
         { error: "Failed to record attendance", dbError: devDetails },
         {
@@ -647,7 +648,12 @@ export async function POST(request: NextRequest) {
       checkInMessage = `Late arrival detected - You checked in at ${arrivalTime} (after 9:00 AM). ${checkInMessage}`
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true,
+      attendance: attendanceRecord,
+      message: checkInMessage,
+      checkInPosition: checkInPosition,
+    });
   }
   catch (error: unknown) {
     console.error("Check-in error:", error);
