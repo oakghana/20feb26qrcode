@@ -68,7 +68,7 @@ export function PendingOffPremisesRequests() {
       // Get user profile for filtering
       const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
-        .select('id, role, department_id, geofence_locations')
+        .select('id, role, department_id')
         .eq('id', authUser.id)
         .maybeSingle()
 
@@ -107,8 +107,7 @@ export function PendingOffPremisesRequests() {
             first_name,
             last_name,
             email,
-            department_id,
-            geofence_locations
+            department_id
           )
         `)
         .eq('status', 'pending')
@@ -116,23 +115,14 @@ export function PendingOffPremisesRequests() {
 
       // Apply role-based filtering
       if (profile.role === 'admin') {
+        console.log('[v0] Admin - showing all requests')
         // Admins see all requests
       } else if (profile.role === 'regional_manager') {
-        // Regional managers see requests from their location staff
-        const { data: locationStaff, error: staffError } = await supabase
-          .from('user_profiles')
-          .select('id')
-          .contains('geofence_locations', profile.geofence_locations || [])
-
-        if (!staffError && locationStaff && locationStaff.length > 0) {
-          const staffIds = locationStaff.map(s => s.id)
-          query = query.in('user_id', staffIds)
-        } else {
-          setRequests([])
-          setIsLoading(false)
-          return
-        }
+        console.log('[v0] Regional manager - no location-based filtering available')
+        // Regional managers would need location data in the user_profiles table
+        // For now, show all requests (this can be refined when location data is added)
       } else if (profile.role === 'department_head') {
+        console.log('[v0] Department head - filtering by department:', profile.department_id)
         // Department heads see requests from their department
         query = query.eq('user_profiles.department_id', profile.department_id)
       }
