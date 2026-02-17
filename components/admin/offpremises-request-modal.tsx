@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -50,6 +51,14 @@ export function OffPremisesRequestModal({
 
     setIsApproving(true)
     try {
+      // Get current user
+      const supabase = createClient()
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+
+      if (!currentUser?.id) {
+        throw new Error('User not authenticated')
+      }
+
       const response = await fetch('/api/attendance/offpremises/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -57,6 +66,7 @@ export function OffPremisesRequestModal({
           request_id: request.id,
           approved,
           comments: approvalComments,
+          user_id: currentUser.id,
         }),
       })
 

@@ -1,19 +1,12 @@
-import { createClientAndGetUser } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { supabase, user, authError } = await createClientAndGetUser()
-
-    console.log("[v0] Auth result:", { hasUser: !!user, authError: authError?.message })
-
-    if (authError || !user) {
-      console.error("[v0] Authentication failed:", authError?.message || "No user")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const body = await request.json()
-    const { current_location, device_info, assigned_location_id } = body
+    const { current_location, device_info, user_id } = body
+
+    console.log("[v0] Off-premises check-in request:", { user_id, location: current_location?.name })
 
     if (!current_location) {
       return NextResponse.json(
@@ -22,20 +15,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log("[v0] Off-premises check-in request:", {
-      user_id: user.id,
-      location_name: current_location.name,
-      coordinates: `${current_location.latitude}, ${current_location.longitude}`,
-    })
+    if (!user_id) {
+      return NextResponse.json(
+        { error: "User ID is required" },
+        { status: 400 }
+      )
+    }
+
+    const supabase = await createAdminClient()
 
     // Get user's direct manager (department head or regional manager they report to)
     const { data: userProfile } = await supabase
       .from("user_profiles")
       .select("department_id, reports_to_id, role, first_name, last_name")
-      .eq("id", user.id)
+      .eq("id", user_id)
       .single()
 
-    console.log("[v0] User profile:", { userProfile, user_id: user.id })
+    console.log("[v0] User profile:", { userProfile, user_id })
 
     if (!userProfile) {
       console.error("[v0] User profile not found")
@@ -93,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     // Store the off-premises check-in request for manager approval
     console.log("[v0] Inserting pending check-in:", {
-      user_id: user.id,
+      user_id,
       location_name: current_location.name,
       status: "pending",
     })
@@ -101,7 +97,7 @@ export async function POST(request: NextRequest) {
     const { data: requestRecord, error: insertError } = await supabase
       .from("pending_offpremises_checkins")
       .insert({
-        user_id: user.id,
+        user_id,
         current_location_name: current_location.name,
         latitude: current_location.latitude,
         longitude: current_location.longitude,

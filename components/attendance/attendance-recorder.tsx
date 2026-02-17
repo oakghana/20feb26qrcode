@@ -1057,6 +1057,14 @@ export function AttendanceRecorder({
 
       setCheckingMessage("Sending request to managers...")
 
+      // Get current user
+      const supabase = createClient()
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+
+      if (!currentUser?.id) {
+        throw new Error("User not authenticated")
+      }
+
       const response = await fetch("/api/attendance/check-in-outside-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1068,7 +1076,7 @@ export function AttendanceRecorder({
             name: locationName,
           },
           device_info: getDeviceInfo(),
-          assigned_location_id: userProfile?.assigned_location_id,
+          user_id: currentUser.id,
         }),
       })
 
