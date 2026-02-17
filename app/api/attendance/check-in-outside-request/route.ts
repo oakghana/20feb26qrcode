@@ -1,7 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 
+console.log("[v0] check-in-outside-request route module loaded")
+
 export async function POST(request: NextRequest) {
+  console.log("[v0] POST handler invoked for check-in-outside-request")
+  
   try {
     console.log("[v0] Off-premises check-in API called")
     
@@ -161,7 +165,12 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     )
   } catch (error: any) {
-    console.error("[v0] Off-premises check-in request error:", error)
+    console.error("[v0] Off-premises check-in request error:", {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+      stack: error?.stack?.split('\n').slice(0, 3).join('\n'),
+    })
     return NextResponse.json(
       { error: error.message || "Failed to process request" },
       { status: 500 }
