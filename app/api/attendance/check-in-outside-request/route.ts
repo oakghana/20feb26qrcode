@@ -1,15 +1,14 @@
-import { createClient } from "@/lib/supabase/server"
+import { createClientAndGetUser } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const { supabase, user, authError } = await createClientAndGetUser()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    console.log("[v0] Auth result:", { hasUser: !!user, authError: authError?.message })
 
-    if (!user) {
+    if (authError || !user) {
+      console.error("[v0] Authentication failed:", authError?.message || "No user")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
