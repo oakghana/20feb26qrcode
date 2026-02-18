@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,6 +17,9 @@ import {
   Navigation,
   Loader2,
   Download,
+  ArrowUpDown,
+  Filter,
+  X,
 } from 'lucide-react'
 import {
   Table,
@@ -26,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
 
 interface ApprovedRecord {
   id: string
@@ -38,14 +42,28 @@ interface ApprovedRecord {
   check_in_type: string
   device_info: string
   staff_name: string
+  current_location_name: string
+  google_maps_name: string
+  approved_at: string
+  latitude: number
+  longitude: number
   user_profiles: {
     id: string
     first_name: string
     last_name: string
     email: string
     department_id: string
+    phone?: string
+  }
+  approved_by?: {
+    id: string
+    first_name: string
+    last_name: string
   }
 }
+
+type SortField = 'staff_name' | 'location' | 'approval_time' | 'department'
+type SortOrder = 'asc' | 'desc'
 
 export function OffPremisesReviewLog() {
   const [records, setRecords] = useState<ApprovedRecord[]>([])
@@ -56,11 +74,42 @@ export function OffPremisesReviewLog() {
   const [totalRecords, setTotalRecords] = useState(0)
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize] = useState(20)
+  
+  // Search and filter state
+  const [searchTerm, setSearchTerm] = useState('')
+  const [departmentFilter, setDepartmentFilter] = useState<string | null>(null)
+  const [departments, setDepartments] = useState<any[]>([])
+  const [sortField, setSortField] = useState<SortField>('approval_time')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [dateFrom, setDateFrom] = useState<string>('')
+  const [dateTo, setDateTo] = useState<string>('')
 
-  console.log('[v0] OffPremisesReviewLog component mounted')
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortOrder('desc')
+    }
+  }
 
-  // Load approved off-premises check-ins
-  const loadApprovedRecords = async () => {
+  const SortableHeader = ({ field, label }: { field: SortField; label: string }) => (
+    <TableHead
+      onClick={() => handleSort(field)}
+      className="cursor-pointer hover:bg-gray-100 select-none"
+    >
+      <div className="flex items-center gap-2">
+        {label}
+        <ArrowUpDown
+          className={`h-4 w-4 ${
+            sortField === field
+              ? 'text-blue-600'
+              : 'text-gray-300'
+          }`}
+        />
+      </div>
+    </TableHead>
+  )
     try {
       setIsLoading(true)
       setError(null)
@@ -80,7 +129,7 @@ export function OffPremisesReviewLog() {
 
       // Get user profile
       const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
+        .from('profiles')
         .select('id, role, department_id')
         .eq('id', authUser.id)
         .maybeSingle()
@@ -156,9 +205,65 @@ export function OffPremisesReviewLog() {
     }
   }
 
-  useEffect(() => {
-    loadApprovedRecords()
-  }, [currentPage])
+  // Apply client-side filtering and sorting
+  const filteredAndSortedRecords = useMemo(() => {
+    let filtered = [...records]
+
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(
+        (r) =>
+          r.user_profiles?.first_name.toLowerCase().includes(term) ||
+          r.user_profiles?.last_name.toLowerCase().includes(term) ||
+          r.user_profiles?.email.toLowerCase().includes(term) ||
+          r.current_location_name?.toLowerCase().includes(term) ||
+          r.google_maps_name?.toLowerCase().includes(term)
+      )
+    }
+
+    // Department filter
+    if (departmentFilter) {
+      filtered = filtered.filter((r) => r.user_profiles?.department_id === departmentFilter)
+    }
+
+    // Date filters
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom)
+      filtered = filtered.filter((r) => new Date(r.approved_at || r.created_at) >= fromDate)
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo)
+      toDate.setHours(23, 59, 59, 999)
+      filtered = filtered.filter((r) => new Date(r.approved_at || r.created_at) <= toDate)
+    }
+
+    // Sorting
+    filtered.sort((a, b) => {
+      let aVal: any
+      let bVal: any
+
+      if (sortField === 'staff_name') {
+        aVal = `${a.user_profiles?.first_name} ${a.user_profiles?.last_name}`
+        bVal = `${b.user_profiles?.first_name} ${b.user_profiles?.last_name}`
+      } else if (sortField === 'location') {
+        aVal = a.current_location_name
+        bVal = b.current_location_name
+      } else if (sortField === 'approval_time') {
+        aVal = new Date(a.approved_at || a.created_at)
+        bVal = new Date(b.approved_at || b.created_at)
+      } else if (sortField === 'department') {
+        aVal = a.user_profiles?.department_id
+        bVal = b.user_profiles?.department_id
+      }
+
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1
+      return 0
+    })
+
+    return filtered
+  }, [records, searchTerm, departmentFilter, dateFrom, dateTo, sortField, sortOrder])
 
   const formatDate = (dateString: string) => {
     try {
@@ -179,21 +284,36 @@ export function OffPremisesReviewLog() {
   }
 
   const handleExportCSV = () => {
-    if (records.length === 0) {
+    if (filteredAndSortedRecords.length === 0) {
       alert('No records to export')
       return
     }
 
     const csv = [
-      ['Staff Name', 'Email', 'Location Name', 'Coordinates', 'Check-In Time', 'Approved By'].join(','),
-      ...records.map((record) =>
+      [
+        'Staff Name',
+        'Email',
+        'Department',
+        'Phone',
+        'Location Name',
+        'Google Maps Location',
+        'Coordinates',
+        'Check-In Time',
+        'Approved By',
+        'Device Info',
+      ].join(','),
+      ...filteredAndSortedRecords.map((record) =>
         [
           `"${record.user_profiles?.first_name} ${record.user_profiles?.last_name}"`,
           record.user_profiles?.email,
+          record.user_profiles?.department_id || 'N/A',
+          record.user_profiles?.phone || 'N/A',
           `"${record.current_location_name}"`,
+          `"${record.google_maps_name || ''}"`,
           formatCoordinates(record.latitude, record.longitude),
           formatDate(record.approved_at || record.created_at),
-          `"${record.approved_by?.first_name} ${record.approved_by?.last_name}"`,
+          `"${record.approved_by?.first_name || ''} ${record.approved_by?.last_name || ''}"`,
+          `"${record.device_info || ''}"`,
         ].join(',')
       ),
     ].join('\n')
@@ -256,84 +376,167 @@ export function OffPremisesReviewLog() {
           </Alert>
         )}
 
-        {/* Stats */}
-        {!error && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600">Total Approved</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalRecords}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600">Current Page</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{records.length}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600">Total Pages</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{Math.ceil(totalRecords / pageSize)}</div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Filters & Search
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">Search</label>
+                <Input
+                  placeholder="Staff name, email, location..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value)
+                    setCurrentPage(0)
+                  }}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">Department</label>
+                <select
+                  value={departmentFilter || ''}
+                  onChange={(e) => {
+                    setDepartmentFilter(e.target.value || null)
+                    setCurrentPage(0)
+                  }}
+                  className="w-full h-9 px-3 border border-gray-300 rounded-md text-sm"
+                >
+                  <option value="">All Departments</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">From Date</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value)
+                    setCurrentPage(0)
+                  }}
+                  className="w-full h-9 px-3 border border-gray-300 rounded-md text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">To Date</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value)
+                    setCurrentPage(0)
+                  }}
+                  className="w-full h-9 px-3 border border-gray-300 rounded-md text-sm"
+                />
+              </div>
+            </div>
+            {(searchTerm || departmentFilter || dateFrom || dateTo) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchTerm('')
+                  setDepartmentFilter(null)
+                  setDateFrom('')
+                  setDateTo('')
+                  setCurrentPage(0)
+                }}
+                className="mt-4 gap-2"
+              >
+                <X className="h-4 w-4" />
+                Clear Filters
+              </Button>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Approved Off-Premises Records</CardTitle>
-            <CardDescription>
-              Showing {records.length} of {totalRecords} total records
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Off-Premises Request Records</CardTitle>
+                <CardDescription>
+                  Showing {filteredAndSortedRecords.length} of {totalRecords} total approved requests
+                </CardDescription>
+              </div>
+              <Button
+                onClick={handleExportCSV}
+                disabled={filteredAndSortedRecords.length === 0}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            {records.length === 0 ? (
+            {filteredAndSortedRecords.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <CheckCircle2 className="h-12 w-12 text-gray-300 mb-4" />
                 <p className="text-gray-600 text-lg font-medium">No approved records found</p>
-                <p className="text-gray-500 mt-2">Off-premises check-ins will appear here once approved</p>
+                <p className="text-gray-500 mt-2">
+                  {searchTerm || departmentFilter || dateFrom || dateTo
+                    ? 'Try adjusting your filters'
+                    : 'Off-premises check-ins will appear here once approved'}
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Staff Name</TableHead>
+                      <SortableHeader field="staff_name" label="Staff Name" />
                       <TableHead>Email</TableHead>
-                      <TableHead>Location</TableHead>
+                      <TableHead>Department</TableHead>
+                      <SortableHeader field="location" label="Location" />
                       <TableHead>Coordinates</TableHead>
-                      <TableHead>Approved Date</TableHead>
+                      <SortableHeader field="approval_time" label="Approval Time" />
                       <TableHead>Approved By</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {records.map((record) => (
+                    {filteredAndSortedRecords.map((record) => (
                       <TableRow key={record.id} className="hover:bg-gray-50">
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-gray-400" />
-                            {record.user_profiles?.first_name} {record.user_profiles?.last_name}
+                            <div>
+                              <p>
+                                {record.user_profiles?.first_name} {record.user_profiles?.last_name}
+                              </p>
+                              {record.user_profiles?.phone && (
+                                <p className="text-xs text-gray-500">{record.user_profiles.phone}</p>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-gray-600">
                           {record.user_profiles?.email}
                         </TableCell>
+                        <TableCell className="text-sm">{record.user_profiles?.department_id || 'N/A'}</TableCell>
                         <TableCell className="max-w-xs">
                           <div className="flex items-start gap-2">
                             <MapPin className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
                             <div className="text-sm">
                               <p className="font-medium">{record.current_location_name}</p>
-                              {record.google_maps_name && record.google_maps_name !== record.current_location_name && (
-                                <p className="text-gray-500 text-xs">{record.google_maps_name}</p>
-                              )}
+                              {record.google_maps_name &&
+                                record.google_maps_name !== record.current_location_name && (
+                                  <p className="text-gray-500 text-xs">{record.google_maps_name}</p>
+                                )}
                             </div>
                           </div>
                         </TableCell>
