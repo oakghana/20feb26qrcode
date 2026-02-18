@@ -1849,7 +1849,12 @@ export function AttendanceRecorder({
                             <MapPin className="mr-2 h-5 w-5" />
                             Check In Outside Premises
                           </>
-      )}
+                        )}
+                      </Button>
+                    )}
+
+            </div>
+          </div>
 
       {showOffPremisesReasonDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
