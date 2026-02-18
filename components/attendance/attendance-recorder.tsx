@@ -181,6 +181,9 @@ export function AttendanceRecorder({
   } | null>(null)
   const [showLatenessDialog, setShowLatenessDialog] = useState(false)
   const [latenessReason, setLatenessReason] = useState("")
+  const [showOffPremisesReasonDialog, setShowOffPremisesReasonDialog] = useState(false)
+  const [offPremisesReason, setOffPremisesReason] = useState("")
+  const [pendingOffPremisesLocation, setPendingOffPremisesLocation] = useState<LocationData | null>(null)
 
   // Helper: treat Security department as exempt from lateness / early-checkout reason prompts
   const isSecurityStaff = useMemo(() => {
@@ -1045,6 +1048,41 @@ export function AttendanceRecorder({
         throw new Error("Could not retrieve current location. Please ensure GPS is enabled.")
       }
 
+      // Store the location and show reason dialog
+      setPendingOffPremisesLocation(currentLocation)
+      setOffPremisesReason("")
+      setShowOffPremisesReasonDialog(true)
+      setIsCheckingIn(false)
+      setCheckingMessage("")
+    } catch (error: any) {
+      console.error("[v0] Error preparing off-premises request:", error)
+      setFlashMessage({
+        message: error.message || "Failed to prepare off-premises request. Please try again.",
+        type: "error",
+      })
+      setIsCheckingIn(false)
+      setCheckingMessage("")
+    }
+  }
+
+  const handleSendOffPremisesRequest = async () => {
+    if (!pendingOffPremisesLocation) return
+    if (!offPremisesReason.trim()) {
+      toast({
+        title: "Reason Required",
+        description: "Please provide a reason for your off-premises request.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsCheckingIn(true)
+    setCheckingMessage("Sending request to managers...")
+    setShowOffPremisesReasonDialog(false)
+
+    try {
+      const currentLocation = pendingOffPremisesLocation
+
       let locationName = "Unknown Location"
       let locationDisplayName = ""
       try {
@@ -1058,8 +1096,6 @@ export function AttendanceRecorder({
         locationDisplayName = locationName
       }
 
-      setCheckingMessage("Sending request to managers...")
-
       // Get current user
       const supabase = createClient()
       const { data: { user: currentUser } } = await supabase.auth.getUser()
@@ -1071,15 +1107,16 @@ export function AttendanceRecorder({
       }
 
       const payload = {
-      current_location: {
-      latitude: currentLocation.latitude,
-      longitude: currentLocation.longitude,
-      accuracy: currentLocation.accuracy,
-      name: locationName,
-      display_name: locationDisplayName,
-      },
-      device_info: getDeviceInfo(),
-      user_id: currentUser.id,
+        current_location: {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          accuracy: currentLocation.accuracy,
+          name: locationName,
+          display_name: locationDisplayName,
+        },
+        device_info: getDeviceInfo(),
+        user_id: currentUser.id,
+        reason: offPremisesReason.trim(),
       }
       
       console.log("[v0] Sending off-premises request:", payload)
@@ -1101,15 +1138,55 @@ export function AttendanceRecorder({
       }
 
       setFlashMessage({
-        message: `Your location request has been sent to your department head and regional manager for confirmation. You are currently at: ${locationName}. Once they confirm that you have been sent on official duties to this location, you will be automatically checked in to your allocated QCC location and marked as working outside premises. Please wait for their approval.`,
+        message: `Your off-premises request has been sent to your department head and regional manager for review. Location: ${locationName}. Reason: ${offPremisesReason}. Once approved, you will be automatically checked in and marked as working outside premises.`,
         type: "info",
       })
 
       toast({
         title: "Request Submitted",
-        description: "Awaiting manager confirmation to check in outside your allocated location.",
+        description: "Your off-premises request is awaiting manager approval.",
         action: <ToastAction altText="OK">OK</ToastAction>,
       })
+
+      setPendingOffPremisesLocation(null)
+      setOffPremisesReason("")
+
+      setTimeout(() => {
+        handleRefreshStatus()
+      }, 2000)
+
+    } catch (error: any) {
+      setFlashMessage({
+        message: error.message || "Failed to send confirmation request. Please try again.",
+        type: "error",
+      })
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send confirmation request",
+        variant: "destructive",
+      })
+    } finally {
+      setIsCheckingIn(false)
+      setCheckingMessage("")
+    }
+  }
+
+    setIsCheckingIn(true)
+    setCheckingMessage("Sending request to managers...")
+    setShowOffPremisesReasonDialog(false)
+
+    try {
+      const currentLocation = pendingOffPremisesLocation
+      try {
+        const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+        if (geoResult) {
+          locationName = geoResult.address || geoResult.display_name || "Unknown Location"
+          locationDisplayName = geoResult.display_name || locationName
+        }
+      } catch (geoError) {
+        locationName = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
+        locationDisplayName = locationName
+      }
 
       setTimeout(() => {
         handleRefreshStatus()
@@ -1812,7 +1889,76 @@ export function AttendanceRecorder({
                             <MapPin className="mr-2 h-5 w-5" />
                             Check In Outside Premises
                           </>
-                        )}
+      )}
+
+      {showOffPremisesReasonDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-blue-600">
+                <MapPin className="h-5 w-5" />
+                Off-Premises Request
+              </CardTitle>
+              <CardDescription>
+                Please provide a reason for your off-premises check-in request.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-blue-200 bg-blue-50">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800">Required Information</AlertTitle>
+                <AlertDescription className="text-blue-700">
+                  Your reason will be reviewed by your department head, regional manager, and admin staff for approval.
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <Label htmlFor="offpremises-reason">Reason for Off-Premises Request *</Label>
+                <textarea
+                  id="offpremises-reason"
+                  value={offPremisesReason}
+                  onChange={(e) => setOffPremisesReason(e.target.value)}
+                  placeholder="e.g., Client meeting, field assignment, official business, training session..."
+                  className="w-full min-h-[100px] p-3 border rounded-md resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  maxLength={500}
+                />
+                <p className={`text-xs ${offPremisesReason.length < 10 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                  {offPremisesReason.length}/500 characters (minimum 10 required)
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    setShowOffPremisesReasonDialog(false)
+                    setPendingOffPremisesLocation(null)
+                    setOffPremisesReason("")
+                  }}
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  disabled={isCheckingIn}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSendOffPremisesRequest}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  disabled={isCheckingIn || offPremisesReason.trim().length < 10}
+                >
+                  {isCheckingIn ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    "Send Request"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
                       </Button>
                     )}
                   </div>

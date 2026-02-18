@@ -44,6 +44,7 @@ interface ApprovedRecord {
   staff_name: string
   current_location_name: string
   google_maps_name: string
+  reason?: string
   approved_at: string
   latitude: number
   longitude: number
@@ -305,6 +306,7 @@ export function OffPremisesReviewLog() {
         'Location Name',
         'Google Maps Location',
         'Coordinates',
+        'Reason',
         'Check-In Time',
         'Approved By',
         'Device Info',
@@ -318,6 +320,7 @@ export function OffPremisesReviewLog() {
           `"${record.current_location_name}"`,
           `"${record.google_maps_name || ''}"`,
           formatCoordinates(record.latitude, record.longitude),
+          `"${record.reason || 'Not provided'}"`,
           formatDate(record.approved_at || record.created_at),
           `"${record.approved_by?.first_name || ''} ${record.approved_by?.last_name || ''}"`,
           `"${record.device_info || ''}"`,
@@ -511,6 +514,7 @@ export function OffPremisesReviewLog() {
                       <TableHead>Department</TableHead>
                       <SortableHeader field="location" label="Location" />
                       <TableHead>Coordinates</TableHead>
+                      <TableHead>Reason</TableHead>
                       <SortableHeader field="approval_time" label="Approval Time" />
                       <TableHead>Approved By</TableHead>
                     </TableRow>
@@ -553,6 +557,14 @@ export function OffPremisesReviewLog() {
                             <span className="font-mono text-xs">
                               {formatCoordinates(record.latitude, record.longitude)}
                             </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm max-w-xs">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                            <div className="text-sm">
+                              <p className="text-gray-700">{record.reason || 'Not provided'}</p>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">

@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("[v0] Request body received:", { user_id: body.user_id, location: body.current_location?.name })
     
-    const { current_location, device_info, user_id } = body
+    const { current_location, device_info, user_id, reason } = body
 
     if (!current_location) {
       console.error("[v0] Missing current_location")
@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
         longitude: current_location.longitude,
         accuracy: current_location.accuracy,
         device_info: device_info,
+        reason: reason || '',
         status: "pending",
       })
       .select()
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
       user_id: manager.id,
       type: "offpremises_checkin_request",
       title: "Off-Premises Check-In Request",
-      message: `${userProfile.first_name} ${userProfile.last_name} is requesting to check-in from outside their assigned location: ${current_location.display_name || current_location.name}. Please approve or deny.`,
+      message: `${userProfile.first_name} ${userProfile.last_name} is requesting to check-in from outside their assigned location: ${current_location.display_name || current_location.name}. Reason: ${reason || 'Not provided'}. Please review and approve or deny.`,
       data: {
         request_id: requestRecord.id,
         staff_user_id: user_id,
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
         location_name: current_location.name,
         google_maps_name: current_location.display_name || current_location.name,
         coordinates: `${current_location.latitude}, ${current_location.longitude}`,
+        reason: reason || 'Not provided',
       },
       is_read: false,
     }))
