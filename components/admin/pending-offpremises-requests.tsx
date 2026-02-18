@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AlertTriangle, MapPin, Clock, User, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { OffPremisesRequestModal } from './offpremises-request-modal'
 
@@ -19,12 +20,18 @@ interface PendingRequest {
   device_info: string
   created_at: string
   status: string
+  approved_by_id?: string
+  approved_at?: string
+  rejection_reason?: string
+  google_maps_name?: string
   user_profiles: {
     id: string
     first_name: string
     last_name: string
     email: string
+    employee_id?: string
     department_id: string
+    position?: string
     geofence_locations?: string[]
   }
 }
@@ -36,36 +43,28 @@ export function PendingOffPremisesRequests() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [managerProfile, setManagerProfile] = useState<any>(null)
+  const [activeTab, setActiveTab] = useState<string>('all')
 
-  console.log('[v0] PendingOffPremisesRequests component mounted')
-
-  // Load pending requests
-  const loadPendingRequests = async () => {
+  // Load requests with status filter
+  const loadPendingRequests = async (statusFilter: string = 'all') => {
     try {
       setIsLoading(true)
       setError(null)
-      console.log('[v0] Starting loadPendingRequests')
 
       const supabase = createClient()
-      console.log('[v0] Supabase client created')
 
       // Get current user with better error handling
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-      console.log('[v0] Auth result:', { hasUser: !!authUser, authError: authError?.message })
 
       if (authError) {
-        console.error('[v0] Auth error:', authError)
         setError('Authentication error: ' + authError.message)
         return
       }
 
       if (!authUser) {
-        console.log('[v0] No authenticated user found')
         setError('Unable to authenticate - please log in again')
         return
       }
-
-      console.log('[v0] Authenticated user:', authUser.id)
 
       // Get user profile for filtering
       const { data: profile, error: profileError } = await supabase
@@ -74,61 +73,71 @@ export function PendingOffPremisesRequests() {
         .eq('id', authUser.id)
         .maybeSingle()
 
-      console.log('[v0] Profile result:', { hasProfile: !!profile, profileError: profileError?.message })
-
       if (profileError) {
-        console.error('[v0] Profile error:', profileError)
         setError('Failed to fetch user profile: ' + profileError.message)
         return
       }
 
       if (!profile) {
-        console.log('[v0] User profile not found')
         setError('User profile not found')
         return
       }
 
-      console.log('[v0] User profile loaded:', profile.role)
       setManagerProfile(profile)
 
-      // Call the API endpoint instead of querying directly
-      console.log('[v0] Fetching pending requests from API')
-      const response = await fetch('/api/attendance/offpremises/pending', {
+      // Call the API endpoint with status filter
+      const response = await fetch(`/api/attendance/offpremises/pending?status=${statusFilter}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       })
 
-      console.log('[v0] API response status:', response.status)
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        console.error('[v0] API error response:', errorData)
-        setError('Failed to fetch pending requests: ' + (errorData.error || response.statusText))
+        setError('Failed to fetch requests: ' + (errorData.error || response.statusText))
         return
       }
 
       const data = await response.json()
-      console.log('[v0] Requests loaded successfully:', data.requests?.length || 0)
       setRequests(data.requests || [])
     } catch (err: any) {
-      console.error('[v0] Exception in loadPendingRequests:', err)
       setError(err.message || 'An error occurred while loading requests')
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Load requests on mount and set up polling
+  // Load requests on mount and when tab changes, with polling
   useEffect(() => {
-    loadPendingRequests()
+    loadPendingRequests(activeTab)
 
     // Poll every 30 seconds
-    const interval = setInterval(loadPendingRequests, 30000)
+    const interval = setInterval(() => loadPendingRequests(activeTab), 30000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [activeTab])
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">Pending</Badge>
+      case 'approved':
+        return <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Approved</Badge>
+      case 'rejected':
+        return <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Rejected</Badge>
+      default:
+        return <Badge variant="secondary">{status}</Badge>
+    }
+  }
+
+  const pendingCount = requests.filter(r => r.status === 'pending').length
+  const approvedCount = requests.filter(r => r.status === 'approved').length
+  const rejectedCount = requests.filter(r => r.status === 'rejected').length
 
   const handleRequestClick = (request: PendingRequest) => {
     setSelectedRequest(request)
@@ -226,78 +235,115 @@ CREATE INDEX IF NOT EXISTS idx_pending_offpremises_created_at ON public.pending_
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Pending Off-Premises Check-In Requests</CardTitle>
+              <CardTitle>Off-Premises Check-In Requests</CardTitle>
               <CardDescription>
-                Review and approve staff members requesting to check in from outside their registered QCC location
+                Review and manage staff requests for off-premises check-ins
               </CardDescription>
             </div>
-            <Badge variant="outline" className="text-lg">
-              {requests.length} Pending
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-sm">
+                {requests.length} Total
+              </Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          {requests.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <CheckCircle2 className="mx-auto h-12 w-12 mb-3 text-green-600" />
-              <p>No pending requests at this time.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {requests.map((request) => (
-                <div
-                  key={request.id}
-                  className="border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer transition-colors"
-                  onClick={() => handleRequestClick(request)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-semibold text-lg">
-                          {request.user_profiles.first_name} {request.user_profiles.last_name}
-                        </h3>
-                        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                          Pending
-                        </Badge>
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+            <TabsList className="grid w-full grid-cols-4 mb-4">
+              <TabsTrigger value="all">
+                All ({activeTab === 'all' ? requests.length : '...'})
+              </TabsTrigger>
+              <TabsTrigger value="pending">
+                Pending ({activeTab === 'all' ? pendingCount : activeTab === 'pending' ? requests.length : '...'})
+              </TabsTrigger>
+              <TabsTrigger value="approved">
+                Approved ({activeTab === 'all' ? approvedCount : activeTab === 'approved' ? requests.length : '...'})
+              </TabsTrigger>
+              <TabsTrigger value="rejected">
+                Rejected ({activeTab === 'all' ? rejectedCount : activeTab === 'rejected' ? requests.length : '...'})
+              </TabsTrigger>
+            </TabsList>
+
+            {requests.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <CheckCircle2 className="mx-auto h-12 w-12 mb-3 text-green-600" />
+                <p>No {activeTab === 'all' ? '' : activeTab} requests found.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {requests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="border rounded-lg p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => handleRequestClick(request)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-semibold text-lg">
+                            {request.user_profiles?.first_name} {request.user_profiles?.last_name}
+                          </h3>
+                          {getStatusBadge(request.status)}
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4" />
+                            <span>{request.user_profiles?.email}</span>
+                          </div>
+                          {request.user_profiles?.employee_id && (
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              <span>ID: {request.user_profiles.employee_id}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span>Requested: {formatDate(request.created_at)}</span>
+                          </div>
+                          {request.approved_at && (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="h-4 w-4" />
+                              <span>{request.status === 'approved' ? 'Approved' : 'Reviewed'}: {formatDate(request.approved_at)}</span>
+                            </div>
+                          )}
+                          <div className="flex items-start gap-2 md:col-span-2">
+                            <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="font-medium text-foreground">{request.google_maps_name || request.current_location_name}</p>
+                              <p className="text-xs">
+                                {request.latitude.toFixed(4)}, {request.longitude.toFixed(4)} (accuracy: {Math.round(request.accuracy)}m)
+                              </p>
+                            </div>
+                          </div>
+                          {request.rejection_reason && (
+                            <div className="flex items-start gap-2 md:col-span-2">
+                              <XCircle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive" />
+                              <p className="text-destructive">Reason: {request.rejection_reason}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-600 dark:text-gray-400">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4" />
-                          <span>{request.user_profiles.email}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          <span>Requested: {formatDate(request.created_at)}</span>
-                        </div>
-                        <div className="flex items-start gap-2 md:col-span-2">
-                          <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-700 dark:text-gray-300">{request.current_location_name}</p>
-                            <p className="text-xs">
-                              {request.latitude.toFixed(4)}, {request.longitude.toFixed(4)} (±{request.accuracy}m)
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                      {request.status === 'pending' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-4 flex-shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleRequestClick(request)
+                          }}
+                        >
+                          Review
+                        </Button>
+                      )}
                     </div>
-                    
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="ml-4 flex-shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleRequestClick(request)
-                      }}
-                    >
-                      Review
-                    </Button>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </Tabs>
         </CardContent>
       </Card>
 

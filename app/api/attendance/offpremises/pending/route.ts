@@ -3,7 +3,9 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("[v0] Fetching pending off-premises requests")
+    const { searchParams } = new URL(request.url)
+    const statusFilter = searchParams.get("status") || "pending" // default to pending, "all" for all statuses
+    console.log("[v0] Fetching off-premises requests with status filter:", statusFilter)
     const supabase = await createClient()
 
     // Get authenticated user
@@ -43,7 +45,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    if (!["department_head", "regional_manager", "admin"].includes(managerProfile.role)) {
+    if (!["department_head", "regional_manager", "admin", "it-admin"].includes(managerProfile.role)) {
       console.log("[v0] User not authorized - role:", managerProfile.role)
       return NextResponse.json(
         { error: "Only managers can view pending off-premises requests" },
@@ -67,23 +69,33 @@ export async function GET(request: NextRequest) {
         device_info,
         created_at,
         status,
+        approved_by_id,
+        approved_at,
+        rejection_reason,
+        google_maps_name,
         user_profiles!pending_offpremises_checkins_user_id_fkey (
           id,
           first_name,
           last_name,
           email,
+          employee_id,
           department_id,
+          position,
           geofence_locations
         )
       `
       )
-      .eq("status", "pending")
       .order("created_at", { ascending: false })
 
+    // Apply status filter - "all" shows everything, otherwise filter by specific status
+    if (statusFilter !== "all") {
+      query = query.eq("status", statusFilter)
+    }
+
     // Apply role-based filtering
-    if (managerProfile.role === "admin") {
-      // Admins see all requests
-      console.log("[v0] Admin - showing all requests")
+    if (managerProfile.role === "admin" || managerProfile.role === "it-admin") {
+      // Admins and IT-Admins see all requests
+      console.log("[v0] Admin/IT-Admin - showing all requests")
     } else if (managerProfile.role === "regional_manager") {
       // Regional managers see requests from their location staff
       console.log("[v0] Regional manager - filtering by location")
