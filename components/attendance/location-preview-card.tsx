@@ -217,6 +217,11 @@ export function LocationPreviewCard({ assignedLocation, locations = [] }: Locati
                   </Badge>
                 </div>
               </div>
+
+              <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg p-3">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Coordinates</p>
+                <p className="text-sm font-mono text-gray-900 dark:text-gray-100">{userLocation.latitude.toFixed(6)}°, {userLocation.longitude.toFixed(6)}°</p>
+              </div>
             </div>
           </div>
 

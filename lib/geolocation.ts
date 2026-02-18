@@ -1042,14 +1042,26 @@ export async function getAveragedLocation(samples = 3): Promise<LocationData> {
   }
 }
 
-export async function reverseGeocode(latitude: number, longitude: number): Promise<string> {
+export interface ReverseGeocodeResult {
+  display_name: string
+  address: string
+  road?: string
+  suburb?: string
+  city?: string
+  region?: string
+  country?: string
+  coordinates: string
+}
+
+export async function reverseGeocode(latitude: number, longitude: number): Promise<ReverseGeocodeResult> {
+  const coordinates = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
   try {
     // Use Nominatim (OpenStreetMap) for reverse geocoding - free and no API key required
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
       {
         headers: {
-          "User-Agent": "QCC-Attendance-App",
+          "User-Agent": "QCC-Attendance-App/1.0",
         },
       },
     )
@@ -1060,32 +1072,49 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
 
     const data = await response.json()
 
-    // Extract meaningful location name
-    const address = data.address || {}
+    // Extract meaningful location name parts
+    const addr = data.address || {}
     const locationParts = []
 
-    if (address.building || address.office) {
-      locationParts.push(address.building || address.office)
+    if (addr.building || addr.office) {
+      locationParts.push(addr.building || addr.office)
     }
-    if (address.road || address.street) {
-      locationParts.push(address.road || address.street)
+    if (addr.road || addr.street) {
+      locationParts.push(addr.road || addr.street)
     }
-    if (address.suburb || address.neighbourhood) {
-      locationParts.push(address.suburb || address.neighbourhood)
+    if (addr.suburb || addr.neighbourhood) {
+      locationParts.push(addr.suburb || addr.neighbourhood)
     }
-    if (address.city || address.town || address.village) {
-      locationParts.push(address.city || address.town || address.village)
+    if (addr.city || addr.town || addr.village) {
+      locationParts.push(addr.city || addr.town || addr.village)
     }
 
-    const locationName =
+    const shortName =
       locationParts.length > 0
         ? locationParts.slice(0, 3).join(", ")
-        : data.display_name?.split(",").slice(0, 3).join(",") || "Unknown Location"
+        : data.display_name?.split(",").slice(0, 3).join(",").trim() || "Unknown Location"
 
-    console.log("[v0] Reverse geocoded location:", locationName)
-    return locationName
+    const fullDisplayName = data.display_name || shortName
+
+    const result: ReverseGeocodeResult = {
+      display_name: fullDisplayName,
+      address: shortName,
+      road: addr.road || addr.street,
+      suburb: addr.suburb || addr.neighbourhood,
+      city: addr.city || addr.town || addr.village,
+      region: addr.state || addr.region,
+      country: addr.country,
+      coordinates,
+    }
+
+    console.log("[v0] Reverse geocoded location:", result.address)
+    return result
   } catch (error) {
     console.error("[v0] Reverse geocoding error:", error)
-    return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+    return {
+      display_name: coordinates,
+      address: coordinates,
+      coordinates,
+    }
   }
 }

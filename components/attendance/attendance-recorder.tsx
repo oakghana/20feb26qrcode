@@ -181,6 +181,9 @@ export function AttendanceRecorder({
   } | null>(null)
   const [showLatenessDialog, setShowLatenessDialog] = useState(false)
   const [latenessReason, setLatenessReason] = useState("")
+  const [showOffPremisesReasonDialog, setShowOffPremisesReasonDialog] = useState(false)
+  const [offPremisesReason, setOffPremisesReason] = useState("")
+  const [pendingOffPremisesLocation, setPendingOffPremisesLocation] = useState<LocationData | null>(null)
 
   // Helper: treat Security department as exempt from lateness / early-checkout reason prompts
   const isSecurityStaff = useMemo(() => {
@@ -1045,17 +1048,50 @@ export function AttendanceRecorder({
         throw new Error("Could not retrieve current location. Please ensure GPS is enabled.")
       }
 
-      let locationName = "Unknown Location"
-      try {
-        const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
-        if (geoResult) {
-          locationName = geoResult.display_name || geoResult.address || "Unknown Location"
-        }
-      } catch (geoError) {
-        locationName = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
-      }
+      // Store the location and show reason dialog
+      setPendingOffPremisesLocation(currentLocation)
+      setOffPremisesReason("")
+      setShowOffPremisesReasonDialog(true)
+      setIsCheckingIn(false)
+      setCheckingMessage("")
+    } catch (error: any) {
+      console.error("[v0] Error preparing off-premises request:", error)
+      setFlashMessage({
+        message: error.message || "Failed to prepare off-premises request. Please try again.",
+        type: "error",
+      })
+      setIsCheckingIn(false)
+      setCheckingMessage("")
+    }
+  }
 
-      setCheckingMessage("Sending request to managers...")
+  const handleSendOffPremisesRequest = async () => {
+    if (!pendingOffPremisesLocation) return
+    if (!offPremisesReason.trim()) {
+      toast({
+        title: "Reason Required",
+        description: "Please provide a reason for your off-premises request.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsCheckingIn(true)
+    setCheckingMessage("Sending request to managers...")
+    setShowOffPremisesReasonDialog(false)
+
+    try {
+      const currentLocation = pendingOffPremisesLocation
+      let locationName = "Unknown Location"
+      let locationDisplayName = ""
+      const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+      if (geoResult) {
+        locationName = geoResult.address || geoResult.display_name || "Unknown Location"
+        locationDisplayName = geoResult.display_name || locationName
+      } else {
+        locationName = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
+        locationDisplayName = locationName
+      }
 
       // Get current user
       const supabase = createClient()
@@ -1073,9 +1109,11 @@ export function AttendanceRecorder({
           longitude: currentLocation.longitude,
           accuracy: currentLocation.accuracy,
           name: locationName,
+          display_name: locationDisplayName,
         },
         device_info: getDeviceInfo(),
         user_id: currentUser.id,
+        reason: offPremisesReason.trim(),
       }
       
       console.log("[v0] Sending off-premises request:", payload)
@@ -1097,15 +1135,18 @@ export function AttendanceRecorder({
       }
 
       setFlashMessage({
-        message: `Your location request has been sent to your department head and regional manager for confirmation. You are currently at: ${locationName}. Once they confirm that you have been sent on official duties to this location, you will be automatically checked in to your allocated QCC location and marked as working outside premises. Please wait for their approval.`,
+        message: `Your off-premises request has been sent to your department head and regional manager for review. Location: ${locationName}. Reason: ${offPremisesReason}. Once approved, you will be automatically checked in and marked as working outside premises.`,
         type: "info",
       })
 
       toast({
         title: "Request Submitted",
-        description: "Awaiting manager confirmation to check in outside your allocated location.",
+        description: "Your off-premises request is awaiting manager approval.",
         action: <ToastAction altText="OK">OK</ToastAction>,
       })
+
+      setPendingOffPremisesLocation(null)
+      setOffPremisesReason("")
 
       setTimeout(() => {
         handleRefreshStatus()
@@ -1727,26 +1768,28 @@ export function AttendanceRecorder({
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Active Session Timer - Show when checked in but not checked out */}
-            {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (() => {
-              const checkInLocationData = realTimeLocations?.find(
-                (loc) => loc.id === localTodayAttendance.check_in_location_id
-              )
-              return (
-                <ActiveSessionTimer
-                  checkInTime={localTodayAttendance.check_in_time}
-                  checkInLocation={checkInLocationData?.name || "Unknown Location"}
-                  checkOutLocation={assignedLocationInfo?.name}
-                  minimumWorkMinutes={120}
-                  locationCheckInTime={checkInLocationData?.check_in_start_time}
-                  locationCheckOutTime={checkInLocationData?.check_out_end_time}
-                  onCheckOut={handleCheckOut}
-                  canCheckOut={locationValidation?.canCheckOut}
-                  isCheckingOut={isLoading}
-                  userDepartment={userProfile?.departments}
-                  userRole={userProfile?.role}
-                />
-              )
-            })()}
+            {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (
+              (() => {
+                const checkInLocationData = realTimeLocations?.find(
+                  (loc) => loc.id === localTodayAttendance.check_in_location_id
+                )
+                return (
+                  <ActiveSessionTimer
+                    checkInTime={localTodayAttendance.check_in_time}
+                    checkInLocation={checkInLocationData?.name || "Unknown Location"}
+                    checkOutLocation={assignedLocationInfo?.name}
+                    minimumWorkMinutes={120}
+                    locationCheckInTime={checkInLocationData?.check_in_start_time}
+                    locationCheckOutTime={checkInLocationData?.check_out_end_time}
+                    onCheckOut={handleCheckOut}
+                    canCheckOut={locationValidation?.canCheckOut}
+                    isCheckingOut={isLoading}
+                    userDepartment={userProfile?.departments}
+                    userRole={userProfile?.role}
+                  />
+                )
+              })()
+            )}
 
             {/* Check-in/Check-out Buttons */}
             <div className="space-y-4">
@@ -1814,51 +1857,127 @@ export function AttendanceRecorder({
                   </div>
                 </>
               )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-              {/* Checkout button - Always visible when checked in */}
-              {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (
+      {showOffPremisesReasonDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-blue-600">
+                <MapPin className="h-5 w-5" />
+                Off-Premises Request
+              </CardTitle>
+              <CardDescription>
+                Please provide a reason for your off-premises check-in request.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-blue-200 bg-blue-50">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800">Required Information</AlertTitle>
+                <AlertDescription className="text-blue-700">
+                  Your reason will be reviewed by your department head, regional manager, and admin staff for approval.
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <Label htmlFor="offpremises-reason">Reason for Off-Premises Request *</Label>
+                <textarea
+                  id="offpremises-reason"
+                  value={offPremisesReason}
+                  onChange={(e) => setOffPremisesReason(e.target.value)}
+                  placeholder="e.g., Client meeting, field assignment, official business, training session..."
+                  className="w-full min-h-[100px] p-3 border rounded-md resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  maxLength={500}
+                />
+                <p className={`text-xs ${offPremisesReason.length < 10 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                  {offPremisesReason.length}/500 characters (minimum 10 required)
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    setShowOffPremisesReasonDialog(false)
+                    setPendingOffPremisesLocation(null)
+                    setOffPremisesReason("")
+                  }}
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  disabled={isCheckingIn}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSendOffPremisesRequest}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  disabled={isCheckingIn || offPremisesReason.trim().length < 10}
+                >
+                  {isCheckingIn ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    "Send Request"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Checkout button - Always visible when checked in */}
+      {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (
+        <>
+          <Button
+            onClick={handleCheckOut}
+            disabled={
+              isCheckingIn || isProcessing || isLoading || !checkoutTimeReached || !locationValidation?.canCheckOut
+            }
+            className="w-full bg-red-600 hover:bg-red-700 text-white shadow-lg relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
+            size="lg"
+            title={!checkoutTimeReached ? "Minimum 2 hours required between check-in and check-out" : !locationValidation?.canCheckOut ? "You must be at your assigned location to check out" : "Check out from your shift"}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-red-600 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="relative z-10 flex items-center justify-center w-full">
+              {isCheckingIn ? (
                 <>
-                  <Button
-                    onClick={handleCheckOut}
-                    disabled={
-                      isCheckingIn || isProcessing || isLoading || !checkoutTimeReached || !locationValidation?.canCheckOut
-                    }
-                    className="w-full bg-red-600 hover:bg-red-700 text-white shadow-lg relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
-                    size="lg"
-                    title={!checkoutTimeReached ? "Minimum 2 hours required between check-in and check-out" : !locationValidation?.canCheckOut ? "You must be at your assigned location to check out" : "Check out from your shift"}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-red-600 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    <div className="relative z-10 flex items-center justify-center w-full">
-                      {isCheckingIn ? (
-                        <>
-                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          {checkingMessage || "Checking Out..."}
-                        </>
-                      ) : (
-                        <>
-                          <LogOut className="mr-2 h-5 w-5" />
-                          Check Out
-                        </>
-                      )}
-                    </div>
-                  </Button>
-
-                  {/* Warning messages for checkout */}
-                  {!checkoutTimeReached && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 text-center">
-                      Minimum 2 hours required between check-in and check-out. {minutesUntilCheckout} minutes remaining.
-                    </p>
-                  )}
-                  
-                  {checkoutTimeReached && !locationValidation?.canCheckOut && (
-                    <p className="text-xs text-red-500 mt-2 text-center">
-                      You are outside the approved location range. Please move closer to a QCC location to check out.
-                    </p>
-                  )}
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  {checkingMessage || "Checking Out..."}
+                </>
+              ) : (
+                <>
+                  <LogOut className="mr-2 h-5 w-5" />
+                  Check Out
                 </>
               )}
             </div>
+          </Button>
 
+          {/* Warning messages for checkout */}
+          {!checkoutTimeReached && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 text-center">
+              Minimum 2 hours required between check-in and check-out. {minutesUntilCheckout} minutes remaining.
+            </p>
+          )}
+          
+          {checkoutTimeReached && !locationValidation?.canCheckOut && (
+            <p className="text-xs text-red-500 mt-2 text-center">
+              You are outside the approved location range. Please move closer to a QCC location to check out.
+            </p>
+          )}
+        </>
+      )}
+
+      {/* Refresh Status Card */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
             <Button
               onClick={handleRefreshLocations}
               variant="secondary"
@@ -1872,9 +1991,9 @@ export function AttendanceRecorder({
             <p className="text-xs md:text-sm text-muted-foreground text-center">
               Click to manually update your attendance status if the buttons don't change after check-in/check-out
             </p>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
