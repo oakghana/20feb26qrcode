@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -45,47 +44,13 @@ export function PendingOffPremisesRequests() {
   const [managerProfile, setManagerProfile] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<string>('all')
 
-  // Load requests with status filter
+  // Load requests with status filter - calls the API directly (API handles auth + profile check)
   const loadPendingRequests = async (statusFilter: string = 'all') => {
     try {
       setIsLoading(true)
       setError(null)
 
-      const supabase = createClient()
-
-      // Get current user with better error handling
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-
-      if (authError) {
-        setError('Authentication error: ' + authError.message)
-        return
-      }
-
-      if (!authUser) {
-        setError('Unable to authenticate - please log in again')
-        return
-      }
-
-      // Get user profile for filtering
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('id, role, department_id')
-        .eq('id', authUser.id)
-        .maybeSingle()
-
-      if (profileError) {
-        setError('Failed to fetch user profile: ' + profileError.message)
-        return
-      }
-
-      if (!profile) {
-        setError('User profile not found')
-        return
-      }
-
-      setManagerProfile(profile)
-
-      // Call the API endpoint with status filter
+      // Call the API endpoint with status filter - the API handles authentication and role checks
       const response = await fetch(`/api/attendance/offpremises/pending?status=${statusFilter}`, {
         method: 'GET',
         headers: {
@@ -95,7 +60,15 @@ export function PendingOffPremisesRequests() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        setError('Failed to fetch requests: ' + (errorData.error || response.statusText))
+        if (response.status === 401) {
+          setError('Unable to authenticate - please log in again')
+        } else if (response.status === 403) {
+          setError('You do not have permission to view off-premises requests')
+        } else if (response.status === 404) {
+          setError('User profile not found')
+        } else {
+          setError('Failed to fetch requests: ' + (errorData.error || response.statusText) + (errorData.details ? ' (' + errorData.details + ')' : ''))
+        }
         return
       }
 
