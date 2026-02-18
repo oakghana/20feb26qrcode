@@ -206,7 +206,14 @@ export function OffPremisesReviewLog() {
   }
 
   // Apply client-side filtering and sorting
-  const filteredAndSortedRecords = useMemo(() => {
+  // Apply pagination to filtered and sorted records
+  const paginatedRecords = useMemo(() => {
+    const start = currentPage * pageSize
+    const end = start + pageSize
+    return filteredAndSortedRecords.slice(start, end)
+  }, [filteredAndSortedRecords, currentPage, pageSize])
+
+  const totalPages = Math.ceil(filteredAndSortedRecords.length / pageSize)
     let filtered = [...records]
 
     // Search filter
@@ -509,7 +516,7 @@ export function OffPremisesReviewLog() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredAndSortedRecords.map((record) => (
+                    {paginatedRecords.map((record) => (
                       <TableRow key={record.id} className="hover:bg-gray-50">
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
@@ -571,27 +578,39 @@ export function OffPremisesReviewLog() {
             )}
 
             {/* Pagination */}
-            {totalRecords > pageSize && (
-              <div className="flex items-center justify-between mt-6 pt-6 border-t">
-                <p className="text-sm text-gray-600">
-                  Page {currentPage + 1} of {Math.ceil(totalRecords / pageSize)}
+            {filteredAndSortedRecords.length > pageSize && (
+              <div className="flex flex-col md:flex-row items-center justify-between mt-6 pt-6 border-t gap-4">
+                <p className="text-sm text-gray-600 order-2 md:order-1">
+                  Showing <span className="font-semibold">{currentPage * pageSize + 1}</span> to{' '}
+                  <span className="font-semibold">
+                    {Math.min((currentPage + 1) * pageSize, filteredAndSortedRecords.length)}
+                  </span>{' '}
+                  of <span className="font-semibold">{filteredAndSortedRecords.length}</span> records
+                  {filteredAndSortedRecords.length < totalRecords && (
+                    <span className="text-gray-500 ml-1">
+                      ({filteredAndSortedRecords.length} after filtering)
+                    </span>
+                  )}
                 </p>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2 order-1 md:order-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
                     disabled={currentPage === 0}
+                    className="gap-2"
                   >
                     Previous
                   </Button>
+                  <div className="px-4 py-2 bg-gray-50 rounded-md text-sm font-medium text-gray-700 border">
+                    Page {currentPage + 1} of {totalPages}
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      setCurrentPage(Math.min(Math.ceil(totalRecords / pageSize) - 1, currentPage + 1))
-                    }
-                    disabled={currentPage >= Math.ceil(totalRecords / pageSize) - 1}
+                    onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+                    disabled={currentPage >= totalPages - 1}
+                    className="gap-2"
                   >
                     Next
                   </Button>
