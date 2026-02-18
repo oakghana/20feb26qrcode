@@ -1175,13 +1175,13 @@ export function AttendanceRecorder({
 
     try {
       const currentLocation = pendingOffPremisesLocation
-      try {
-        const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
-        if (geoResult) {
-          locationName = geoResult.address || geoResult.display_name || "Unknown Location"
-          locationDisplayName = geoResult.display_name || locationName
-        }
-      } catch (geoError) {
+      let locationName = "Unknown Location"
+      let locationDisplayName = ""
+      const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+      if (geoResult) {
+        locationName = geoResult.address || geoResult.display_name || "Unknown Location"
+        locationDisplayName = geoResult.display_name || locationName
+      } else {
         locationName = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
         locationDisplayName = locationName
       }
@@ -2001,24 +2001,26 @@ export function AttendanceRecorder({
         </>
       )}
 
-      <div className="space-y-4">
-              <Button
-                onClick={handleRefreshLocations}
-                variant="secondary"
-                size="lg"
-                className="w-full h-12 md:h-14"
-                disabled={isLoading || isCheckingIn}
-              >
-                <RefreshCw className={`h-5 w-5 md:h-6 md:w-6 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                Refresh Attendance Status
-              </Button>
-              <p className="text-xs md:text-sm text-muted-foreground text-center">
-                Click to manually update your attendance status if the buttons don't change after check-in/check-out
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Refresh Status Card */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <Button
+              onClick={handleRefreshLocations}
+              variant="secondary"
+              size="lg"
+              className="w-full h-12 md:h-14"
+              disabled={isLoading || isCheckingIn}
+            >
+              <RefreshCw className={`h-5 w-5 md:h-6 md:w-6 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh Attendance Status
+            </Button>
+            <p className="text-xs md:text-sm text-muted-foreground text-center">
+              Click to manually update your attendance status if the buttons don't change after check-in/check-out
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
