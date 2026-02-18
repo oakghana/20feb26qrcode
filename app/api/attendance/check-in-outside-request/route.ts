@@ -109,12 +109,10 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id,
         current_location_name: current_location.name,
-        google_maps_name: current_location.display_name || current_location.name,
         latitude: current_location.latitude,
         longitude: current_location.longitude,
         accuracy: current_location.accuracy,
         device_info: device_info,
-        reason: reason || '',
         status: "pending",
       })
       .select()
