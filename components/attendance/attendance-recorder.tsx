@@ -1085,13 +1085,11 @@ export function AttendanceRecorder({
 
       let locationName = "Unknown Location"
       let locationDisplayName = ""
-      try {
-        const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
-        if (geoResult) {
-          locationName = geoResult.address || geoResult.display_name || "Unknown Location"
-          locationDisplayName = geoResult.display_name || locationName
-        }
-      } catch (geoError) {
+      const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
+      if (geoResult) {
+        locationName = geoResult.address || geoResult.display_name || "Unknown Location"
+        locationDisplayName = geoResult.display_name || locationName
+      } else {
         locationName = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
         locationDisplayName = locationName
       }
@@ -1988,23 +1986,22 @@ export function AttendanceRecorder({
             </div>
           </Button>
 
-                  {/* Warning messages for checkout */}
-                  {!checkoutTimeReached && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 text-center">
-                      Minimum 2 hours required between check-in and check-out. {minutesUntilCheckout} minutes remaining.
-                    </p>
-                  )}
-                  
-                  {checkoutTimeReached && !locationValidation?.canCheckOut && (
-                    <p className="text-xs text-red-500 mt-2 text-center">
-                      You are outside the approved location range. Please move closer to a QCC location to check out.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
+          {/* Warning messages for checkout */}
+          {!checkoutTimeReached && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 text-center">
+              Minimum 2 hours required between check-in and check-out. {minutesUntilCheckout} minutes remaining.
+            </p>
+          )}
+          
+          {checkoutTimeReached && !locationValidation?.canCheckOut && (
+            <p className="text-xs text-red-500 mt-2 text-center">
+              You are outside the approved location range. Please move closer to a QCC location to check out.
+            </p>
+          )}
+        </>
+      )}
 
-            <div className="space-y-4">
+      <div className="space-y-4">
               <Button
                 onClick={handleRefreshLocations}
                 variant="secondary"
