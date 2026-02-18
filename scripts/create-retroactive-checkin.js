@@ -26,7 +26,6 @@ async function createCheckInRecord() {
     .insert({
       user_id: userId,
       check_in_time: approvalTime.toISOString(),
-      location_id: "off-premises", // Special marker for off-premises
       actual_location_name: locationName,
       actual_latitude: latitude,
       actual_longitude: longitude,
