@@ -1768,26 +1768,28 @@ export function AttendanceRecorder({
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Active Session Timer - Show when checked in but not checked out */}
-            {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (() => {
-              const checkInLocationData = realTimeLocations?.find(
-                (loc) => loc.id === localTodayAttendance.check_in_location_id
-              )
-              return (
-                <ActiveSessionTimer
-                  checkInTime={localTodayAttendance.check_in_time}
-                  checkInLocation={checkInLocationData?.name || "Unknown Location"}
-                  checkOutLocation={assignedLocationInfo?.name}
-                  minimumWorkMinutes={120}
-                  locationCheckInTime={checkInLocationData?.check_in_start_time}
-                  locationCheckOutTime={checkInLocationData?.check_out_end_time}
-                  onCheckOut={handleCheckOut}
-                  canCheckOut={locationValidation?.canCheckOut}
-                  isCheckingOut={isLoading}
-                  userDepartment={userProfile?.departments}
-                  userRole={userProfile?.role}
-                />
-              )
-            })()
+            {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (
+              (() => {
+                const checkInLocationData = realTimeLocations?.find(
+                  (loc) => loc.id === localTodayAttendance.check_in_location_id
+                )
+                return (
+                  <ActiveSessionTimer
+                    checkInTime={localTodayAttendance.check_in_time}
+                    checkInLocation={checkInLocationData?.name || "Unknown Location"}
+                    checkOutLocation={assignedLocationInfo?.name}
+                    minimumWorkMinutes={120}
+                    locationCheckInTime={checkInLocationData?.check_in_start_time}
+                    locationCheckOutTime={checkInLocationData?.check_out_end_time}
+                    onCheckOut={handleCheckOut}
+                    canCheckOut={locationValidation?.canCheckOut}
+                    isCheckingOut={isLoading}
+                    userDepartment={userProfile?.departments}
+                    userRole={userProfile?.role}
+                  />
+                )
+              })()
+            )}
 
             {/* Check-in/Check-out Buttons */}
             <div className="space-y-4">
