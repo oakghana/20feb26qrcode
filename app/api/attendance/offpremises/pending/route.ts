@@ -67,7 +67,6 @@ export async function GET(request: NextRequest) {
         device_info,
         created_at,
         status,
-        reason,
         user_profiles!pending_offpremises_checkins_user_id_fkey (
           id,
           first_name,

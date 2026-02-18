@@ -1,7 +1,7 @@
--- Add missing columns to pending_offpremises_checkins table
-ALTER TABLE public.pending_offpremises_checkins
-ADD COLUMN IF NOT EXISTS reason TEXT,
-ADD COLUMN IF NOT EXISTS google_maps_name TEXT;
+-- Add reason column to pending_offpremises_checkins table
+ALTER TABLE pending_offpremises_checkins
+ADD COLUMN reason TEXT DEFAULT NULL;
 
--- Add index for reason field for potential filtering
-CREATE INDEX IF NOT EXISTS idx_pending_offpremises_reason ON public.pending_offpremises_checkins(reason);
+-- Add google_maps_name column to pending_offpremises_checkins table
+ALTER TABLE pending_offpremises_checkins
+ADD COLUMN google_maps_name TEXT DEFAULT NULL;
