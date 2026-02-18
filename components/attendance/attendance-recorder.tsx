@@ -1082,7 +1082,6 @@ export function AttendanceRecorder({
 
     try {
       const currentLocation = pendingOffPremisesLocation
-
       let locationName = "Unknown Location"
       let locationDisplayName = ""
       const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
