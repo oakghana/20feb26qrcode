@@ -1959,11 +1959,6 @@ export function AttendanceRecorder({
           </Card>
         </div>
       )}
-                      </Button>
-                    )}
-                  </div>
-                </>
-              )}
 
               {/* Checkout button - Always visible when checked in */}
               {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (

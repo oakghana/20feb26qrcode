@@ -111,6 +111,8 @@ export function OffPremisesReviewLog() {
       </div>
     </TableHead>
   )
+
+  const loadApprovedRecords = async () => {
     try {
       setIsLoading(true)
       setError(null)
