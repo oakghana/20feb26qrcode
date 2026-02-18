@@ -1046,13 +1046,16 @@ export function AttendanceRecorder({
       }
 
       let locationName = "Unknown Location"
+      let locationDisplayName = ""
       try {
         const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
         if (geoResult) {
-          locationName = geoResult.display_name || geoResult.address || "Unknown Location"
+          locationName = geoResult.address || geoResult.display_name || "Unknown Location"
+          locationDisplayName = geoResult.display_name || locationName
         }
       } catch (geoError) {
         locationName = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
+        locationDisplayName = locationName
       }
 
       setCheckingMessage("Sending request to managers...")
@@ -1068,14 +1071,15 @@ export function AttendanceRecorder({
       }
 
       const payload = {
-        current_location: {
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
-          accuracy: currentLocation.accuracy,
-          name: locationName,
-        },
-        device_info: getDeviceInfo(),
-        user_id: currentUser.id,
+      current_location: {
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
+      accuracy: currentLocation.accuracy,
+      name: locationName,
+      display_name: locationDisplayName,
+      },
+      device_info: getDeviceInfo(),
+      user_id: currentUser.id,
       }
       
       console.log("[v0] Sending off-premises request:", payload)

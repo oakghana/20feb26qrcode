@@ -9,6 +9,10 @@ ADD COLUMN IF NOT EXISTS on_official_duty_outside_premises BOOLEAN DEFAULT FALSE
 ADD COLUMN IF NOT EXISTS check_in_type VARCHAR(50),
 ADD COLUMN IF NOT EXISTS device_info TEXT;
 
+-- Add google_maps_name (full display name from reverse geocoding) to pending_offpremises_checkins
+ALTER TABLE public.pending_offpremises_checkins
+ADD COLUMN IF NOT EXISTS google_maps_name TEXT;
+
 -- Add index for efficient filtering of off-premises check-ins
 CREATE INDEX IF NOT EXISTS idx_attendance_offpremises
   ON public.attendance_records(on_official_duty_outside_premises)
