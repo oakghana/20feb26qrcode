@@ -1168,43 +1168,6 @@ export function AttendanceRecorder({
     }
   }
 
-    setIsCheckingIn(true)
-    setCheckingMessage("Sending request to managers...")
-    setShowOffPremisesReasonDialog(false)
-
-    try {
-      const currentLocation = pendingOffPremisesLocation
-      let locationName = "Unknown Location"
-      let locationDisplayName = ""
-      const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
-      if (geoResult) {
-        locationName = geoResult.address || geoResult.display_name || "Unknown Location"
-        locationDisplayName = geoResult.display_name || locationName
-      } else {
-        locationName = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
-        locationDisplayName = locationName
-      }
-
-      setTimeout(() => {
-        handleRefreshStatus()
-      }, 2000)
-
-    } catch (error: any) {
-      setFlashMessage({
-        message: error.message || "Failed to send confirmation request. Please try again.",
-        type: "error",
-      })
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send confirmation request",
-        variant: "destructive",
-      })
-    } finally {
-      setIsCheckingIn(false)
-      setCheckingMessage("")
-    }
-  }
-
   const handleCheckOut = async () => {
     if (!localTodayAttendance?.check_in_time || localTodayAttendance?.check_out_time) {
       setFlashMessage({
