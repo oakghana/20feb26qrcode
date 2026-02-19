@@ -28,20 +28,11 @@ async function diagnoseOffPremisesRequests() {
       console.log("[v0] Total pending requests in table:", allRequests?.length || 0);
       if (allRequests && allRequests.length > 0) {
         console.log("[v0] Recent requests:");
-        allRequests.forEach((req: any, idx: number) => {
+        allRequests.forEach((req, idx) => {
           console.log(`  [${idx}] ID: ${req.id}, User: ${req.user_id}, Status: ${req.status}, Created: ${req.created_at}, Location: ${req.current_location_name}`);
         });
       }
     }
-
-    // Check table structure
-    console.log("\n[v0] Getting table schema for pending_offpremises_checkins...");
-    const { data: tableInfo } = await supabase
-      .from('pending_offpremises_checkins')
-      .select('*')
-      .limit(0);
-    
-    console.log("[v0] Query executed (checking table exists)");
 
     // Get today's count specifically
     const today = new Date();
@@ -63,13 +54,13 @@ async function diagnoseOffPremisesRequests() {
       console.log(`[v0] Today's requests count: ${count}`);
       if (todayRequests && todayRequests.length > 0) {
         console.log("[v0] Today's requests:");
-        todayRequests.forEach((req: any, idx: number) => {
+        todayRequests.forEach((req, idx) => {
           console.log(`  [${idx}] ID: ${req.id}, User: ${req.user_id}, Location: ${req.current_location_name}, Created: ${req.created_at}`);
         });
       }
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[v0] Error:", error.message);
   }
 }
