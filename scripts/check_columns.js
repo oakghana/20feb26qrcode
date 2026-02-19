@@ -6,29 +6,7 @@ const supabase = createClient(
 )
 
 async function main() {
-  // Get user_profiles columns
-  const { data: cols, error } = await supabase.rpc('exec_sql', {
-    sql: `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'user_profiles' AND table_schema = 'public' ORDER BY ordinal_position`
-  }).catch(() => ({ data: null, error: 'rpc not available' }))
-
-  if (error) {
-    // Fallback: just select one row and check keys
-    const { data, error: e2 } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .limit(1)
-      .single()
-    
-    if (e2) {
-      console.log('Error:', e2.message)
-    } else {
-      console.log('user_profiles columns:', Object.keys(data).sort().join('\n'))
-    }
-  } else {
-    console.log('Columns:', JSON.stringify(cols, null, 2))
-  }
-
-  // Also check if there's a geofence-related column with a different name
+  // Just select one row and check keys
   const { data: row } = await supabase
     .from('user_profiles')
     .select('*')

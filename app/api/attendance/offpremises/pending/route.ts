@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     // Get user profile to verify permissions
     const { data: managerProfile, error: profileError } = await adminClient
       .from("user_profiles")
-      .select("id, role, department_id, geofence_locations")
+      .select("id, role, department_id, assigned_location_id")
       .eq("id", user.id)
       .maybeSingle()
 
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
           employee_id,
           department_id,
           position,
-          geofence_locations
+          assigned_location_id
         )
       `
       )
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
       const { data: locationStaff } = await adminClient
         .from("user_profiles")
         .select("id")
-        .contains("geofence_locations", managerProfile.geofence_locations || [])
+        .eq("assigned_location_id", managerProfile.assigned_location_id)
 
       const staffIds = locationStaff?.map(s => s.id) || []
       if (staffIds.length > 0) {

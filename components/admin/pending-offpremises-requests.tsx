@@ -31,7 +31,7 @@ interface PendingRequest {
     employee_id?: string
     department_id: string
     position?: string
-    geofence_locations?: string[]
+    assigned_location_id?: string
   }
 }
 
