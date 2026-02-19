@@ -25,7 +25,7 @@ async function checkPendingStatus() {
     } else {
       console.log(`[v0] Total requests in database: ${allRequests?.length || 0}`);
       if (allRequests && allRequests.length > 0) {
-        allRequests.forEach((req: any, idx: number) => {
+        allRequests.forEach((req, idx) => {
           console.log(`[v0] Request ${idx + 1}: status='${req.status}', user_id=${req.user_id}, created=${req.created_at}`);
         });
       }
@@ -43,7 +43,7 @@ async function checkPendingStatus() {
     } else {
       console.log(`[v0] Pending requests in database: ${pendingRequests?.length || 0}`);
       if (pendingRequests && pendingRequests.length > 0) {
-        pendingRequests.forEach((req: any, idx: number) => {
+        pendingRequests.forEach((req, idx) => {
           console.log(`[v0] Pending ${idx + 1}: user_id=${req.user_id}, created=${req.created_at}, location=${req.current_location_name}`);
         });
       }
@@ -56,9 +56,9 @@ async function checkPendingStatus() {
       .select('status');
 
     if (statusBreakdown) {
-      const pending = statusBreakdown.filter((r: any) => r.status === 'pending').length;
-      const approved = statusBreakdown.filter((r: any) => r.status === 'approved').length;
-      const rejected = statusBreakdown.filter((r: any) => r.status === 'rejected').length;
+      const pending = statusBreakdown.filter(r => r.status === 'pending').length;
+      const approved = statusBreakdown.filter(r => r.status === 'approved').length;
+      const rejected = statusBreakdown.filter(r => r.status === 'rejected').length;
       console.log(`[v0] Pending: ${pending}, Approved: ${approved}, Rejected: ${rejected}`);
     }
 
