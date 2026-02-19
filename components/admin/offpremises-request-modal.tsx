@@ -232,9 +232,6 @@ export function OffPremisesRequestModal({
             </div>
           )}
 
-          {/* Current Location Information */}
-          <div className="border rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20">
-
           {/* Approval Questions */}
           <Alert>
             <AlertTriangle className="h-4 w-4" />
