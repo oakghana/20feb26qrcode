@@ -68,11 +68,7 @@ export async function GET(request: NextRequest) {
             department_id,
             position,
             assigned_location_id,
-            departments (
-              id,
-              name
-            ),
-            locations (
+            geofence_locations!user_profiles_assigned_location_id_fkey (
               id,
               name
             )
@@ -131,11 +127,7 @@ export async function GET(request: NextRequest) {
           department_id,
           position,
           assigned_location_id,
-          departments (
-            id,
-            name
-          ),
-          locations (
+          geofence_locations!user_profiles_assigned_location_id_fkey (
             id,
             name
           )

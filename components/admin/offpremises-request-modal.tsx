@@ -31,11 +31,7 @@ interface PendingRequest {
     employee_id?: string
     position?: string
     assigned_location_id?: string
-    departments?: {
-      id: string
-      name: string
-    }
-    locations?: {
+    geofence_locations?: {
       id: string
       name: string
     }
@@ -170,10 +166,10 @@ export function OffPremisesRequestModal({
                   <span>Position: {request.user_profiles.position}</span>
                 </div>
               )}
-              {request.user_profiles.locations && (
+              {request.user_profiles.geofence_locations && (
                 <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-gray-500" />
-                  <span>Assigned Location: {request.user_profiles.locations.name}</span>
+                  <span>Assigned Location: {request.user_profiles.geofence_locations.name}</span>
                 </div>
               )}
               <div className="flex items-center gap-2">
