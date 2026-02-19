@@ -21,7 +21,6 @@ interface PendingRequest {
   created_at: string
   status: string
   google_maps_name?: string
-  reason?: string
   user_profiles: {
     id: string
     first_name: string
@@ -199,18 +198,6 @@ export function OffPremisesRequestModal({
               </div>
             </div>
           </div>
-
-          {/* Reason for Off-Premises */}
-          {request.reason && (
-            <div className="border rounded-lg p-4 bg-amber-50 dark:bg-amber-900/20">
-              <h3 className="font-semibold text-sm text-amber-900 dark:text-amber-300 mb-2">
-                Reason for Off-Premises Check-In
-              </h3>
-              <p className="text-sm text-amber-800 dark:text-amber-400">
-                {request.reason}
-              </p>
-            </div>
-          )}
 
           {/* Approval Questions */}
           <Alert>
