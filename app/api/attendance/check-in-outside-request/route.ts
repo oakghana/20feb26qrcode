@@ -10,9 +10,9 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Off-premises check-in API called")
     
     const body = await request.json()
-    console.log("[v0] Request body received:", { user_id: body.user_id, location: body.current_location?.name })
+    console.log("[v0] Request body received:", { location: body.current_location?.name })
     
-    const { current_location, device_info, user_id, reason } = body
+    const { current_location, device_info, reason } = body
 
     if (!current_location) {
       console.error("[v0] Missing current_location")
@@ -22,17 +22,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!user_id) {
-      console.error("[v0] Missing user_id")
+    // Get authenticated user from session (more secure than trusting frontend)
+    console.log("[v0] Creating admin client to get user session...")
+    const supabaseAdmin = await createAdminClient()
+    
+    const authHeader = request.headers.get('Authorization') || ''
+    const token = authHeader.replace('Bearer ', '')
+    
+    if (!token) {
+      console.error("[v0] No authentication token provided")
       return NextResponse.json(
-        { error: "User ID is required" },
-        { status: 400 }
+        { error: "Authentication required" },
+        { status: 401 }
       )
     }
 
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+    
+    if (authError || !user?.id) {
+      console.error("[v0] Failed to authenticate user:", authError)
+      return NextResponse.json(
+        { error: "Authentication failed" },
+        { status: 401 }
+      )
+    }
+
+    const user_id = user.id
+    console.log("[v0] Authenticated user_id:", user_id)
+
     console.log("[v0] Creating admin client...")
-    const supabase = await createAdminClient()
-    console.log("[v0] Admin client created")
+    const supabase = supabaseAdmin
+    console.log("[v0] Admin client ready")
 
     // Get user's direct manager (department head or regional manager they report to)
     const { data: userProfile } = await supabase
