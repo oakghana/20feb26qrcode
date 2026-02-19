@@ -5,17 +5,41 @@ const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-async function checkOffPremisesRequests() {
+async function listTables() {
   try {
-    // Get today's date
+    console.log('Listing all tables in the database...\n');
+
+    // Try to list tables related to offpremises or attendance
+    const { data: offPremisesData, error: offError } = await supabase
+      .from('pending_offpremises_checkins')
+      .select('*', { count: 'exact', head: true });
+
+    const { data: allCheckinsData, error: allError } = await supabase
+      .from('all_offpremises_checkins')
+      .select('*', { count: 'exact', head: true });
+
+    console.log('Table: pending_offpremises_checkins');
+    if (offError) {
+      console.log(`  Error: ${offError.message}`);
+    } else {
+      console.log('  ✓ Table exists');
+    }
+
+    console.log('\nTable: all_offpremises_checkins');
+    if (allError) {
+      console.log(`  Error: ${allError.message}`);
+    } else {
+      console.log('  ✓ Table exists');
+    }
+
+    // Now query pending_offpremises_checkins
+    console.log('\n---\nQuerying pending_offpremises_checkins for today...\n');
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    console.log('Checking off-premises check-in requests...\n');
-
-    // Query for today's requests
     const { data, error } = await supabase
       .from('pending_offpremises_checkins')
       .select('*')
@@ -33,9 +57,9 @@ async function checkOffPremisesRequests() {
     if (data && data.length > 0) {
       console.log('\nRequest Details:');
       data.forEach((req, index) => {
-        console.log(`\n${index + 1}. Staff ID: ${req.staff_id}`);
+        console.log(`\n${index + 1}. Staff ID: ${req.staff_id || req.user_id}`);
         console.log(`   Status: ${req.status}`);
-        console.log(`   Reason: ${req.reason || 'N/A'}`);
+        console.log(`   Reason: ${req.reason || req.description || 'N/A'}`);
         console.log(`   Created: ${new Date(req.created_at).toLocaleString()}`);
       });
     }
@@ -44,4 +68,4 @@ async function checkOffPremisesRequests() {
   }
 }
 
-checkOffPremisesRequests();
+listTables();
