@@ -1,9 +1,17 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient } from '@supabase/supabase-js';
 
 async function checkTodaysOffPremisesRequests() {
   console.log("[v0] Starting off-premises request check...");
 
-  const supabase = await createAdminClient();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.error("[v0] Missing Supabase credentials");
+    process.exit(1);
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
   // Get today's date range in UTC
   const today = new Date();
@@ -48,16 +56,6 @@ async function checkTodaysOffPremisesRequests() {
       todaysRequests?.length || 0
     );
     console.log("[v0] Details:", JSON.stringify(todaysRequests, null, 2));
-  }
-
-  // Also check the user profiles to confirm data exists
-  const { data: userProfiles, error: userError } = await supabase
-    .from("user_profiles")
-    .select("id, first_name, last_name, email")
-    .limit(1);
-
-  if (!userError && userProfiles && userProfiles.length > 0) {
-    console.log("[v0] Sample user profile exists:", userProfiles[0]);
   }
 
   return {
