@@ -33,10 +33,6 @@ interface PendingRequest {
     department_id: string
     position?: string
     assigned_location_id?: string
-    geofence_locations?: {
-      id: string
-      name: string
-    }
   }
 }
 
@@ -274,12 +270,6 @@ CREATE INDEX IF NOT EXISTS idx_pending_offpremises_created_at ON public.pending_
                               <span>ID: {request.user_profiles.employee_id}</span>
                             </div>
                           )}
-                          {request.user_profiles?.departments && (
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4" />
-                              <span>Department: {request.user_profiles.departments.name}</span>
-                            </div>
-                          )}
                           {request.user_profiles?.position && (
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4" />
@@ -290,12 +280,6 @@ CREATE INDEX IF NOT EXISTS idx_pending_offpremises_created_at ON public.pending_
                             <Clock className="h-4 w-4" />
                             <span>Requested: {formatDate(request.created_at)}</span>
                           </div>
-                          {request.user_profiles?.geofence_locations && (
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4" />
-                              <span>Assigned Location: {request.user_profiles.geofence_locations.name}</span>
-                            </div>
-                          )}
                           {request.approved_at && (
                             <div className="flex items-center gap-2">
                               <CheckCircle2 className="h-4 w-4" />
