@@ -63,6 +63,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to update password" }, { status: 500, headers })
     }
 
+    // update profile timestamp so we can enforce expiry
+    await supabase
+      .from('user_profiles')
+      .update({ password_changed_at: new Date().toISOString() })
+      .eq('id', user.id)
+      .catch(err => console.warn('[v0] Failed to update password_changed_at:', err))
+
     // Log the action
     await supabase.from("audit_logs").insert({
       user_id: user.id,

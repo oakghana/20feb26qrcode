@@ -795,7 +795,7 @@ export function AttendanceRecorder({
             employee_id,
             position,
             assigned_location_id,
-            departments (
+          password_changed_at,
               name,
               code
             )
@@ -815,7 +815,19 @@ export function AttendanceRecorder({
           position: profileData.position,
           assigned_location_id: profileData.assigned_location_id,
           department: profileData.departments?.name,
+          password_changed_at: profileData.password_changed_at,
         })
+
+        // enforce 90-day password expiry
+        if (profileData.password_changed_at) {
+          const last = new Date(profileData.password_changed_at)
+          const now = new Date()
+          const days = (now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24)
+          if (days >= 90) {
+            console.log('[v0] Password expired, redirecting to profile')
+            router.push('/dashboard/profile?forceChange=true')
+          }
+        }
       } catch (authError) {
         console.error("[v0] Supabase auth error:", authError)
         if (!window.location.hostname.includes("vusercontent.net")) {

@@ -84,6 +84,17 @@ export function ProfileClient({ initialUser, initialProfile }: ProfileClientProp
     confirmPassword: "",
   })
   const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const router = useRouter()
+
+  // if redirected with forceChange flag, open password form automatically
+  useEffect(() => {
+    if (router && router.search) {
+      const params = new URLSearchParams(router.search)
+      if (params.get('forceChange')) {
+        setShowPasswordChange(true)
+      }
+    }
+  }, [router.search])
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -541,6 +552,11 @@ export function ProfileClient({ initialUser, initialProfile }: ProfileClientProp
                     Change Password
                   </Button>
                 </div>
+
+                {/* if redirected due to expiry, force form open */}
+                {router && router.search && new URLSearchParams(router.search).get('forceChange') && !showPasswordChange && (
+                  <p className="text-sm text-red-600 mt-2">Your password has expired; please update before using the app.</p>
+                )}
 
                 {showPasswordChange && (
                   <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
