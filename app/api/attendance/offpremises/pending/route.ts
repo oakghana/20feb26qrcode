@@ -128,6 +128,21 @@ export async function GET(request: NextRequest) {
       )
       .order("created_at", { ascending: false })
 
+    // if non-admin manager, restrict to own department or assigned location
+    if (managerProfile.role !== 'admin') {
+      const deptId = managerProfile.department_id
+      const locId = managerProfile.assigned_location_id
+      if (deptId || locId) {
+        // use PostgREST `or` to combine conditions
+        const conditions: string[] = []
+        if (deptId) conditions.push(`user_profiles.department_id.eq.${deptId}`)
+        if (locId) conditions.push(`user_profiles.assigned_location_id.eq.${locId}`)
+        if (conditions.length > 0) {
+          queryWithReason = queryWithReason.or(conditions.join(','))
+        }
+      }
+    }
+
     // Apply status filter
     if (statusFilter !== "all") {
       queryWithReason = queryWithReason.eq("status", statusFilter)

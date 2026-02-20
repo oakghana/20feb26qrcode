@@ -1296,7 +1296,7 @@ export function AttendanceRecorder({
               current_location: locationData,
               device_info: getDeviceInfo(),
               request_type: "checkout",
-              reason: early_checkout_reason || null,
+              reason: earlyCheckoutReason || null,
             }),
           })
           const result = await response.json()
