@@ -44,6 +44,32 @@ export function PendingOffPremisesRequests() {
   const [error, setError] = useState<string | null>(null)
   const [managerProfile, setManagerProfile] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<string>('all')
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [userLocation, setUserLocation] = useState<string | null>(null)
+  const [userDepartment, setUserDepartment] = useState<string | null>(null)
+
+  // Load user role and profile on mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        const response = await fetch('/api/user/profile', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setUserRole(data.role)
+          setUserLocation(data.assigned_location_id)
+          setUserDepartment(data.department)
+        }
+      } catch (err) {
+        console.error('[v0] Error loading user profile:', err)
+      }
+    }
+
+    loadUserProfile()
+  }, [])
 
   // Always load ALL requests, then filter client-side for accurate tab counts
   const loadPendingRequests = async () => {
@@ -77,7 +103,25 @@ export function PendingOffPremisesRequests() {
       console.log("[v0] Loaded requests:", data.requests)
       console.log("[v0] Total count:", data.count)
       console.log("[v0] Pending filter:", data.requests?.filter((r: any) => r.status === 'pending'))
-      setAllRequests(data.requests || [])
+      
+      // Filter requests based on user role
+      let filteredRequests = data.requests || []
+      
+      if (userRole === 'regional_manager' && userLocation) {
+        // Regional manager sees only requests from their region
+        filteredRequests = filteredRequests.filter((r: any) => {
+          // Check if request's user is in the same region
+          return r.user_profiles?.assigned_location_id === userLocation
+        })
+      } else if (userRole === 'departmental_head' && userDepartment) {
+        // Departmental head sees only requests from their department
+        filteredRequests = filteredRequests.filter((r: any) => {
+          return r.user_profiles?.department_id === userDepartment
+        })
+      }
+      // Admin and other roles see all requests
+      
+      setAllRequests(filteredRequests)
     } catch (err: any) {
       setError(err.message || 'An error occurred while loading requests')
     } finally {
@@ -87,10 +131,12 @@ export function PendingOffPremisesRequests() {
 
   // Load all requests on mount, poll every 30 seconds
   useEffect(() => {
-    loadPendingRequests()
-    const interval = setInterval(loadPendingRequests, 30000)
-    return () => clearInterval(interval)
-  }, [])
+    if (userRole) {
+      loadPendingRequests()
+      const interval = setInterval(loadPendingRequests, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [userRole, userLocation, userDepartment])
 
   // Derive counts and filtered list from allRequests
   const pendingCount = allRequests.filter(r => r.status === 'pending').length

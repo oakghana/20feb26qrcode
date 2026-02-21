@@ -206,6 +206,11 @@ export function AttendanceRecorder({
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
 
+  // Off-premises request states
+  const [showOffPremisesReasonDialog, setShowOffPremisesReasonDialog] = useState(false)
+  const [offPremisesReason, setOffPremisesReason] = useState("")
+  const [pendingOffPremisesLocation, setPendingOffPremisesLocation] = useState<any>(null)
+
   const [detectedLocationName, setDetectedLocationName] = useState<string | null>(null)
 
   const [locationPermissionStatusSimplified, setLocationPermissionStatusSimplified] = useState<{
@@ -1220,6 +1225,82 @@ export function AttendanceRecorder({
     setRecentCheckIn(false)
   }
 
+  // Off-premises request handlers
+  const handleOffPremisesCancel = () => {
+    setShowOffPremisesReasonDialog(false)
+    setOffPremisesReason("")
+    setPendingOffPremisesLocation(null)
+    setIsCheckingIn(false)
+  }
+
+  const handleOffPremisesConfirm = async () => {
+    const trimmedReason = offPremisesReason.trim()
+    
+    if (!trimmedReason) {
+      setFlashMessage({
+        message: "Please provide a reason for your off-premises request.",
+        type: "error",
+      })
+      return
+    }
+    
+    if (trimmedReason.length < 10) {
+      setFlashMessage({
+        message: "Off-premises reason must be at least 10 characters long.",
+        type: "error",
+      })
+      return
+    }
+
+    setIsCheckingIn(true)
+    try {
+      // Submit off-premises request to supervisor for approval
+      const deviceInfo = getDeviceInfo()
+      const response = await fetch("/api/attendance/off-premises-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          latitude: pendingOffPremisesLocation?.latitude,
+          longitude: pendingOffPremisesLocation?.longitude,
+          accuracy: pendingOffPremisesLocation?.accuracy,
+          location_name: pendingOffPremisesLocation?.location_name || "Unknown Location",
+          reason: trimmedReason,
+          device_info: deviceInfo,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to submit off-premises request")
+      }
+
+      // Reset dialog
+      setShowOffPremisesReasonDialog(false)
+      setOffPremisesReason("")
+      setPendingOffPremisesLocation(null)
+
+      // Show success message
+      setFlashMessage({
+        message: "Your off-premises check-in request has been sent to your supervisor for approval. You will be notified once it is reviewed.",
+        type: "success",
+      })
+
+      // Refresh attendance data
+      await fetchTodayAttendance()
+      setIsCheckingIn(false)
+    } catch (error) {
+      console.error("[v0] Error submitting off-premises request:", error)
+      setFlashMessage({
+        message: error instanceof Error ? error.message : "Failed to submit request. Please try again.",
+        type: "error",
+      })
+      setIsCheckingIn(false)
+    }
+  }
+
   const handleCheckOut = async () => {
     if (isLoading) {
       return
@@ -1813,6 +1894,73 @@ export function AttendanceRecorder({
           </Card>
         </div>
       )}
+
+      {/* Off-Premises Check-In Request Modal */}
+      {showOffPremisesReasonDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-blue-600">
+                <MapPin className="h-5 w-5" />
+                Off-Premises Check-In Request
+              </CardTitle>
+              <CardDescription>
+                Provide a reason for your off-premises check-in. This will be sent to your supervisor for approval.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-blue-200 bg-blue-50">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800">Required Approval</AlertTitle>
+                <AlertDescription className="text-blue-700">
+                  Your request will be reviewed by your supervisor and department head. You will be notified once approved or rejected.
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <Label htmlFor="offpremises-reason">Reason for Off-Premises Work *</Label>
+                <textarea
+                  id="offpremises-reason"
+                  value={offPremisesReason}
+                  onChange={(e) => setOffPremisesReason(e.target.value)}
+                  placeholder="e.g., Official meeting at partner office, client site visit, training program..."
+                  className="w-full min-h-[100px] p-3 border rounded-md resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  maxLength={500}
+                />
+                <p className={`text-xs ${offPremisesReason.length < 10 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                  {offPremisesReason.length}/500 characters (minimum 10 required)
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleOffPremisesCancel}
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  disabled={isCheckingIn}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleOffPremisesConfirm}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  disabled={isCheckingIn || offPremisesReason.trim().length < 10}
+                >
+                  {isCheckingIn ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    "Submit Request"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* GPS Location Required badge moved to bottom */}
       {!locationPermissionStatusSimplified.granted && !isCompletedForDay && (
         <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-500/50 mt-8">
