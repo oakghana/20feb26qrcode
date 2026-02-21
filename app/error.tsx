@@ -7,8 +7,17 @@ import { AlertTriangle } from "lucide-react"
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    console.error("[v0] Application error:", error)
+    // Don't log Next.js redirect errors - they're handled internally by Next.js
+    if (error.message !== "NEXT_REDIRECT") {
+      console.error("[v0] Application error:", error)
+    }
   }, [error])
+
+  // If it's a redirect error, let Next.js handle it internally
+  // The redirect will happen automatically, don't show error UI
+  if (error.message === "NEXT_REDIRECT" || error.digest?.includes("NEXT_REDIRECT")) {
+    return null
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">

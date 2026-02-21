@@ -4,9 +4,10 @@ import "./globals.css"
 import { metadata, viewport } from "./metadata"
 import RootLayoutClient from "./root-layout-client"
 
-// FORCE COMPLETE REBUILD: 2026-02-21T20:00:00Z
-// Critical changes: Added performCheckInAPI and check-in API endpoint
-// Removed all old early checkout dialog code from compiled cache
+// AGGRESSIVE CACHE BUST: 2026-02-21T22:00:00Z
+// EMERGENCY FIX: Force complete rebuild - remove handleEarlyCheckoutCancel error
+// Server was running OLD code with undefined handleEarlyCheckoutCancel at line 2316
+// and checkoutLocationData initialization error at line 147
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
