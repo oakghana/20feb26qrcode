@@ -1191,7 +1191,17 @@ export function AttendanceRecorder({
 
       const result = await response.json()
 
+      console.log("[v0] Check-in API response:", {
+        status: response.status,
+        ok: response.ok,
+        result,
+        nearestLocation: nearestLocation?.name,
+        is_within_range: true,
+        userData: { lat: locationData.latitude, lng: locationData.longitude }
+      })
+
       if (!response.ok) {
+        console.error("[v0] Check-in API error response:", result)
         throw new Error(result.error || `Check-in failed: ${response.status}`)
       }
 
