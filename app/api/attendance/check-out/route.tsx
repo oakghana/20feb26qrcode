@@ -518,22 +518,31 @@ export async function POST(request: NextRequest) {
       checkoutData.early_checkout_reason = early_checkout_reason
     }
 
+    console.log("[v0] Attempting to update attendance record:", {
+      id: attendanceRecord.id,
+      userId: user.id,
+      checkoutData: {
+        check_out_time: checkoutData.check_out_time,
+        check_out_location_id: checkoutData.check_out_location_id,
+        work_hours: checkoutData.work_hours,
+        check_out_method: checkoutData.check_out_method,
+      },
+    })
+
     const { data: updatedRecord, error: updateError } = await supabase
       .from("attendance_records")
       .update(checkoutData)
       .eq("id", attendanceRecord.id)
-      .select(`
-        *,
-        geofence_locations!check_in_location_id (
-          name,
-          address
-        ),
-        checkout_location:geofence_locations!check_out_location_id (
-          name,
-          address
-        )
-      `)
+      .select(`*`)
       .single()
+
+    console.log("[v0] Update result:", {
+      success: !updateError,
+      error: updateError,
+      recordId: updatedRecord?.id,
+      checkOutTime: updatedRecord?.check_out_time,
+      workHours: updatedRecord?.work_hours,
+    })
 
     if (updateError) {
       console.error("[v0] Update error:", updateError)

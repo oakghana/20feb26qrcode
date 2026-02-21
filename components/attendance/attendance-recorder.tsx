@@ -1473,6 +1473,17 @@ A manager will review it shortly and you will be notified of the outcome.`,
   // OPTIMIZATION: Extracted checkout API call into separate function for cleaner flow
   const performCheckoutAPI = async (locationData: any, nearestLocation: any, reason: string) => {
     try {
+      const deviceInfo = getDeviceInfo()
+      
+      console.log("[v0] Sending checkout request with data:", {
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        accuracy: locationData.accuracy,
+        device_type: deviceInfo.device_type,
+        location_name: nearestLocation?.name,
+        early_checkout_reason: reason,
+      })
+
       const response = await fetch("/api/attendance/check-out", {
         method: "POST",
         headers: {
@@ -1484,15 +1495,31 @@ A manager will review it shortly and you will be notified of the outcome.`,
           longitude: locationData.longitude,
           accuracy: locationData.accuracy,
           location_source: locationData.source,
+          location_id: nearestLocation?.id,
           location_name: nearestLocation?.name || "Unknown Location",
           early_checkout_reason: reason || null,
+          device_info: deviceInfo,
         }),
       })
 
       const result = await response.json()
 
+      console.log("[v0] Checkout API response status:", response.status)
+      console.log("[v0] Checkout API response data:", result)
+
+      if (!response.ok) {
+        console.error("[v0] Checkout failed with status:", response.status, result)
+        throw new Error(result.error || `HTTP ${response.status}`)
+      }
+
       if (result.success && result.data) {
-        console.log("[v0] Checkout successful:", result.data)
+        console.log("[v0] Checkout successful - data returned:", {
+          id: result.data.id,
+          check_in_time: result.data.check_in_time,
+          check_out_time: result.data.check_out_time,
+          work_hours: result.data.work_hours,
+          check_out_location_name: result.data.check_out_location_name,
+        })
 
         setLocalTodayAttendance(result.data)
         clearAttendanceCache()
