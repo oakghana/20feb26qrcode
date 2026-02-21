@@ -347,15 +347,21 @@ export async function POST(request: NextRequest) {
     const isWeekend = checkInTime.getDay() === 0 || checkInTime.getDay() === 6
     const isLateArrival = checkInHour > 9 || (checkInHour === 9 && checkInMinutes > 0)
 
-    // CHECK TIME RESTRICTION: Check if check-in is after 1 PM (13:00)
-    const canCheckIn = canCheckInAtTime(checkInTime, userProfile?.departments, userProfile?.role)
-    if (!canCheckIn) {
-      return NextResponse.json({
-        error: `Check-in is only allowed before ${getCheckInDeadline()}. Your department/role does not have exceptions for late check-ins.`,
-        checkInBlocked: true,
-        currentTime: checkInTime.toLocaleTimeString(),
-        deadline: getCheckInDeadline(),
-      }, { status: 403 })
+    // WHEN is_within_range=true, SKIP ALL TIME AND DISTANCE RESTRICTIONS
+    // User is confirmed to be at the correct location via device radius settings
+    if (!is_within_range) {
+      // Only enforce time restrictions when user hasn't confirmed within-range
+      const canCheckIn = canCheckInAtTime(checkInTime, userProfile?.departments, userProfile?.role)
+      if (!canCheckIn) {
+        return NextResponse.json({
+          error: `Check-in is only allowed before ${getCheckInDeadline()}. Your department/role does not have exceptions for late check-ins.`,
+          checkInBlocked: true,
+          currentTime: checkInTime.toLocaleTimeString(),
+          deadline: getCheckInDeadline(),
+        }, { status: 403 })
+      }
+    } else {
+      console.log("[v0] ✅ is_within_range=true: SKIPPING time restriction check, allowing check-in")
     }
 
     const latenessRequired = requiresLatenessReason(checkInTime, userProfile?.departments, userProfile?.role)
