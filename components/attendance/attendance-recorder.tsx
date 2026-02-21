@@ -1,5 +1,11 @@
 "use client"
 
+// ===== COMPLETE CLIENT REBUILD FORCED =====
+// Timestamp: 2026-02-21T18:30:00Z
+// Critical: Removed all early checkout code
+// All cached compiled code must be purged
+// Status: Forcing complete fresh compilation
+// ==========================================
 import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   getCurrentLocation,
@@ -173,19 +179,8 @@ export function AttendanceRecorder({
     typeof detectWindowsLocationCapabilities
   > | null>(null)
   const [currentDate, setCurrentDate] = useState(new Date().toISOString().split("T")[0])
-  const [showEarlyCheckoutDialog, setShowEarlyCheckoutDialog] = useState(false)
-  const [earlyCheckoutReason, setEarlyCheckoutReason] = useState("")
-  const [pendingCheckoutData, setPendingCheckoutData] = useState<{
-    location: LocationData | null
-    nearestLocation: any
-  } | null>(null)
   const [showLatenessDialog, setShowLatenessDialog] = useState(false)
   const [latenessReason, setLatenessReason] = useState("")
-  const [showOffPremisesReasonDialog, setShowOffPremisesReasonDialog] = useState(false)
-  const [offPremisesReason, setOffPremisesReason] = useState("")
-  const [pendingOffPremisesLocation, setPendingOffPremisesLocation] = useState<LocationData | null>(null)
-  // 'checkin' | 'checkout' - reused by the off-premises reason dialog
-  const [offPremisesMode, setOffPremisesMode] = useState<'checkin' | 'checkout'>('checkin')
 
   // Helper: treat Security department as exempt from lateness / early-checkout reason prompts
   const isSecurityStaff = useMemo(() => {
@@ -224,6 +219,9 @@ export function AttendanceRecorder({
   const [recentCheckIn, setRecentCheckIn] = useState(false)
   const [recentCheckOut, setRecentCheckOut] = useState(false)
   const [localTodayAttendance, setLocalTodayAttendance] = useState(initialTodayAttendance)
+
+  // Derived state: user has completed their attendance for the day (both checked in AND checked out)
+  const isCompletedForDay = !!(localTodayAttendance?.check_in_time && localTodayAttendance?.check_out_time)
 
   const [checkoutTimeReached, setCheckoutTimeReached] = useState(false)
   const [minutesUntilOffPremisesCheckout, setMinutesUntilOffPremisesCheckout] = useState<number | null>(null)
@@ -311,18 +309,6 @@ export function AttendanceRecorder({
 
   const [minutesUntilCheckout, setMinutesUntilCheckout] = useState<number | null>(null)
 
-  // summary after off-premises request submitted (check-in or check-out)
-  const [offPremisesSuccess, setOffPremisesSuccess] = useState<{
-    mode: "checkin" | "checkout"
-    reason: string
-    location: string
-  } | null>(null)
-  // summary specifically for checkout request if out-of-range
-  const [offPremisesCheckoutRequest, setOffPremisesCheckoutRequest] = useState<{
-    reason: string
-    location: string
-  } | null>(null)
-
   const fetchTodayAttendance = async () => {
     try {
       const supabase = createClient()
@@ -378,12 +364,8 @@ export function AttendanceRecorder({
     !!localTodayAttendance?.check_in_time && // Must have a check-in record
     !localTodayAttendance?.check_out_time &&
     !isOnLeave &&
-    !offPremisesCheckoutRequest && // if request pending, disable further attempts
-    // Allow checkout when either location validation passes, the session was started
-    // as an off‑premises request, or the minimum two‑hour duration has been reached.
-    (locationValidation?.canCheckOut === true ||
-      localTodayAttendance?.on_official_duty_outside_premises === true ||
-      checkoutTimeReached)
+    // Allow checkout when location validation passes or minimum two-hour duration has been reached
+    (locationValidation?.canCheckOut === true || checkoutTimeReached)
 
   const handleQRScanSuccess = async (qrData: QRCodeData) => {
     console.log("[v0] QR scan successful, mode:", qrScanMode)
@@ -811,21 +793,23 @@ export function AttendanceRecorder({
           return
         }
 
-        const { data: profileData, error } = await supabase
-          .from("user_profiles")
-          .select(`
-            id,
-            first_name,
-            last_name,
-            employee_id,
-            position,
-            assigned_location_id,
-            password_changed_at,
-            name,
-            code
-          `)
-          .eq("id", user.id)
-          .single()
+  const { data: profileData, error } = await supabase
+    .from("user_profiles")
+    .select(`
+      id,
+      first_name,
+      last_name,
+      employee_id,
+      position,
+      assigned_location_id,
+      password_changed_at,
+      departments (
+        name,
+        code
+      )
+    `)
+    .eq("id", user.id)
+    .single()
 
         if (error) {
           // supabase error objects aren't always serializable, so log individual fields too
@@ -1129,575 +1113,6 @@ export function AttendanceRecorder({
     }
   }
 
-  const handleSendOffPremisesRequest = async () => {
-    if (!pendingOffPremisesLocation) return
-    if (!offPremisesReason.trim()) {
-      toast({
-        title: "Reason Required",
-        description: "Please provide a reason for your off-premises request.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsCheckingIn(true)
-    setCheckingMessage("Sending request to managers...")
-    setShowOffPremisesReasonDialog(false)
-
-    try {
-      const currentLocation = pendingOffPremisesLocation
-      let locationName = "Unknown Location"
-      let locationDisplayName = ""
-      const geoResult = await reverseGeocode(currentLocation.latitude, currentLocation.longitude)
-      if (geoResult) {
-        locationName = geoResult.address || geoResult.display_name || "Unknown Location"
-        locationDisplayName = geoResult.display_name || locationName
-      } else {
-        locationName = `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
-        locationDisplayName = locationName
-      }
-
-      // Get current user
-      const supabase = createClient()
-      const { data: { user: currentUser } } = await supabase.auth.getUser()
-
-      console.log("[v0] User authenticated:", { user_id: currentUser?.id })
-
-      if (!currentUser?.id) {
-        throw new Error("User not authenticated")
-      }
-
-      const payload = {
-        current_location: {
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
-          accuracy: currentLocation.accuracy,
-          name: locationName,
-          display_name: locationDisplayName,
-        },
-        device_info: getDeviceInfo(),
-        user_id: currentUser.id,
-        reason: offPremisesReason.trim(),
-        request_type: offPremisesMode,
-      }
-      
-      console.log("[v0] Sending off-premises request:", payload)
-
-      const response = await fetch("/api/attendance/check-in-outside-request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      console.log("[v0] API response status:", response.status, response.statusText)
-
-      let result: any = {}
-      let rawBody: string | null = null
-      try {
-        rawBody = await response.text()
-        try {
-          result = rawBody ? JSON.parse(rawBody) : {}
-        } catch (jsonErr) {
-          console.warn("[v0] Response body not JSON, keeping raw text", jsonErr)
-        }
-      } catch (err) {
-        console.warn("[v0] Failed to read API response body", err)
-      }
-
-      console.log("[v0] API response body:", result, "raw:", rawBody)
-
-      if (!response.ok) {
-        // prefer an explicit error string if available, fall back to raw text or status
-        const errMsg = result?.error || result?.message || rawBody || `HTTP ${response.status}`
-        console.error("[v0] Off-premises request failed:", {
-          status: response.status,
-          statusText: response.statusText,
-          body: result,
-          rawBody,
-        })
-        throw new Error(errMsg)
-      }
-
-      // safety check: API may return 200 but indicate failure or omit key fields
-      if (result && (result.success === false || !result.request_id)) {
-        console.error("[v0] Off-premises request not successful or missing id:", result)
-        const msg = result.error || result.message || "Request was not successful"
-        throw new Error(msg)
-      }
-
-      console.log("[v0] Off-premises request submitted successfully", { request_id: result.request_id })
-
-      setFlashMessage({
-        message: `Your off-premises ${offPremisesMode === 'checkout' ? 'check‑out' : 'check‑in'} request has been submitted.
-Reason: "${offPremisesReason.trim()}".
-A manager will review it shortly and you will be notified of the outcome.`,
-        type: "success",
-      })
-
-      toast({
-        title: "Request Sent",
-        description: (
-          <div className="space-y-1">
-            <p>Your off-premises {offPremisesMode === 'checkout' ? 'check‑out' : 'check‑in'} request</p>
-            <p><strong>Reason:</strong> {offPremisesReason.trim()}</p>
-            <p className="text-sm">You will be automatically {offPremisesMode === 'checkout' ? 'checked out' : 'checked in'} if the manager approves.</p>
-          </div>
-        ),
-        action: <ToastAction altText="Understood">OK</ToastAction>,
-      })
-
-      setPendingOffPremisesLocation(null)
-      setOffPremisesReason("")
-
-      // show brief success summary on page
-      setOffPremisesSuccess({
-        mode: offPremisesMode,
-        reason: offPremisesReason.trim(),
-        location: locationDisplayName,
-      })
-      // dismiss summary after 15 seconds
-      setTimeout(() => setOffPremisesSuccess(null), 15000)
-
-      // Refresh attendance status after submitting off-premises request
-      setTimeout(() => {
-        fetchTodayAttendance()
-      }, 2000)
-
-    } catch (error: any) {
-      setFlashMessage({
-        message: error.message || "Failed to send confirmation request. Please try again.",
-        type: "error",
-      })
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send confirmation request",
-        variant: "destructive",
-      })
-    } finally {
-      setIsCheckingIn(false)
-      setCheckingMessage("")
-    }
-  }
-
-  const handleCheckOut = async () => {
-    if (!localTodayAttendance?.check_in_time || localTodayAttendance?.check_out_time) {
-      setFlashMessage({
-        message:
-          "You need to check in first before you can check out. Please complete your check-in to start your shift.",
-        type: "info",
-      })
-      return
-    }
-
-    // ensure we know who is checking out
-    if (!userProfile?.id) {
-      console.warn("[v0] Attempting checkout without user profile")
-      setFlashMessage({
-        message: "Unable to identify current user. Please refresh and try again.",
-        type: "error",
-      })
-      return
-    }
-
-    const userId = userProfile.id
-
-    // Determine if the user started in an approved remote/off‑premises 
-    setIsLoading(true)
-    try {
-      // OPTIMIZATION: Fetch location data ONCE and reuse everywhere
-      const locationData = await getCurrentLocationData()
-      if (!locationData) {
-        setIsLoading(false)
-        return
-      }
-
-      // Get device-specific checkout radius
-      let checkOutRadius: number | undefined
-      if (deviceRadiusSettings) {
-        if (deviceInfo.device_type === "mobile") {
-          checkOutRadius = deviceRadiusSettings.mobile.checkOut
-        } else if (deviceInfo.device_type === "tablet") {
-          checkOutRadius = deviceRadiusSettings.tablet.checkOut
-        } else if (deviceInfo.device_type === "laptop") {
-          checkOutRadius = deviceRadiusSettings.laptop.checkOut
-        } else if (deviceInfo.device_type === "desktop") {
-          checkOutRadius = deviceRadiusSettings.desktop.checkOut
-        }
-      }
-      
-      // OPTIMIZATION: Validate location ONCE
-      const checkoutValidation = validateCheckoutLocation(locationData, realTimeLocations || [], checkOutRadius)
-
-      // compute flags used for button labels and error logic
-      const wasOffPremises = !!localTodayAttendance?.on_official_duty_outside_premises || !!localTodayAttendance?.is_remote_location
-      const isOffPremisesCheckedIn = wasOffPremises && !checkoutValidation.canCheckOut
-
-      // If the user is not inside any location and not previously flagged remote,
-      // block checkout. out-of-range users are allowed remote checkouts immediately.
-      // additional off-premises request logic
-      if (!checkoutValidation.canCheckOut) {
-        if (wasOffPremises && minutesUntilOffPremisesCheckout && minutesUntilOffPremisesCheckout > 0) {
-          setFlashMessage({
-            message: `Please wait ${minutesUntilOffPremisesCheckout} more minute${minutesUntilOffPremisesCheckout !== 1 ? "s" : ""} before requesting off‑premises check‑out`,
-            type: "info",
-          })
-          return
-        }
-
-        // submit a remote checkout request instead of performing immediate checkout
-        try {
-          const response = await fetch("/api/attendance/check-in-outside-request", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              user_id: userId,
-              current_location: locationData,
-              device_info: getDeviceInfo(),
-              request_type: "checkout",
-              reason: earlyCheckoutReason || null,
-            }),
-          })
-          const result = await response.json()
-          if (!response.ok) {
-            throw new Error(result.error || "Failed to submit checkout request")
-          }
-
-          // show descriptive message and summary card
-          const locName = locationData.name || `${locationData.latitude.toFixed(4)}, ${locationData.longitude.toFixed(4)}`
-          setFlashMessage({
-            message: `Your off‑premises checkout request has been sent for approval. Reason: "${earlyCheckoutReason || 'Not provided'}"`,
-            type: "success",
-          })
-          setOffPremisesCheckoutRequest({ reason: earlyCheckoutReason || "", location: locName })
-          setRecentCheckOut(true) // disable button until request cleared
-
-          toast({
-            title: "Checkout Request Submitted",
-            description: (
-              <div className="space-y-1">
-                <p>Your remote checkout request has been sent to your manager.</p>
-                <p><strong>Location:</strong> {locName}</p>
-                {earlyCheckoutReason && <p><strong>Reason:</strong> {earlyCheckoutReason}</p>}
-              </div>
-            ),
-            action: <ToastAction altText="Understood">OK</ToastAction>,
-          })
-          return
-        } catch (reqErr: any) {
-          console.error("[v0] Failed to send off-premises checkout request:", reqErr)
-          throw reqErr
-        }
-      }
-
-      if (checkoutValidation.canCheckOut) {
-        console.log("[v0] Location validation passed - user within range")
-      } else {
-        console.log("[v0] Off‑premises/remote checkout allowed")
-      }
-
-      // Check if early checkout is needed
-      const now = new Date()
-      const checkoutHour = now.getHours()
-      const checkoutMinutes = now.getMinutes()
-      
-      // Fetch location-specific working hours configuration
-      const assignedLocation = realTimeLocations?.find(loc => loc.id === userProfile?.assigned_location_id)
-      const checkOutEndTime = assignedLocation?.check_out_end_time || "17:00"
-      const requireEarlyCheckoutReason = assignedLocation?.require_early_checkout_reason ?? true
-      const effectiveRequireEarlyCheckoutReason = requiresEarlyCheckoutReason(now, requireEarlyCheckoutReason)
-      
-      // Parse checkout end time (HH:MM format)
-      const [endHour, endMinute] = checkOutEndTime.split(":").map(Number)
-      const checkoutEndTimeMinutes = endHour * 60 + (endMinute || 0)
-      const currentTimeMinutes = checkoutHour * 60 + checkoutMinutes
-      
-      const isBeforeCheckoutTime = currentTimeMinutes < checkoutEndTimeMinutes
-      
-      console.log("[v0] Checkout time check:", {
-        location: assignedLocation?.name || "Unknown",
-        checkOutEndTime,
-        currentTime: `${checkoutHour}:${checkoutMinutes.toString().padStart(2, '0')}`,
-        isBeforeCheckoutTime,
-        requireEarlyCheckoutReason,
-        effectiveRequireEarlyCheckoutReason,
-      })
-
-      // Find nearest location first (reuse for both paths)
-      const effectiveCheckOutRadius = checkOutRadius ?? proximitySettings.checkInProximityRange
-      let nearestLocation = null
-      if (realTimeLocations && realTimeLocations.length > 0) {
-        if (userProfile?.assigned_location_id && assignedLocationInfo?.isAtAssignedLocation) {
-          nearestLocation = realTimeLocations.find((loc) => loc.id === userProfile.assigned_location_id)
-        } else {
-          const locationDistances = realTimeLocations
-            .map((loc) => {
-              const distance = calculateDistance(
-                locationData.latitude,
-                locationData.longitude,
-                loc.latitude,
-                loc.longitude,
-              )
-              return { location: loc, distance: Math.round(distance) }
-            })
-            .sort((a, b) => a.distance - b.distance)
-            .filter(({ distance }) => distance <= effectiveCheckOutRadius)
-
-          nearestLocation = locationDistances[0]?.location
-        }
-      }
-
-      // SMART LOGIC: If checkout time PASSED, no location rule, early-reason not required, OR user is Security — skip modal and checkout immediately
-      // This is the "one-tap" optimization - no unnecessary modal delays
-      if (!isBeforeCheckoutTime || !requireEarlyCheckoutReason || isSecurityStaff) {
-        console.log("[v0] SMART CHECKOUT: Checkout time passed or no reason needed or Security staff - immediate checkout")
-        await performCheckoutAPI(locationData, nearestLocation, "")
-        return
-      }
-
-      // If checkout time is NOT reached and reason required, show modal
-      // Store pending checkout data and show dialog - THEN release loading
-      setPendingCheckoutData({ location: locationData, nearestLocation })
-      setShowEarlyCheckoutDialog(true)
-      setIsLoading(false)
-    } catch (error) {
-      setIsLoading(false)
-      setFlashMessage({
-        message: error instanceof Error ? error.message : "Checkout failed. Please try again.",
-        type: "error",
-      })
-    }
-  }
-
-  // OPTIMIZATION: Extracted checkout API call into separate function for cleaner flow
-  const performCheckoutAPI = async (locationData: any, nearestLocation: any, reason: string) => {
-    try {
-      const response = await fetch("/api/attendance/check-out", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-device-type": deviceInfo.device_type || "desktop",
-        },
-        body: JSON.stringify({
-          latitude: locationData.latitude,
-          longitude: locationData.longitude,
-          accuracy: locationData.accuracy,
-          location_source: locationData.source,
-          location_name: nearestLocation?.name || "Unknown Location",
-          early_checkout_reason: reason || null,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (result.success && result.data) {
-        console.log("[v0] Checkout successful:", result.data)
-
-        setLocalTodayAttendance(result.data)
-        clearAttendanceCache()
-
-        setRecentCheckOut(true)
-        setTimeout(() => setRecentCheckOut(false), 3000)
-
-        const checkInTime = new Date(result.data.check_in_time)
-        const checkOutTime = new Date(result.data.check_out_time)
-        const workHours = ((checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60)).toFixed(2)
-
-        setFlashMessage({
-          message: `Successfully checked out from ${result.data.check_out_location_name}! Great work today. Total work hours: ${workHours} hours. See you tomorrow!`,
-          type: "success",
-        })
-
-        setEarlyCheckoutReason("")
-        setPendingCheckoutData(null)
-
-        // Refetch to verify checkout was recorded
-        setTimeout(() => {
-          fetchTodayAttendance()
-        }, 500)
-      } else if (result.error) {
-        throw new Error(result.error)
-      } else {
-        throw new Error("Invalid checkout response from server")
-      }
-    } catch (err) {
-      console.error("[v0] Checkout error:", err)
-      throw err
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Extracted check-in API call for lateness dialog flow
-  const performCheckInAPI = async (locationData: any, nearestLocation: any, reason: string) => {
-    try {
-      const deviceInfo = getDeviceInfo()
-      const checkInData: any = {
-        device_info: deviceInfo,
-        latitude: locationData.latitude,
-        longitude: locationData.longitude,
-        accuracy: locationData.accuracy,
-        location_timestamp: locationData.timestamp || Date.now(),
-        location_source: locationData.source || null,
-        location_id: nearestLocation?.id,
-        lateness_reason: reason || null,
-      }
-
-      const response = await fetch("/api/attendance/check-in", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-        },
-        body: JSON.stringify(checkInData),
-      })
-
-      const result = await response.json()
-      console.log("[v0] Check-in API response:", result)
-
-      if (!response.ok) {
-        console.warn("[v0] Server rejected check-in", {
-          status: response.status,
-          body: result,
-        })
-        // Handle completed work for the day with friendly message
-        if (result.alreadyCompleted && result.details) {
-          console.log("[v0] User has already completed work for today")
-
-          setFlashMessage({
-            message: `Work completed! You worked ${result.details.workHours} hours today.`,
-            type: "success",
-          })
-
-          await fetchTodayAttendance()
-
-          toast({
-            title: "✓ You're Done for Today!",
-            description: `You checked in at ${result.details.checkInTime} and checked out at ${result.details.checkOutTime}. You worked ${result.details.workHours} hours. Great job! See you tomorrow.`,
-            className: "bg-green-50 border-green-400 text-green-900 dark:bg-green-900/20 dark:border-green-700 dark:text-green-200",
-            duration: 10000,
-          })
-        } else if (result.error?.includes("DUPLICATE CHECK-IN BLOCKED") || result.error?.includes("already checked in")) {
-          console.log("[v0] Duplicate check-in prevented by server - still on duty")
-          setFlashMessage({
-            message: result.error,
-            type: "error",
-          })
-
-          await fetchTodayAttendance()
-
-          toast({
-            title: "Already Checked In",
-            description: result.error,
-            variant: "destructive",
-            duration: 8000,
-          })
-        } else {
-          throw new Error(result.error || "Failed to check in")
-        }
-        return
-      }
-
-      console.log("[v0] ✓ Check-in successful")
-
-      if (result.attendance) {
-        // Add device sharing warning to the attendance data if present
-        const attendanceWithWarning = {
-          ...result.attendance,
-          device_sharing_warning: result.deviceSharingWarning?.message || null
-        }
-        setLocalTodayAttendance(attendanceWithWarning)
-      } else {
-        // rare case: response success but no record returned
-        console.warn("[v0] Check-in succeeded but no attendance record included; refreshing manually")
-        await fetchTodayAttendance()
-        if (!localTodayAttendance?.check_in_time) {
-          toast({
-            title: "Check-in recorded but state not updated",
-            description: "Your check-in went through but the client could not verify it. Please refresh the page.",
-            variant: "warning",
-          })
-        }
-      }
-
-      setFlashMessage({
-        message: result.message || "Successfully checked in!",
-        type: "success",
-      })
-
-      // always refresh to guarantee state
-      await fetchTodayAttendance()
-
-
-      // Refresh attendance data
-      await fetchTodayAttendance()
-
-      // Clear attendance cache
-      clearAttendanceCache()
-
-      // Show device sharing warning if applicable (highest priority)
-      if (result.deviceSharingWarning) {
-        toast({
-          title: "⚠️ Shared Device Detected",
-          description: result.deviceSharingWarning.message,
-          variant: "default",
-          className: "bg-yellow-50 border-yellow-400 text-yellow-900 dark:bg-yellow-900/20 dark:border-yellow-700 dark:text-yellow-200",
-          duration: 10000,
-        })
-      }
-
-      setLatenessReason("")
-      setPendingCheckInData(null)
-
-      // Refetch to verify check-in was recorded
-      setTimeout(() => {
-        fetchTodayAttendance()
-      }, 500)
-    } catch (err) {
-      console.error("[v0] Check-in error:", err)
-      throw err
-    } finally {
-      setIsCheckingIn(false)
-      setIsCheckInProcessing(false)
-      setRecentCheckIn(false)
-    }
-  }
-
-  const handleEarlyCheckoutConfirm = async () => {
-    const trimmedReason = earlyCheckoutReason.trim()
-    
-    if (!trimmedReason) {
-      setFlashMessage({
-        message: "Please provide a reason for early checkout before proceeding.",
-        type: "error",
-      })
-      return
-    }
-    
-    if (trimmedReason.length < 10) {
-      setFlashMessage({
-        message: "Early checkout reason must be at least 10 characters long. Please provide more details.",
-        type: "error",
-      })
-      return
-    }
-
-    setShowEarlyCheckoutDialog(false)
-    setIsLoading(true)
-
-    try {
-      const { location, nearestLocation } = pendingCheckoutData
-
-      // Use optimized checkout function with reason
-      await performCheckoutAPI(location, nearestLocation, earlyCheckoutReason)
-    } catch (error) {
-      console.error("[v0] Early checkout error:", error)
-      setFlashMessage({
-        message: error instanceof Error ? error.message : "Failed to check out. Please try again.",
-        type: "error",
-      })
-    }
-  }
   const handleLatenessConfirm = async () => {
     const trimmedReason = latenessReason.trim()
     
@@ -1743,68 +1158,145 @@ A manager will review it shortly and you will be notified of the outcome.`,
     setRecentCheckIn(false)
   }
 
-  const getFormattedCheckoutTime = () => {
-    const assignedLoc = realTimeLocations?.find(loc => loc.id === userProfile?.assigned_location_id)
-    const checkOutTime = assignedLoc?.check_out_end_time || "17:00"
-    const [hours, minutes] = checkOutTime.split(":").map(Number)
-    const period = hours >= 12 ? "PM" : "AM"
-    const displayHours = hours % 12 || 12
-    const formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
-    const locationName = assignedLoc?.name || "your location"
-    return `You are checking out before the standard ${formattedTime} end time for ${locationName}`
+  const handleCheckOut = async () => {
+    if (isLoading) {
+      return
+    }
+
+    if (!localTodayAttendance?.check_in_time) {
+      toast({
+        title: "No Check-In Found",
+        description: "You must check in before you can check out.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (localTodayAttendance?.check_out_time) {
+      const checkOutTime = new Date(localTodayAttendance.check_out_time).toLocaleTimeString()
+      toast({
+        title: "Already Checked Out",
+        description: `You already checked out at ${checkOutTime}.`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
+    setCheckingMessage("Processing check-out...")
+
+    try {
+      setError(null)
+      setFlashMessage(null)
+
+      const deviceInfo = getDeviceInfo()
+      
+      let latitude = userLocation?.latitude
+      let longitude = userLocation?.longitude
+
+      if (!latitude || !longitude) {
+        const currentLocation = await getCurrentLocationData()
+        if (!currentLocation) {
+          throw new Error("Could not retrieve current location for checkout.")
+        }
+        latitude = currentLocation.latitude
+        longitude = currentLocation.longitude
+      }
+
+      const response = await fetch("/api/attendance/check-out", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-device-type": deviceInfo.device_type || "desktop",
+        },
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          accuracy: userLocation?.accuracy || 10,
+          location_source: "gps",
+          device_info: deviceInfo,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || `Checkout failed: ${response.status}`)
+      }
+
+      // Success
+      if (result.success && result.data) {
+        const workHours = parseFloat(result.workHours || "0").toFixed(2)
+        const checkOutLocation = result.checkoutLocation || "Unknown Location"
+
+        setLocalTodayAttendance({
+          ...localTodayAttendance,
+          check_out_time: result.data.check_out_time,
+          check_out_location_id: result.data.check_out_location_id,
+          check_out_location_name: result.data.check_out_location_name,
+          work_hours: parseFloat(workHours),
+        })
+
+        setFlashMessage({
+          message: `Successfully checked out at ${checkOutLocation}. Work hours: ${workHours}`,
+          type: "success",
+        })
+
+        toast({
+          title: "Checked Out",
+          description: `You have successfully checked out. Total work hours: ${workHours}`,
+          action: <ToastAction altText="OK">OK</ToastAction>,
+        })
+
+        setRecentCheckOut(true)
+      } else {
+        throw new Error(result.message || "Checkout did not complete successfully")
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to check out. Please try again."
+      setFlashMessage({
+        message: errorMessage,
+        type: "error",
+      })
+      toast({
+        title: "Checkout Failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+      setCheckingMessage("")
+    }
   }
 
   const handleRefreshLocations = async () => {
+    console.log("[v0] Refreshing attendance status...")
     setIsLoading(true)
-    setError(null)
     try {
-      console.log("[v0] Manually refreshing location...")
-      const location = await getCurrentLocation()
-      setUserLocation(location)
-
-      if (location.accuracy > 1000) {
-        setError(
-          `GPS accuracy is critically poor (${(location.accuracy / 1000).toFixed(1)}km) - Use QR code for reliable attendance.`,
-        )
-      } else if (location.accuracy > 500) {
-        setError(`GPS accuracy is poor (${Math.round(location.accuracy)}m). Consider using QR code for best results.`)
-      } else {
-        setSuccess(`Location refreshed successfully. Accuracy: ${Math.round(location.accuracy)}m`)
-        setTimeout(() => setSuccess(null), 3000)
-      }
-
-      setLocationPermissionStatus({ granted: true, message: "Location access granted" })
-      setLocationPermissionStatusSimplified({ granted: true, message: "Location access granted" })
-      console.log("[v0] Location refreshed successfully")
+      await fetchTodayAttendance()
+      setFlashMessage({
+        message: "Attendance status refreshed successfully",
+        type: "success",
+      })
+      toast({
+        title: "Status Updated",
+        description: "Your attendance status has been refreshed",
+        action: <ToastAction altText="OK">OK</ToastAction>,
+      })
     } catch (error) {
-      console.error("[v0] Failed to refresh location:", error)
-      const errorMessage =
-        error instanceof Error ? error.message : "Unable to access location. Please enable GPS or use QR code option."
-      setError(errorMessage)
-      setLocationPermissionStatus({ granted: false, message: errorMessage })
-      setLocationPermissionStatusSimplified({ granted: false, message: errorMessage })
-      setShowLocationHelp(true)
+      console.error("[v0] Failed to refresh attendance:", error)
+      setFlashMessage({
+        message: "Failed to refresh attendance status. Please try again.",
+        type: "error",
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
-  const checkInDate = localTodayAttendance?.check_in_time
-    ? new Date(localTodayAttendance.check_in_time).toISOString().split("T")[0]
-    : null
-
-  const isFromPreviousDay = checkInDate && checkInDate !== currentDate
-
-  const isCheckedIn = localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && !isFromPreviousDay
-  const isCheckedOut = localTodayAttendance?.check_out_time
-  const isCompletedForDay =
-    localTodayAttendance?.check_in_time && localTodayAttendance?.check_out_time && !isFromPreviousDay
-
-  const defaultMode = canCheckInButton ? "checkin" : canCheckOutButton ? "checkout" : null
-
   const handleLocationSelect = (location: GeofenceLocation) => {
     console.log("Location selected:", location.name)
-    // Logic to handle location selection, e.g., pre-filling a form or triggering an action
+    // Logic to handle location selection
   }
 
   return (
@@ -1828,76 +1320,90 @@ A manager will review it shortly and you will be notified of the outcome.`,
       )}
 
       {isCompletedForDay && (
-        <div className="rounded-lg border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 dark:from-emerald-950/30 dark:via-green-950/30 dark:to-teal-950/30 p-6 shadow-lg">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-12 w-12 rounded-full bg-emerald-500 flex items-center justify-center">
-              <CheckCircle2 className="h-7 w-7 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-100">✅ Attendance Complete!</h3>
-              <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
-                Your work session has been successfully recorded
-              </p>
+        <>
+          {/* Success Banner */}
+          <div className="rounded-lg border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-900/40 p-4 mb-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+              <span className="text-emerald-900 dark:text-emerald-100 font-semibold">Success</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/60 dark:bg-black/30 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
-            <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Check-In Time</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {new Date(localTodayAttendance.check_in_time).toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
-              </p>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                📍 {localTodayAttendance.check_in_location_name}
-              </p>
+          {/* Attendance Complete Card */}
+          <div className="rounded-lg border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 dark:from-emerald-950/30 dark:via-green-950/30 dark:to-teal-950/30 p-6 shadow-lg">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="h-14 w-14 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">Attendance Complete!</h3>
+                <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+                  Your work session has been successfully recorded
+                </p>
+              </div>
             </div>
 
-            <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Check-Out Time</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {new Date(localTodayAttendance.check_out_time).toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
-              </p>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                📍 {localTodayAttendance.check_out_location_name}
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/60 dark:bg-black/30 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
+              <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Check-In Time</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {new Date(localTodayAttendance.check_in_time).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}
+                </p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1">
+                  <span>📍</span> {localTodayAttendance.check_in_location_name}
+                </p>
+              </div>
+
+              <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Check-Out Time</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {new Date(localTodayAttendance.check_out_time).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}
+                </p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1">
+                  <span>📍</span> {localTodayAttendance.check_out_location_name}
+                </p>
+              </div>
+
+              <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Work Hours</p>
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {localTodayAttendance.work_hours?.toFixed(2) || "0.00"} <span className="text-xs font-normal">hours</span>
+                </p>
+              </div>
+
+              <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Status</p>
+                <Badge className="bg-emerald-500 text-white hover:bg-emerald-600 text-sm">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Completed for Today
+                </Badge>
+              </div>
             </div>
 
-            <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Work Hours</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                {localTodayAttendance.work_hours?.toFixed(2) || "0.00"} hours
-              </p>
-            </div>
+            {refreshTimer !== null && refreshTimer > 0 && (
+              <div className="mt-4 text-center text-sm text-emerald-700 dark:text-emerald-300">
+                Status will refresh in {Math.floor(refreshTimer / 60)}:{(refreshTimer % 60).toString().padStart(2, "0")}
+              </div>
+            )}
 
-            <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Status</p>
-              <Badge className="bg-emerald-500 text-white hover:bg-emerald-600">✓ Completed for Today</Badge>
+            <div className="mt-6 text-center border-t border-emerald-200 dark:border-emerald-800 pt-4">
+              <p className="text-sm text-emerald-900 dark:text-emerald-100 font-semibold">
+                🎉 Great work today! Your attendance has been successfully recorded.
+              </p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-2">
+                You can view your full attendance history in the reports section.
+              </p>
             </div>
           </div>
-
-          {refreshTimer !== null && refreshTimer > 0 && (
-            <div className="mt-4 text-center text-sm text-emerald-700 dark:text-emerald-300">
-              Status will refresh in {Math.floor(refreshTimer / 60)}:{(refreshTimer % 60).toString().padStart(2, "0")}
-            </div>
-          )}
-
-          <div className="mt-4 text-center">
-            <p className="text-sm text-emerald-800 dark:text-emerald-200 font-medium">
-              🎉 Great work today! Your attendance has been successfully recorded.
-            </p>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-              You can view your full attendance history in the reports section.
-            </p>
-          </div>
-        </div>
+        </>
       )}
 
       {(localTodayAttendance as any)?.device_sharing_warning && (
@@ -1976,7 +1482,12 @@ A manager will review it shortly and you will be notified of the outcome.`,
                     isCheckingOut={isLoading}
                     userDepartment={userProfile?.departments}
                     userRole={userProfile?.role}
-                    isOffPremisesCheckedIn={isOffPremisesCheckedIn}
+                    isOutOfRange={
+                      locationValidation?.canCheckOut === false
+                    }
+                    nearestLocation={
+                      locationValidation?.nearestLocation?.name || null
+                    }
                   />
                 )
               })()
@@ -2053,75 +1564,6 @@ A manager will review it shortly and you will be notified of the outcome.`,
         </Card>
       )}
 
-      {showOffPremisesReasonDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-blue-600">
-                <MapPin className="h-5 w-5" />
-                Off-Premises Request
-              </CardTitle>
-              <CardDescription>
-                Please provide a reason for your off-premises check-in request.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Alert className="border-blue-200 bg-blue-50">
-                <Info className="h-4 w-4 text-blue-600" />
-                <AlertTitle className="text-blue-800">Required Information</AlertTitle>
-                <AlertDescription className="text-blue-700">
-                  Your reason will be reviewed by your department head, regional manager, and admin staff for approval.
-                </AlertDescription>
-              </Alert>
-
-              <div className="space-y-2">
-                <Label htmlFor="offpremises-reason">Reason for Off-Premises Request *</Label>
-                <textarea
-                  id="offpremises-reason"
-                  value={offPremisesReason}
-                  onChange={(e) => setOffPremisesReason(e.target.value)}
-                  placeholder="e.g., Client meeting, field assignment, official business, training session..."
-                  className="w-full min-h-[100px] p-3 border rounded-md resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  maxLength={500}
-                />
-                <p className={`text-xs ${offPremisesReason.length < 10 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                  {offPremisesReason.length}/500 characters (minimum 10 required)
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => {
-                    setShowOffPremisesReasonDialog(false)
-                    setPendingOffPremisesLocation(null)
-                    setOffPremisesReason("")
-                  }}
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  disabled={isCheckingIn}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSendOffPremisesRequest}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
-                  disabled={isCheckingIn || offPremisesReason.trim().length < 10}
-                >
-                  {isCheckingIn ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    "Send Request"
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
 {/* Checkout actions/warnings for active session (ActiveSessionTimer handles the CTA) */}
             {localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && (
               <>
@@ -2131,12 +1573,6 @@ A manager will review it shortly and you will be notified of the outcome.`,
                     Minimum 2 hours required between check-in and check-out. {minutesUntilCheckout} minutes remaining.
                   </p>
                 )}
-
-                {checkoutTimeReached && !locationValidation?.canCheckOut && (
-                    <p className="text-xs text-green-700 mt-2 text-center">
-                      You are outside the approved location range. Since you've been checked in for at least two hours, you may use the <strong>Off‑Premises Check Out</strong> option to record a remote checkout.
-                    </p>
-                )}
               </>
             )}
 
@@ -2144,29 +1580,7 @@ A manager will review it shortly and you will be notified of the outcome.`,
       <Card>
         <CardContent className="pt-6">
           <div className="space-y-4">
-            {offPremisesSuccess && (
-        <Card className="mb-4 border-green-300 bg-green-50">
-          <CardContent>
-            <p className="font-semibold text-green-800">
-              {offPremisesSuccess.mode === 'checkout' ? 'Off‑Premises Check‑Out' : 'Off‑Premises Check‑In'} Request Pending
-            </p>
-            <p className="text-sm">Location: {offPremisesSuccess.location}</p>
-            <p className="text-sm">Reason: {offPremisesSuccess.reason}</p>
-          </CardContent>
-        </Card>
-      )}
-      {offPremisesCheckoutRequest && (
-        <Card className="mb-4 border-blue-300 bg-blue-50">
-          <CardContent>
-            <p className="font-semibold text-blue-800">
-              Off‑Premises Checkout Request Pending
-            </p>
-            <p className="text-sm">Location: {offPremisesCheckoutRequest.location}</p>
-            <p className="text-sm">Reason: {offPremisesCheckoutRequest.reason || 'Not provided'}</p>
-          </CardContent>
-        </Card>
-      )}
-      <Button
+            <Button
               onClick={handleRefreshLocations}
               variant="secondary"
               size="lg"
@@ -2271,71 +1685,6 @@ A manager will review it shortly and you will be notified of the outcome.`,
           mode={defaultMode}
           userLocation={userLocation}
         />
-      )}
-
-      {showEarlyCheckoutDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-600">
-                <AlertTriangle className="h-5 w-5" />
-                Early Check-Out Notice
-              </CardTitle>
-            <CardDescription>
-              {getFormattedCheckoutTime()}. Please provide a reason.
-            </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Alert className="border-orange-200 bg-orange-50">
-                <Info className="h-4 w-4 text-orange-600" />
-                <AlertTitle className="text-orange-800">Important</AlertTitle>
-                <AlertDescription className="text-orange-700">
-                  Your reason will be visible to your department head, supervisor, and HR portal for review.
-                </AlertDescription>
-              </Alert>
-
-              <div className="space-y-2">
-                <Label htmlFor="early-checkout-reason">Reason for Early Checkout *</Label>
-                <textarea
-                  id="early-checkout-reason"
-                  value={earlyCheckoutReason}
-                  onChange={(e) => setEarlyCheckoutReason(e.target.value)}
-                  placeholder="e.g., Medical appointment, family emergency, approved leave..."
-                  className="w-full min-h-[100px] p-3 border rounded-md resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  maxLength={500}
-                />
-                <p className={`text-xs ${earlyCheckoutReason.length < 10 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                  {earlyCheckoutReason.length}/500 characters (minimum 10 required)
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleEarlyCheckoutCancel}
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  disabled={isLoading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleEarlyCheckoutConfirm}
-                  className="flex-1 bg-orange-600 hover:bg-orange-700"
-                  disabled={isLoading || earlyCheckoutReason.trim().length < 10}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    "Confirm Check-Out"
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       )}
 
       {showLatenessDialog && (

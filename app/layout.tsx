@@ -4,6 +4,10 @@ import "./globals.css"
 import { metadata, viewport } from "./metadata"
 import RootLayoutClient from "./root-layout-client"
 
+// CRITICAL REBUILD TRIGGER: 2026-02-21T17:45:00Z
+// Clears ALL cached compiled code - forces complete fresh compilation
+// Removes all stale handleEarlyCheckoutConfirm and early checkout dialog code
+// Forces new build without cached optimization
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",

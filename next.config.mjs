@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+// Force rebuild timestamp: 2026-02-21T15:45:00Z
 const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
