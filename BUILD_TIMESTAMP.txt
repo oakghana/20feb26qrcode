@@ -1,0 +1,7 @@
+HARD_CACHE_RESET_2026_02_21_1930
+Reason: Server running OLD compiled code with:
+1. handleEarlyCheckoutConfirm at line 1694
+2. handleEarlyCheckoutCancel at line 2316  
+3. checkoutLocationData initialization bug at line 147
+
+Force complete rebuild without any cached optimization.
