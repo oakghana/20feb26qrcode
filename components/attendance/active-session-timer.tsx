@@ -20,8 +20,6 @@ interface ActiveSessionTimerProps {
   isCheckingOut?: boolean
   userDepartment?: { code?: string | null; name?: string | null } | undefined | null
   userRole?: string | null
-  // New: indicates the user was checked in via an approved off‑premises request
-  isOffPremisesCheckedIn?: boolean
 }
 
 export function ActiveSessionTimer({
@@ -36,7 +34,6 @@ export function ActiveSessionTimer({
   isCheckingOut = false,
   userDepartment,
   userRole,
-  isOffPremisesCheckedIn = false,
 }: ActiveSessionTimerProps) {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [timeUntilCheckout, setTimeUntilCheckout] = useState<{
@@ -177,8 +174,8 @@ export function ActiveSessionTimer({
           </Button>
         )}
 
-        {/* Countdown Timer */}
-        {(timeUntilCheckout.canCheckout || isOffPremisesCheckedIn) ? (
+        {/* Countdown Timer - Show when checkout is available or when waiting */}
+        {timeUntilCheckout.canCheckout ? (
           <div className="rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/60 dark:to-emerald-900/60 border border-green-200 dark:border-green-500/50 p-4">
             <div className="flex items-center gap-3">
               <div className="bg-green-500 rounded-full p-2">
@@ -187,7 +184,7 @@ export function ActiveSessionTimer({
               <div>
                 <p className="font-semibold text-green-900 dark:text-green-100">Ready to check out</p>
                 <p className="text-sm text-green-700 dark:text-green-300">
-                  {isOffPremisesCheckedIn ? 'Off‑premises checkout allowed — will be recorded as remote.' : 'You can now check out from your location'}
+                  You have completed the minimum 2-hour work period and can now check out
                 </p>
               </div>
             </div>
@@ -197,10 +194,10 @@ export function ActiveSessionTimer({
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-orange-900 dark:text-orange-100">
-                  Minimum work period in progress
+                  Minimum 2-hour work period required
                 </p>
                 <p className="text-xs text-orange-700 dark:text-orange-300">
-                  Checkout will be available after {minimumWorkMinutes} minutes
+                  You can check out once the 2-hour minimum has elapsed
                 </p>
               </div>
               <div className="text-right">
@@ -211,7 +208,7 @@ export function ActiveSessionTimer({
                   <span className="animate-pulse">:</span>
                   <span className="w-12">{String(timeUntilCheckout.seconds).padStart(2, "0")}</span>
                 </div>
-                <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">until checkout available</p>
+                <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">remaining</p>
               </div>
             </div>
           </div>

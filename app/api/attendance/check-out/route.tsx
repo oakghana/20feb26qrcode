@@ -147,17 +147,6 @@ export async function POST(request: NextRequest) {
       role: userProfile?.role 
     }
     const canCheckOut = canCheckOutAtTime(now, timeRestrictCheckData?.departments, timeRestrictCheckData?.role)
-    
-    // Determine if this was an off-premises check-in (which doesn't require location validation for checkout)
-    const isOffPremisesCheckedIn = !!attendanceRecord.on_official_duty_outside_premises || !!attendanceRecord.is_remote_location
-    
-    // Block checkout entirely if user was checked in via off-premises (they should not checkout via app)
-    if (isOffPremisesCheckedIn) {
-      return NextResponse.json({
-        error: "Off-premises check-in does not allow app-based checkout. Please contact your supervisor for checkout authorization.",
-        isOffPremisesCheckIn: true,
-      }, { status: 403 })
-    }
 
     const bypassTimeRules = workHours >= 9 // Users with 9+ hours don't need time restrictions
 

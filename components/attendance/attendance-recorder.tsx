@@ -173,19 +173,8 @@ export function AttendanceRecorder({
     typeof detectWindowsLocationCapabilities
   > | null>(null)
   const [currentDate, setCurrentDate] = useState(new Date().toISOString().split("T")[0])
-  const [showEarlyCheckoutDialog, setShowEarlyCheckoutDialog] = useState(false)
-  const [earlyCheckoutReason, setEarlyCheckoutReason] = useState("")
-  const [pendingCheckoutData, setPendingCheckoutData] = useState<{
-    location: LocationData | null
-    nearestLocation: any
-  } | null>(null)
   const [showLatenessDialog, setShowLatenessDialog] = useState(false)
   const [latenessReason, setLatenessReason] = useState("")
-  const [showOffPremisesReasonDialog, setShowOffPremisesReasonDialog] = useState(false)
-  const [offPremisesReason, setOffPremisesReason] = useState("")
-  const [pendingOffPremisesLocation, setPendingOffPremisesLocation] = useState<LocationData | null>(null)
-  // 'checkin' | 'checkout' - reused by the off-premises reason dialog
-  const [offPremisesMode, setOffPremisesMode] = useState<'checkin' | 'checkout'>('checkin')
 
   // Helper: treat Security department as exempt from lateness / early-checkout reason prompts
   const isSecurityStaff = useMemo(() => {
@@ -1772,75 +1761,9 @@ A manager will review it shortly and you will be notified of the outcome.`,
     setRecentCheckIn(false)
   }
 
-  const getFormattedCheckoutTime = () => {
-    const assignedLoc = realTimeLocations?.find(loc => loc.id === userProfile?.assigned_location_id)
-    const checkOutTime = assignedLoc?.check_out_end_time || "17:00"
-    const [hours, minutes] = checkOutTime.split(":").map(Number)
-    const period = hours >= 12 ? "PM" : "AM"
-    const displayHours = hours % 12 || 12
-    const formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
-    const locationName = assignedLoc?.name || "your location"
-    return `You are checking out before the standard ${formattedTime} end time for ${locationName}`
-  }
-
-  const handleRefreshLocations = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      console.log("[v0] Manually refreshing location...")
-      const location = await getCurrentLocation()
-      setUserLocation(location)
-
-      if (location.accuracy > 1000) {
-        setError(
-          `GPS accuracy is critically poor (${(location.accuracy / 1000).toFixed(1)}km) - Use QR code for reliable attendance.`,
-        )
-      } else if (location.accuracy > 500) {
-        setError(`GPS accuracy is poor (${Math.round(location.accuracy)}m). Consider using QR code for best results.`)
-      } else {
-        setSuccess(`Location refreshed successfully. Accuracy: ${Math.round(location.accuracy)}m`)
-        setTimeout(() => setSuccess(null), 3000)
-      }
-
-      setLocationPermissionStatus({ granted: true, message: "Location access granted" })
-      setLocationPermissionStatusSimplified({ granted: true, message: "Location access granted" })
-      console.log("[v0] Location refreshed successfully")
-    } catch (error) {
-      console.error("[v0] Failed to refresh location:", error)
-      const errorMessage =
-        error instanceof Error ? error.message : "Unable to access location. Please enable GPS or use QR code option."
-      setError(errorMessage)
-      setLocationPermissionStatus({ granted: false, message: errorMessage })
-      setLocationPermissionStatusSimplified({ granted: false, message: errorMessage })
-      setShowLocationHelp(true)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const checkInDate = localTodayAttendance?.check_in_time
-    ? new Date(localTodayAttendance.check_in_time).toISOString().split("T")[0]
-    : null
-
-  const isFromPreviousDay = checkInDate && checkInDate !== currentDate
-
-  const isCheckedIn = localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time && !isFromPreviousDay
-  const isCheckedOut = localTodayAttendance?.check_out_time
-  const isCompletedForDay =
-    localTodayAttendance?.check_in_time && localTodayAttendance?.check_out_time && !isFromPreviousDay
-
-  const defaultMode = canCheckInButton ? "checkin" : canCheckOutButton ? "checkout" : null
-
   const handleLocationSelect = (location: GeofenceLocation) => {
     console.log("Location selected:", location.name)
-    // Logic to handle location selection, e.g., pre-filling a form or triggering an action
-  }
-
-  const handleEarlyCheckoutCancel = () => {
-    setShowEarlyCheckoutDialog(false)
-    setEarlyCheckoutReason("")
-    setPendingCheckoutData(null)
-    setIsLoading(false)
+    // Logic to handle location selection
   }
 
   return (
@@ -2321,71 +2244,6 @@ A manager will review it shortly and you will be notified of the outcome.`,
           mode={defaultMode}
           userLocation={userLocation}
         />
-      )}
-
-      {showEarlyCheckoutDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-600">
-                <AlertTriangle className="h-5 w-5" />
-                Early Check-Out Notice
-              </CardTitle>
-            <CardDescription>
-              {getFormattedCheckoutTime()}. Please provide a reason.
-            </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Alert className="border-orange-200 bg-orange-50">
-                <Info className="h-4 w-4 text-orange-600" />
-                <AlertTitle className="text-orange-800">Important</AlertTitle>
-                <AlertDescription className="text-orange-700">
-                  Your reason will be visible to your department head, supervisor, and HR portal for review.
-                </AlertDescription>
-              </Alert>
-
-              <div className="space-y-2">
-                <Label htmlFor="early-checkout-reason">Reason for Early Checkout *</Label>
-                <textarea
-                  id="early-checkout-reason"
-                  value={earlyCheckoutReason}
-                  onChange={(e) => setEarlyCheckoutReason(e.target.value)}
-                  placeholder="e.g., Medical appointment, family emergency, approved leave..."
-                  className="w-full min-h-[100px] p-3 border rounded-md resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  maxLength={500}
-                />
-                <p className={`text-xs ${earlyCheckoutReason.length < 10 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                  {earlyCheckoutReason.length}/500 characters (minimum 10 required)
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleEarlyCheckoutCancel}
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  disabled={isLoading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleEarlyCheckoutConfirm}
-                  className="flex-1 bg-orange-600 hover:bg-orange-700"
-                  disabled={isLoading || earlyCheckoutReason.trim().length < 10}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    "Confirm Check-Out"
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       )}
 
       {showLatenessDialog && (
