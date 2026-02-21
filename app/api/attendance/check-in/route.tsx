@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
-import { validateCheckInLocation, type LocationData } from "@/lib/geolocation"
+import { validateCheckoutLocation, type LocationData } from "@/lib/geolocation"
 
 export async function POST(request: NextRequest) {
   try {
