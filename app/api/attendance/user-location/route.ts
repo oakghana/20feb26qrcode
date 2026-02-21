@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 export async function GET() {
   try {
     console.log("[v0] User Location API - Starting request")
@@ -73,14 +76,22 @@ export async function GET() {
 
     console.log("[v0] User Location API - Found locations:", locations?.length)
 
-    return NextResponse.json({
+    // Return with cache-control headers to prevent caching
+    const response = NextResponse.json({
       success: true,
       data: locations,
       user_role: profile.role,
       assigned_location_id: profile.assigned_location_id,
       assigned_location: profile.geofence_locations,
       message: "All QCC locations available for attendance within 50m proximity range",
+      timestamp: new Date().toISOString(),
     })
+    
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+    response.headers.set("Pragma", "no-cache")
+    response.headers.set("Expires", "0")
+    
+    return response
   } catch (error) {
     console.error("[v0] User Location API - Unexpected error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
