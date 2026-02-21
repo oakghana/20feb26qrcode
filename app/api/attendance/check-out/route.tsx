@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { validateCheckoutLocation, type LocationData } from "@/lib/geolocation"
 import { requiresEarlyCheckoutReason, canCheckOutAtTime, getCheckOutDeadline } from "@/lib/attendance-utils"
 
+// Force rebuild: 2026-02-21T16:30:00Z - Cache purge
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
