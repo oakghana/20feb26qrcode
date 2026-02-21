@@ -1837,76 +1837,90 @@ A manager will review it shortly and you will be notified of the outcome.`,
       )}
 
       {isCompletedForDay && (
-        <div className="rounded-lg border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 dark:from-emerald-950/30 dark:via-green-950/30 dark:to-teal-950/30 p-6 shadow-lg">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-12 w-12 rounded-full bg-emerald-500 flex items-center justify-center">
-              <CheckCircle2 className="h-7 w-7 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-100">✅ Attendance Complete!</h3>
-              <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
-                Your work session has been successfully recorded
-              </p>
+        <>
+          {/* Success Banner */}
+          <div className="rounded-lg border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-900/40 p-4 mb-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+              <span className="text-emerald-900 dark:text-emerald-100 font-semibold">Success</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/60 dark:bg-black/30 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
-            <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Check-In Time</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {new Date(localTodayAttendance.check_in_time).toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
-              </p>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                📍 {localTodayAttendance.check_in_location_name}
-              </p>
+          {/* Attendance Complete Card */}
+          <div className="rounded-lg border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 dark:from-emerald-950/30 dark:via-green-950/30 dark:to-teal-950/30 p-6 shadow-lg">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="h-14 w-14 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">Attendance Complete!</h3>
+                <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+                  Your work session has been successfully recorded
+                </p>
+              </div>
             </div>
 
-            <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Check-Out Time</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {new Date(localTodayAttendance.check_out_time).toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
-              </p>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                📍 {localTodayAttendance.check_out_location_name}
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/60 dark:bg-black/30 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
+              <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Check-In Time</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {new Date(localTodayAttendance.check_in_time).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}
+                </p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1">
+                  <span>📍</span> {localTodayAttendance.check_in_location_name}
+                </p>
+              </div>
+
+              <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Check-Out Time</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {new Date(localTodayAttendance.check_out_time).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}
+                </p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1">
+                  <span>📍</span> {localTodayAttendance.check_out_location_name}
+                </p>
+              </div>
+
+              <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Work Hours</p>
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {localTodayAttendance.work_hours?.toFixed(2) || "0.00"} <span className="text-xs font-normal">hours</span>
+                </p>
+              </div>
+
+              <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Status</p>
+                <Badge className="bg-emerald-500 text-white hover:bg-emerald-600 text-sm">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Completed for Today
+                </Badge>
+              </div>
             </div>
 
-            <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Work Hours</p>
-              <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                {localTodayAttendance.work_hours?.toFixed(2) || "0.00"} hours
-              </p>
-            </div>
+            {refreshTimer !== null && refreshTimer > 0 && (
+              <div className="mt-4 text-center text-sm text-emerald-700 dark:text-emerald-300">
+                Status will refresh in {Math.floor(refreshTimer / 60)}:{(refreshTimer % 60).toString().padStart(2, "0")}
+              </div>
+            )}
 
-            <div className="bg-white/50 dark:bg-gray-900/50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Status</p>
-              <Badge className="bg-emerald-500 text-white hover:bg-emerald-600">✓ Completed for Today</Badge>
+            <div className="mt-6 text-center border-t border-emerald-200 dark:border-emerald-800 pt-4">
+              <p className="text-sm text-emerald-900 dark:text-emerald-100 font-semibold">
+                🎉 Great work today! Your attendance has been successfully recorded.
+              </p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-2">
+                You can view your full attendance history in the reports section.
+              </p>
             </div>
           </div>
-
-          {refreshTimer !== null && refreshTimer > 0 && (
-            <div className="mt-4 text-center text-sm text-emerald-700 dark:text-emerald-300">
-              Status will refresh in {Math.floor(refreshTimer / 60)}:{(refreshTimer % 60).toString().padStart(2, "0")}
-            </div>
-          )}
-
-          <div className="mt-4 text-center">
-            <p className="text-sm text-emerald-800 dark:text-emerald-200 font-medium">
-              🎉 Great work today! Your attendance has been successfully recorded.
-            </p>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-              You can view your full attendance history in the reports section.
-            </p>
-          </div>
-        </div>
+        </>
       )}
 
       {(localTodayAttendance as any)?.device_sharing_warning && (
