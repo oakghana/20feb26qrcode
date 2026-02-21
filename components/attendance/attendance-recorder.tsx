@@ -49,7 +49,7 @@ import { Label } from "@/components/ui/label"
 import { ToastAction } from "@/components/ui/toast"
 import { clearAttendanceCache, shouldClearCache, setCachedDate } from "@/lib/utils/attendance-cache"
 import { cn } from "@/lib/utils"
-import { requiresLatenessReason, requiresEarlyCheckoutReason, canCheckInAtTime, canCheckOutAtTime, getCheckInDeadline, getCheckOutDeadline } from "@/lib/attendance-utils"
+import { requiresLatenessReason, requiresEarlyCheckoutReason, canCheckInAtTime, canCheckOutAtTime, getCheckInDeadline, getCheckOutDeadline, isWeekend } from "@/lib/attendance-utils"
 import { DeviceActivityHistory } from "@/components/attendance/device-activity-history"
 import { ActiveSessionTimer } from "@/components/attendance/active-session-timer"
 
@@ -241,19 +241,21 @@ export function AttendanceRecorder({
     const now = new Date()
     const userDept = userProfile?.departments
     const userRole = userProfile?.role
+    const isWeekendDay = isWeekend(now)
     
     const canCheckIn = canCheckInAtTime(now, userDept, userRole)
     const canCheckOut = canCheckOutAtTime(now, userDept, userRole)
     
-    if (!canCheckIn && !localTodayAttendance?.check_in_time) {
+    // Only show time restriction warnings on working days
+    if (!isWeekendDay && !canCheckIn && !localTodayAttendance?.check_in_time) {
       setTimeRestrictionWarning({
         type: 'checkin',
-        message: `Check-in is only allowed before ${getCheckInDeadline()}. Your department does not have exemptions for late check-ins.`
+        message: `Check-in is only allowed before ${getCheckInDeadline()} on working days. Your department does not have exemptions for late check-ins.`
       })
-    } else if (!canCheckOut && localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time) {
+    } else if (!isWeekendDay && !canCheckOut && localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time) {
       setTimeRestrictionWarning({
         type: 'checkout',
-        message: `Check-out is only allowed before ${getCheckOutDeadline()}. Your department does not have exemptions for late check-outs.`
+        message: `Check-out is only allowed before ${getCheckOutDeadline()} on working days. Your department does not have exemptions for late check-outs.`
       })
     } else {
       setTimeRestrictionWarning(null)
