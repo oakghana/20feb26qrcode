@@ -91,9 +91,13 @@ export function OffPremisesRequestModal({
       // Close modal immediately
       onClose()
       
-      // Trigger refresh after a small delay to let modal animation complete
+      // Inform parent of the result so it can update UI without refetching
+      const updateInfo = { id: request.id, status: approved ? 'approved' : 'rejected' } as any
+      if (result.attendance_record_id) {
+        updateInfo.attendance_record_id = result.attendance_record_id
+      }
       setTimeout(() => {
-        onApprovalComplete()
+        onApprovalComplete(updateInfo)
       }, 300)
     } catch (error: any) {
       toast({

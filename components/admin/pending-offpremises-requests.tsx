@@ -120,10 +120,17 @@ export function PendingOffPremisesRequests() {
     setIsModalOpen(true)
   }
 
-  const handleApprovalComplete = () => {
+  const handleApprovalComplete = (update?: { id: string; status: string; attendance_record_id?: string }) => {
     setIsModalOpen(false)
     setSelectedRequest(null)
-    loadPendingRequests()
+    if (update) {
+      // update the specific request in local state to avoid full reload
+      setAllRequests((prev) =>
+        prev.map((r) => (r.id === update.id ? { ...r, status: update.status } : r))
+      )
+    } else {
+      loadPendingRequests()
+    }
   }
 
   const formatDate = (dateString: string) => {
