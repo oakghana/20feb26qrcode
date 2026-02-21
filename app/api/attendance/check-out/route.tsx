@@ -135,6 +135,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // FIRST: Check if user has worked 9+ hours to skip early checkout reason requirement
+    const checkInTime = new Date(attendanceRecord.check_in_time)
+    const checkOutTime = new Date()
+    const workHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60)
+    const hasWorkedLongShift = workHours >= 9
+
     // CHECK TIME RESTRICTION: Check if check-out is after 6 PM (18:00)
     const timeRestrictCheckData = { 
       departments: userProfile?.departments, 
@@ -142,10 +148,18 @@ export async function POST(request: NextRequest) {
     }
     const canCheckOut = canCheckOutAtTime(now, timeRestrictCheckData?.departments, timeRestrictCheckData?.role)
     
-    // determine bypass if remote checkout (either originally off-premises OR currently out-of-range)
+    // Determine if this was an off-premises check-in (which doesn't require location validation for checkout)
     const isOffPremisesCheckedIn = !!attendanceRecord.on_official_duty_outside_premises || !!attendanceRecord.is_remote_location
-    const isOutOfRange = !checkoutLocationData
-    const bypassTimeRules = isOffPremisesCheckedIn || isOutOfRange
+    
+    // Block checkout entirely if user was checked in via off-premises (they should not checkout via app)
+    if (isOffPremisesCheckedIn) {
+      return NextResponse.json({
+        error: "Off-premises check-in does not allow app-based checkout. Please contact your supervisor for checkout authorization.",
+        isOffPremisesCheckIn: true,
+      }, { status: 403 })
+    }
+
+    const bypassTimeRules = workHours >= 9 // Users with 9+ hours don't need time restrictions
 
     if (!canCheckOut && !bypassTimeRules) {
       // Create a notification for users trying to check out after 6 PM
@@ -375,18 +389,16 @@ export async function POST(request: NextRequest) {
 
     let checkoutLocationData = null
 
-    // Determine whether this attendance record was created from an approved off-premises request
-    const isAttendanceOffPremises = !!attendanceRecord.on_official_duty_outside_premises || !!attendanceRecord.is_remote_location
+    // Determine if this was an off-premises check-in (already checked above, but set location data)
+    // When checking out, validate location ONLY if not off-premises
+    if (!isOffPremisesCheckedIn) {
+      if (!qr_code_used && latitude && longitude) {
+        const userLocation: LocationData = {
+          latitude,
+          longitude,
+          accuracy: 10,
+        }
 
-    if (!qr_code_used && latitude && longitude) {
-      const userLocation: LocationData = {
-        latitude,
-        longitude,
-        accuracy: 10,
-      }
-
-      // If the staff was checked-in via approved off-premises, skip strict geofence validation
-      if (!isAttendanceOffPremises) {
         const validation = validateCheckoutLocation(userLocation, qccLocations, deviceCheckOutRadius)
 
         if (!validation.canCheckOut) {
@@ -399,34 +411,18 @@ export async function POST(request: NextRequest) {
         }
 
         checkoutLocationData = validation.nearestLocation
-      } else {
-        // off-premises checked-in — treat this as remote checkout (no geofence enforcement)
-        checkoutLocationData = null
-      }
-    } else if (location_id) {
-      const { data: locationData, error: locationError } = await supabase
-        .from("geofence_locations")
-        .select("id, name, address, district_id, districts(name)")
-        .eq("id", location_id)
-        .single()
+      } else if (location_id) {
+        const { data: locationData, error: locationError } = await supabase
+          .from("geofence_locations")
+          .select("id, name, address, district_id, districts(name)")
+          .eq("id", location_id)
+          .single()
 
-      if (!locationError && locationData) {
-        checkoutLocationData = locationData
+        if (!locationError && locationData) {
+          checkoutLocationData = locationData
+        }
       }
     }
-
-    // (already determined earlier for time-restriction logic)
-    // If staff was checked in via an APPROVED off‑premises request, allow remote checkout
-
-    if (!checkoutLocationData && !isOffPremisesCheckedIn) {
-      // user is out of range and not already flagged remote; allow remote checkout
-      // immediately rather than blocking
-      console.log("[v0] Out-of-range checkout allowed (remote)")
-    }
-
-    const checkInTime = new Date(attendanceRecord.check_in_time)
-    const checkOutTime = new Date()
-    const workHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60)
 
     // determine remote checkout status: anything outside a known location is treated
     // as a remote/off-premises checkout.  Approved off-premises check-ins are also
@@ -477,8 +473,8 @@ export async function POST(request: NextRequest) {
       isWeekend,
     })
 
-    // Only mark earlyCheckoutWarning when the location requires a reason AND it's NOT a weekend
-    if (isEarlyCheckout && effectiveRequireEarlyCheckoutReason && !isWeekend) {
+    // Only mark earlyCheckoutWarning when the location requires a reason AND it's NOT a weekend AND user hasn't worked 9+ hours
+    if (isEarlyCheckout && effectiveRequireEarlyCheckoutReason && !isWeekend && !hasWorkedLongShift) {
       earlyCheckoutWarning = {
         message: `Early checkout detected at ${checkOutTime.toLocaleTimeString()}. Standard work hours end at ${checkOutEndTime}.`,
         checkoutTime: checkOutTime.toISOString(),
@@ -493,6 +489,9 @@ export async function POST(request: NextRequest) {
           standardEndTime: checkOutEndTime,
         }, { status: 400 })
       }
+    } else if (hasWorkedLongShift && isEarlyCheckout && !isWeekend) {
+      // User has worked 9+ hours, no reason required but log it
+      console.log(`[v0] Early checkout for user with ${workHours.toFixed(2)} hours worked - no reason required`)
     }
 
     const checkoutData: Record<string, any> = {
@@ -565,10 +564,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      earlyCheckoutWarning,
+      earlyCheckoutWarning: hasWorkedLongShift ? null : earlyCheckoutWarning, // No warning for 9+ hours
       deviceSharingWarning,
       data: updatedRecord,
-      message: `Successfully checked out at ${checkoutLocationData?.name}. Work hours: ${workHours.toFixed(2)}`,
+      workHours: workHours.toFixed(2),
+      checkoutLocation: checkoutLocationData?.name || "Off-Premises",
+      message: `Successfully checked out${checkoutLocationData ? ` at ${checkoutLocationData.name}` : ""}. Work hours: ${workHours.toFixed(2)}`,
     })
   } catch (error) {
     console.error("[v0] Check-out error:", error)
