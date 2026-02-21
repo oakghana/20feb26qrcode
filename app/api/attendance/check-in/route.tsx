@@ -2,6 +2,12 @@ import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { validateCheckoutLocation, type LocationData } from "@/lib/geolocation"
 
+// ===== FINAL HARD RESET REBUILD =====
+// Timestamp: 2026-02-21T21:00:00Z
+// Issue: Server running OLD compiled code - forcing complete rebuild
+// This endpoint MUST save check-in to supabase attendance table
+// ====================================
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
