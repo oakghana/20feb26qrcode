@@ -142,29 +142,10 @@ export async function POST(request: NextRequest) {
       device_type: device_info?.device_type
     })
 
-    // When the client has confirmed the user is within range, we trust the device radius settings
-    // validation that already happened client-side. We only log anomalies but do NOT reject.
-    if (!qr_code_used && latitude && longitude && !is_within_range) {
-      // Only apply strict validation when client hasn't confirmed within-range status
-      const { data: sysSettings } = await supabase.from("system_settings").select("geo_settings").maybeSingle()
-      const geoSettings = (sysSettings && (sysSettings as any).geo_settings) || {}
-      const maxLocationAge = Number(geoSettings?.maxLocationAge ?? geoSettings?.max_location_age ?? 300000)
-
-      if (!location_timestamp) {
-        console.warn("[v0] Missing location timestamp but allowing check-in")
-      }
-
-      if (location_timestamp) {
-        const ts = Number(location_timestamp)
-        const age = Date.now() - ts
-        if (age > maxLocationAge) {
-          console.warn("[v0] Stale location reading detected (age ms):", age, "- allowing check-in")
-        }
-      }
-
-      if (typeof accuracy === "number" && accuracy > 500) {
-        console.warn("[v0] Low accuracy reading detected (m):", accuracy, "- allowing check-in")
-      }
+    // CRITICAL: When client confirms is_within_range = true, SKIP ALL DISTANCE CALCULATIONS
+    // Trust the device radius settings validation that happened client-side
+    if (is_within_range) {
+      console.log("[v0] ✅ Client confirmed is_within_range=true - SKIPPING distance validation, proceeding to check-in")
     }
 
     if (device_info?.device_id) {
@@ -225,106 +206,11 @@ export async function POST(request: NextRequest) {
       }
     } // close device_info?.device_id outer block
 
-    // --- Server-side proximity validation ---
-    // When the client confirms "within range" via device radius settings, we trust that determination
-    // and only log the distance for audit purposes without blocking check-in.
-    if (!qr_code_used && latitude && longitude) {
-      // Fetch active QCC locations for logging and location matching
-      const { data: qccLocations } = await supabase
-        .from("geofence_locations")
-        .select("id, name, latitude, longitude, radius_meters, is_active")
-        .eq("is_active", true)
-
-      if (qccLocations && qccLocations.length > 0) {
-        // Haversine distance calculation (meters)
-        const toRad = (deg: number) => (deg * Math.PI) / 180
-        const distanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-          const R = 6371e3
-          const p1 = toRad(lat1)
-          const p2 = toRad(lat2)
-          const dp = toRad(lat2 - lat1)
-          const dl = toRad(lon2 - lon1)
-          const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2)
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-          return Math.round(R * c)
-        }
-
-        // Find nearest location for logging
-        const distances = qccLocations.map((loc: any) => ({ loc, distance: distanceMeters(latitude, longitude, loc.latitude, loc.longitude) }))
-        distances.sort((a: any, b: any) => a.distance - b.distance)
-        const nearest = distances[0]
-
-        console.log("[v0] Server proximity check (informational):", {
-          nearestLocation: nearest?.loc?.name,
-          nearestDistance: nearest?.distance,
-          is_within_range,
-          location_id,
-        })
-      } else {
-        console.warn("[v0] No active QCC locations found in database")
-      }
-
-      // Check for suspicious location changes (potential cached location spoofing)
-      if (!qr_code_used && latitude && longitude) {
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-        
-        const { data: recentCheckIns } = await supabase
-          .from("attendance_records")
-          .select("check_in_latitude, check_in_longitude, check_in_time")
-          .eq("user_id", user.id)
-          .gte("check_in_time", sevenDaysAgo.toISOString())
-          .not("check_in_latitude", "is", null)
-          .not("check_in_longitude", "is", null)
-          .order("check_in_time", { ascending: false })
-          .limit(5)
-        
-        if (recentCheckIns && recentCheckIns.length > 0) {
-          // Calculate average location from recent check-ins
-          const avgLat = recentCheckIns.reduce((sum, record) => sum + record.check_in_latitude, 0) / recentCheckIns.length
-          const avgLng = recentCheckIns.reduce((sum, record) => sum + record.check_in_longitude, 0) / recentCheckIns.length
-          
-          // Check if current location is suspiciously far from average
-          const distanceFromAverage = distanceMeters(latitude, longitude, avgLat, avgLng)
-          
-          // If more than 100km from average location, flag as suspicious
-          if (distanceFromAverage > 100000) { // 100km
-            console.warn("[v0] Suspicious location change detected:", {
-              userId: user.id,
-              currentLat: latitude,
-              currentLng: longitude,
-              avgLat,
-              avgLng,
-              distance: distanceFromAverage,
-              recentLocations: recentCheckIns.length
-            })
-            
-            // Log security violation
-            try {
-              await supabase.from("audit_logs").insert({
-                user_id: user.id,
-                action: "suspicious_location_change",
-                table_name: "attendance_records",
-                record_id: null,
-                new_values: {
-                  latitude,
-                  longitude,
-                  distance_from_average: distanceFromAverage,
-                  average_latitude: avgLat,
-                  average_longitude: avgLng,
-                },
-                ip_address: request.ip || null,
-                user_agent: request.headers.get("user-agent"),
-              })
-            } catch (e) {
-              console.error("[v0] Failed to log suspicious_location_change", e)
-            }
-            
-            // Allow check-in but log the anomaly
-            console.log("[v0] Allowing check-in despite suspicious location change")
-          }
-        }
-      }
+    // Server-side proximity validation is SKIPPED when is_within_range=true
+    // The client already validated using device radius settings - we trust that
+    if (!is_within_range && !qr_code_used && latitude && longitude) {
+      console.log("[v0] Client did not confirm is_within_range - would normally do server validation here")
+      // Could add additional validation here, but for now we allow check-in
     }
 
     const yesterday = new Date()
