@@ -1152,6 +1152,127 @@ export function AttendanceRecorder({
     setRecentCheckIn(false)
   }
 
+  const handleCheckOut = async () => {
+    console.log("[v0] Check-out initiated")
+
+    if (isLoading) {
+      console.log("[v0] Check-out already in progress")
+      return
+    }
+
+    if (!localTodayAttendance?.check_in_time) {
+      toast({
+        title: "No Check-In Found",
+        description: "You must check in before you can check out.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (localTodayAttendance?.check_out_time) {
+      const checkOutTime = new Date(localTodayAttendance.check_out_time).toLocaleTimeString()
+      toast({
+        title: "Already Checked Out",
+        description: `You already checked out at ${checkOutTime}.`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
+    setCheckingMessage("Processing check-out...")
+
+    try {
+      console.log("[v0] Starting check-out process...")
+      setError(null)
+      setFlashMessage(null)
+
+      const deviceInfo = getDeviceInfo()
+      
+      let latitude = userLocation?.latitude
+      let longitude = userLocation?.longitude
+
+      if (!latitude || !longitude) {
+        const currentLocation = await getCurrentLocationData()
+        if (!currentLocation) {
+          throw new Error("Could not retrieve current location for checkout.")
+        }
+        latitude = currentLocation.latitude
+        longitude = currentLocation.longitude
+      }
+
+      console.log("[v0] Sending checkout request with location:", { latitude, longitude })
+
+      const response = await fetch("/api/attendance/check-out", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-device-type": deviceInfo.device_type || "desktop",
+        },
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          accuracy: userLocation?.accuracy || 10,
+          location_source: "gps",
+          device_info: deviceInfo,
+        }),
+      })
+
+      const result = await response.json()
+      console.log("[v0] Checkout API response:", { status: response.status, data: result })
+
+      if (!response.ok) {
+        throw new Error(result.error || `Checkout failed: ${response.status}`)
+      }
+
+      // Success
+      if (result.success && result.data) {
+        console.log("[v0] Checkout successful:", result.data)
+        
+        const workHours = parseFloat(result.workHours || "0").toFixed(2)
+        const checkOutLocation = result.checkoutLocation || "Unknown Location"
+
+        setLocalTodayAttendance({
+          ...localTodayAttendance,
+          check_out_time: result.data.check_out_time,
+          check_out_location_id: result.data.check_out_location_id,
+          check_out_location_name: result.data.check_out_location_name,
+          work_hours: parseFloat(workHours),
+        })
+
+        setFlashMessage({
+          message: `Successfully checked out at ${checkOutLocation}. Work hours: ${workHours}`,
+          type: "success",
+        })
+
+        toast({
+          title: "Checked Out",
+          description: `You have successfully checked out. Total work hours: ${workHours}`,
+          action: <ToastAction altText="OK">OK</ToastAction>,
+        })
+
+        setRecentCheckOut(true)
+      } else {
+        throw new Error(result.message || "Checkout did not complete successfully")
+      }
+    } catch (error) {
+      console.error("[v0] Check-out error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to check out. Please try again."
+      setFlashMessage({
+        message: errorMessage,
+        type: "error",
+      })
+      toast({
+        title: "Checkout Failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+      setCheckingMessage("")
+    }
+  }
+
   const handleLocationSelect = (location: GeofenceLocation) => {
     console.log("Location selected:", location.name)
     // Logic to handle location selection
@@ -1340,7 +1461,6 @@ export function AttendanceRecorder({
                     isCheckingOut={isLoading}
                     userDepartment={userProfile?.departments}
                     userRole={userProfile?.role}
-                    isOffPremisesCheckedIn={isOffPremisesCheckedIn}
                   />
                 )
               })()
