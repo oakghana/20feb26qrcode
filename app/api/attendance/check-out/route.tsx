@@ -3,9 +3,14 @@ import { type NextRequest, NextResponse } from "next/server"
 import { validateCheckoutLocation, type LocationData } from "@/lib/geolocation"
 import { requiresEarlyCheckoutReason, canCheckOutAtTime, getCheckOutDeadline } from "@/lib/attendance-utils"
 
-// FORCE COMPLETE REBUILD: 2026-02-21T17:15:00Z
-// This comment triggers server cache invalidation and forces full recompilation
-// Removes all stale compiled code from previous builds
+// ===== HARD RESET REBUILD TRIGGER =====
+// Timestamp: 2026-02-21T18:00:00Z
+// Action: Complete server cache invalidation
+// Purpose: Force rebuild without ANY cached compiled code
+// Previous issues: OLD compiled code with checkoutLocationData bug
+// Status: Rebuilding clean copy of checkout route
+// ======================================
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()

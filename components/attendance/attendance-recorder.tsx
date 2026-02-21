@@ -1,7 +1,12 @@
 "use client"
 
-// FORCE COMPLETE REBUILD: 2026-02-21T17:15:00Z
-// Invalidates all cached compiled code - enables new checkout range validation
+// ===== HARD RESET REBUILD TRIGGER =====
+// Timestamp: 2026-02-21T18:00:00Z
+// Action: Complete client cache invalidation
+// Purpose: Force rebuild without ANY cached compiled code
+// Previous issue: OLD code with handleEarlyCheckoutConfirm and handleEarlyCheckoutCancel
+// Status: Rebuilding clean copy without early checkout functions
+// ======================================
 import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   getCurrentLocation,
@@ -1479,7 +1484,7 @@ export function AttendanceRecorder({
                     userDepartment={userProfile?.departments}
                     userRole={userProfile?.role}
                     isOutOfRange={
-                      checkoutTimeReached && locationValidation?.canCheckOut === false
+                      locationValidation?.canCheckOut === false
                     }
                     nearestLocation={
                       locationValidation?.nearestLocation?.name || null
