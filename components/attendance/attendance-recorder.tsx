@@ -311,6 +311,18 @@ export function AttendanceRecorder({
 
   const [minutesUntilCheckout, setMinutesUntilCheckout] = useState<number | null>(null)
 
+  // summary after off-premises request submitted (check-in or check-out)
+  const [offPremisesSuccess, setOffPremisesSuccess] = useState<{
+    mode: "checkin" | "checkout"
+    reason: string
+    location: string
+  } | null>(null)
+  // summary specifically for checkout request if out-of-range
+  const [offPremisesCheckoutRequest, setOffPremisesCheckoutRequest] = useState<{
+    reason: string
+    location: string
+  } | null>(null)
+
   const fetchTodayAttendance = async () => {
     try {
       const supabase = createClient()
@@ -366,6 +378,7 @@ export function AttendanceRecorder({
     !!localTodayAttendance?.check_in_time && // Must have a check-in record
     !localTodayAttendance?.check_out_time &&
     !isOnLeave &&
+    !offPremisesCheckoutRequest && // if request pending, disable further attempts
     // Allow checkout when either location validation passes, the session was started
     // as an off‑premises request, or the minimum two‑hour duration has been reached.
     (locationValidation?.canCheckOut === true ||
@@ -779,7 +792,19 @@ export function AttendanceRecorder({
       try {
         const {
           data: { user },
+          error: authErr,
         } = await supabase.auth.getUser()
+
+        if (authErr) {
+          console.error("[v0] Auth error while getting user:", authErr)
+          // if refresh token invalid or session expired, force sign-out
+          if (authErr.message?.toLowerCase().includes("refresh token")) {
+            console.log("[v0] Refresh token issue detected, signing out")
+            await supabase.auth.signOut()
+            router.push("/auth/login")
+            return
+          }
+        }
 
         if (!user) {
           console.log("[v0] No authenticated user found")
@@ -1203,21 +1228,37 @@ export function AttendanceRecorder({
       console.log("[v0] Off-premises request submitted successfully", { request_id: result.request_id })
 
       setFlashMessage({
-        message: `Off-premises ${offPremisesMode === 'checkout' ? 'check-out' : 'check-in'} request sent to your supervisor for approval. We'll notify you when the supervisor approves and your attendance will be recorded using the ORIGINAL request time and the submitted location.`,
+        message: `Your off-premises ${offPremisesMode === 'checkout' ? 'check‑out' : 'check‑in'} request has been submitted.
+Reason: "${offPremisesReason.trim()}".
+A manager will review it shortly and you will be notified of the outcome.`,
         type: "success",
       })
 
       toast({
-        title: "Off‑Premises Request Sent",
-        description: `Your request was sent to your supervisor — waiting for approval. You will be automatically ${offPremisesMode === 'checkout' ? 'checked out' : 'checked in'} if approved.`,
-        action: <ToastAction altText="OK">OK</ToastAction>,
+        title: "Request Sent",
+        description: (
+          <div className="space-y-1">
+            <p>Your off-premises {offPremisesMode === 'checkout' ? 'check‑out' : 'check‑in'} request</p>
+            <p><strong>Reason:</strong> {offPremisesReason.trim()}</p>
+            <p className="text-sm">You will be automatically {offPremisesMode === 'checkout' ? 'checked out' : 'checked in'} if the manager approves.</p>
+          </div>
+        ),
+        action: <ToastAction altText="Understood">OK</ToastAction>,
       })
 
       setPendingOffPremisesLocation(null)
       setOffPremisesReason("")
 
+      // show brief success summary on page
+      setOffPremisesSuccess({
+        mode: offPremisesMode,
+        reason: offPremisesReason.trim(),
+        location: locationDisplayName,
+      })
+      // dismiss summary after 15 seconds
+      setTimeout(() => setOffPremisesSuccess(null), 15000)
+
       // Refresh attendance status after submitting off-premises request
-      // `handleRefreshStatus` was removed/renamed — call the established refetch instead.
       setTimeout(() => {
         fetchTodayAttendance()
       }, 2000)
@@ -1320,7 +1361,27 @@ export function AttendanceRecorder({
           if (!response.ok) {
             throw new Error(result.error || "Failed to submit checkout request")
           }
-          setFlashMessage({ message: result.message || "Checkout request submitted", type: "success" })
+
+          // show descriptive message and summary card
+          const locName = locationData.name || `${locationData.latitude.toFixed(4)}, ${locationData.longitude.toFixed(4)}`
+          setFlashMessage({
+            message: `Your off‑premises checkout request has been sent for approval. Reason: "${earlyCheckoutReason || 'Not provided'}"`,
+            type: "success",
+          })
+          setOffPremisesCheckoutRequest({ reason: earlyCheckoutReason || "", location: locName })
+          setRecentCheckOut(true) // disable button until request cleared
+
+          toast({
+            title: "Checkout Request Submitted",
+            description: (
+              <div className="space-y-1">
+                <p>Your remote checkout request has been sent to your manager.</p>
+                <p><strong>Location:</strong> {locName}</p>
+                {earlyCheckoutReason && <p><strong>Reason:</strong> {earlyCheckoutReason}</p>}
+              </div>
+            ),
+            action: <ToastAction altText="Understood">OK</ToastAction>,
+          })
           return
         } catch (reqErr: any) {
           console.error("[v0] Failed to send off-premises checkout request:", reqErr)
@@ -2083,7 +2144,29 @@ export function AttendanceRecorder({
       <Card>
         <CardContent className="pt-6">
           <div className="space-y-4">
-            <Button
+            {offPremisesSuccess && (
+        <Card className="mb-4 border-green-300 bg-green-50">
+          <CardContent>
+            <p className="font-semibold text-green-800">
+              {offPremisesSuccess.mode === 'checkout' ? 'Off‑Premises Check‑Out' : 'Off‑Premises Check‑In'} Request Pending
+            </p>
+            <p className="text-sm">Location: {offPremisesSuccess.location}</p>
+            <p className="text-sm">Reason: {offPremisesSuccess.reason}</p>
+          </CardContent>
+        </Card>
+      )}
+      {offPremisesCheckoutRequest && (
+        <Card className="mb-4 border-blue-300 bg-blue-50">
+          <CardContent>
+            <p className="font-semibold text-blue-800">
+              Off‑Premises Checkout Request Pending
+            </p>
+            <p className="text-sm">Location: {offPremisesCheckoutRequest.location}</p>
+            <p className="text-sm">Reason: {offPremisesCheckoutRequest.reason || 'Not provided'}</p>
+          </CardContent>
+        </Card>
+      )}
+      <Button
               onClick={handleRefreshLocations}
               variant="secondary"
               size="lg"
