@@ -17,11 +17,11 @@ async function checkOffPremisesRequests() {
       .select('*', { count: 'exact', head: true });
 
     if (countError) {
-      console.error('❌ Error counting records:', countError);
+      console.error('Error counting records:', countError);
       return;
     }
 
-    console.log(`📊 TOTAL RECORDS IN TABLE: ${totalCount || 0}\n`);
+    console.log(`TOTAL RECORDS IN TABLE: ${totalCount || 0}\n`);
 
     // 2. Get count by status
     const { data: byStatus, error: statusError } = await supabase
@@ -29,15 +29,15 @@ async function checkOffPremisesRequests() {
       .select('status');
 
     if (!statusError && byStatus) {
-      const statusCounts = byStatus.reduce((acc: any, req: any) => {
-        acc[req.status] = (acc[req.status] || 0) + 1;
-        return acc;
-      }, {});
+      const statusCounts = {};
+      byStatus.forEach(req => {
+        statusCounts[req.status] = (statusCounts[req.status] || 0) + 1;
+      });
 
-      console.log('📈 RECORDS BY STATUS:');
-      console.log(`  ⏳ Pending: ${statusCounts.pending || 0}`);
-      console.log(`  ✅ Approved: ${statusCounts.approved || 0}`);
-      console.log(`  ❌ Rejected: ${statusCounts.rejected || 0}\n`);
+      console.log('RECORDS BY STATUS:');
+      console.log(`  Pending: ${statusCounts.pending || 0}`);
+      console.log(`  Approved: ${statusCounts.approved || 0}`);
+      console.log(`  Rejected: ${statusCounts.rejected || 0}\n`);
     }
 
     // 3. Get all requests with details (limit to 20 most recent)
@@ -54,7 +54,7 @@ async function checkOffPremisesRequests() {
         created_at,
         approved_at,
         rejection_reason,
-        user_profiles (
+        user_profiles!pending_offpremises_checkins_user_id_fkey (
           id,
           first_name,
           last_name,
@@ -66,13 +66,13 @@ async function checkOffPremisesRequests() {
       .limit(20);
 
     if (fetchError) {
-      console.error('❌ Error fetching requests:', fetchError);
+      console.error('Error fetching requests:', fetchError);
       return;
     }
 
     if (allRequests && allRequests.length > 0) {
-      console.log('📋 RECENT OFF-PREMISES REQUESTS:\n');
-      allRequests.forEach((req: any, index: number) => {
+      console.log('RECENT OFF-PREMISES REQUESTS:\n');
+      allRequests.forEach((req, index) => {
         const user = Array.isArray(req.user_profiles) ? req.user_profiles[0] : req.user_profiles;
         console.log(`${index + 1}. REQUEST ID: ${req.id}`);
         console.log(`   Staff: ${user?.first_name} ${user?.last_name} (${user?.email})`);
@@ -91,7 +91,7 @@ async function checkOffPremisesRequests() {
         console.log('');
       });
     } else {
-      console.log('❌ NO RECORDS FOUND IN TABLE\n');
+      console.log('NO RECORDS FOUND IN TABLE\n');
       console.log('The table exists but has no off-premises check-in requests yet.');
       console.log('Users can submit requests through the mobile app when checking in outside premises.\n');
     }
@@ -114,7 +114,7 @@ async function checkOffPremisesRequests() {
     console.log('');
 
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('Error:', error);
   }
 }
 
