@@ -650,14 +650,30 @@ export function validateAttendanceLocation(
     })
     .sort((a, b) => a.distance - b.distance)
 
-  const availableLocations = allLocationsWithDistance.filter(({ withinRange }) => withinRange)
+  // Filter out locations with clearly incorrect coordinates (e.g., Australia instead of Ghana)
+  // Ghana coordinates are approximately between lat 1-12 and lng -4 to 2
+  const validLocationsWithDistance = allLocationsWithDistance.filter(({ location }) => {
+    const lat = location.latitude
+    const lng = location.longitude
+    // Check if location is within Ghana bounds (approximately)
+    // Ghana: lat 1.0 to 11.2, lng -3.3 to 1.2
+    const isInGhana = lat >= 0.5 && lat <= 12 && lng >= -4 && lng <= 2
+    
+    if (!isInGhana) {
+      console.warn(`[v0] Filtering out location with invalid coordinates (outside Ghana): ${location.name} (${lat}, ${lng})`)
+    }
+    return isInGhana
+  })
+
+  const availableLocations = validLocationsWithDistance.filter(({ withinRange }) => withinRange)
 
   console.log("[v0] Check-in validation - Locations:", {
-    nearestLocation: allLocationsWithDistance[0]?.location.name,
-    nearestDistance: allLocationsWithDistance[0]?.distance,
+    nearestLocation: validLocationsWithDistance[0]?.location.name,
+    nearestDistance: validLocationsWithDistance[0]?.distance,
     proximityRadius: deviceProximityBase, // Changed from internalProximityDistance to deviceProximityBase
     availableLocationsCount: availableLocations.length,
-    allLocations: allLocationsWithDistance.map(l => `${l.location.name}: ${l.distance}m`)
+    allLocations: validLocationsWithDistance.map(l => `${l.location.name}: ${l.distance}m`),
+    filteredOutLocations: allLocationsWithDistance.filter(l => !validLocationsWithDistance.some(v => v.location.id === l.location.id)).map(l => `${l.location.name}: ${l.distance}m`)
   })
 
   const canCheckIn = availableLocations.length > 0
@@ -665,10 +681,10 @@ export function validateAttendanceLocation(
   let message: string
 
   if (canCheckIn) {
-    message = `You can check in at ${nearest.location.name}`
+    message = `You can check in at ${validLocationsWithDistance[0]?.location.name}`
   } else {
-    const nearestDistanceKm = (nearest.distance / 1000).toFixed(1)
-    message = `You are too far from ${nearest.location.name}. You must be within ${displayDistance} meters of a QCC location to check in.`
+    const nearestDistanceKm = (validLocationsWithDistance[0]?.distance || 0 / 1000).toFixed(1)
+    message = `You are too far from ${validLocationsWithDistance[0]?.location.name}. You must be within ${deviceProximityBase} meters of a QCC location to check in.`
   }
 
   let accuracyWarning: string | undefined
@@ -712,8 +728,8 @@ RECOMMENDED: Use QR code or switch to Chrome/Edge for better accuracy.`
 
   return {
     canCheckIn,
-    nearestLocation: nearest.location,
-    distance: nearest.distance,
+    nearestLocation: validLocationsWithDistance[0]?.location,
+    distance: validLocationsWithDistance[0]?.distance,
     message,
     accuracyWarning,
     criticalAccuracyIssue,
@@ -758,6 +774,27 @@ export function validateCheckoutLocation(
     }
   }
 
+  // Filter out locations with clearly incorrect coordinates (e.g., Australia instead of Ghana)
+  // Ghana coordinates are approximately between lat 1-12 and lng -4 to 2
+  const validLocations = qccLocations.filter((location) => {
+    const lat = location.latitude
+    const lng = location.longitude
+    // Check if location is within Ghana bounds (approximately)
+    // Ghana: lat 1.0 to 11.2, lng -3.3 to 1.2
+    const isInGhana = lat >= 0.5 && lat <= 12 && lng >= -4 && lng <= 2
+    return isInGhana
+  })
+
+  // Get nearest valid location
+  const nearestValid = findNearestLocation(userLocation, validLocations)
+
+  if (!nearestValid) {
+    return {
+      canCheckOut: false,
+      message: "No valid QCC locations found. Please use QR code for check-out.",
+    }
+  }
+
   // Use device-specific radius (location radius is ignored)
   const baseProximity = deviceProximityBase
 
@@ -768,8 +805,8 @@ export function validateCheckoutLocation(
   const effectiveProximity = baseProximity + accuracyBuffer
 
   console.log("[v0] Check-out validation:", {
-    location: nearest.location.name,
-    distance: nearest.distance,
+    location: nearestValid.location.name,
+    distance: nearestValid.distance,
     deviceProximityBase,
     baseProximity,
     effectiveProximity,
@@ -781,19 +818,19 @@ export function validateCheckoutLocation(
   if (userLocation.accuracy > 5000) {
     return {
       canCheckOut: false,
-      nearestLocation: nearest.location,
-      distance: nearest.distance,
+      nearestLocation: nearestValid.location,
+      distance: nearestValid.distance,
       message:
         "Cannot validate location due to extremely poor GPS accuracy. Please use the QR code option or ensure you have a better GPS signal.",
     }
   }
 
-  const canCheckOut = nearest.distance <= effectiveProximity
+  const canCheckOut = nearestValid.distance <= effectiveProximity
 
   let message: string
 
   if (canCheckOut) {
-    message = `You can check out at ${nearest.location.name}`
+    message = `You can check out at ${nearestValid.location.name}`
   } else {
     message = `You must be within ${displayDistance} meters of a QCC location to check out`
   }
@@ -816,8 +853,8 @@ export function validateCheckoutLocation(
 
   return {
     canCheckOut,
-    nearestLocation: nearest.location,
-    distance: nearest.distance,
+    nearestLocation: nearestValid.location,
+    distance: nearestValid.distance,
     message,
     accuracyWarning,
   }

@@ -33,28 +33,27 @@ export const metadata = {
 }
 
 export default async function DashboardPage() {
-  try {
-    const supabase = await createClient()
+  const supabase = await createClient()
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect("/auth/login")
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect("/auth/login")
 
-    // Get current date info
-    const today = new Date()
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-    const startOfYear = new Date(today.getFullYear(), 0, 1)
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-    const currentDay = today.getDate()
+  // Get current date info
+  const today = new Date()
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  const startOfYear = new Date(today.getFullYear(), 0, 1)
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+  const currentDay = today.getDate()
 
-    // Parallel fetch for better performance
-    const [
-      profileResult,
-      todayAttendanceResult,
-      monthlyAttendanceResult,
-      yearlyAttendanceResult,
-      leaveRequestsResult,
-      notificationsResult
-    ] = await Promise.all([
+  // Parallel fetch for better performance
+  const [
+    profileResult,
+    todayAttendanceResult,
+    monthlyAttendanceResult,
+    yearlyAttendanceResult,
+    leaveRequestsResult,
+    notificationsResult
+  ] = await Promise.all([
       supabase
         .from("user_profiles")
         .select(`id, first_name, last_name, role, departments (name, code)`)
@@ -447,8 +446,4 @@ export default async function DashboardPage() {
         </div>
       </div>
     )
-  } catch (error) {
-    console.error("[v0] Dashboard error:", error)
-    redirect("/auth/login")
-  }
 }

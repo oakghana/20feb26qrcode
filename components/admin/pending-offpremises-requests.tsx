@@ -44,6 +44,32 @@ export function PendingOffPremisesRequests() {
   const [error, setError] = useState<string | null>(null)
   const [managerProfile, setManagerProfile] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<string>('all')
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [userLocation, setUserLocation] = useState<string | null>(null)
+  const [userDepartment, setUserDepartment] = useState<string | null>(null)
+
+  // Load user role and profile on mount
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        const response = await fetch('/api/user/profile', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setUserRole(data.role)
+          setUserLocation(data.assigned_location_id)
+          setUserDepartment(data.department)
+        }
+      } catch (err) {
+        console.error('[v0] Error loading user profile:', err)
+      }
+    }
+
+    loadUserProfile()
+  }, [])
 
   // Always load ALL requests, then filter client-side for accurate tab counts
   const loadPendingRequests = async () => {
@@ -51,6 +77,8 @@ export function PendingOffPremisesRequests() {
       setIsLoading(true)
       setError(null)
 
+      console.log('[v0] Starting to load pending off-premises requests...')
+      
       // Always fetch all statuses - the API handles authentication and role checks
       const response = await fetch(`/api/attendance/offpremises/pending?status=all`, {
         method: 'GET',
@@ -59,8 +87,12 @@ export function PendingOffPremisesRequests() {
         },
       })
 
+      console.log('[v0] API response status:', response.status)
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error('[v0] API error response:', errorData)
+        
         if (response.status === 401) {
           setError('Unable to authenticate - please log in again')
         } else if (response.status === 403) {
@@ -70,17 +102,26 @@ export function PendingOffPremisesRequests() {
         } else {
           setError('Failed to fetch requests: ' + (errorData.error || response.statusText) + (errorData.details ? ' (' + errorData.details + ')' : ''))
         }
+        setIsLoading(false)
         return
       }
 
       const data = await response.json()
-      console.log("[v0] Loaded requests:", data.requests)
-      console.log("[v0] Total count:", data.count)
-      console.log("[v0] Pending filter:", data.requests?.filter((r: any) => r.status === 'pending'))
+      console.log('[v0] Successfully loaded off-premises requests:', {
+        totalCount: data.count,
+        requestsReceived: data.requests?.length || 0,
+        firstRequest: data.requests?.[0]?.id,
+        statuses: data.requests?.reduce((acc: any, r: any) => {
+          acc[r.status] = (acc[r.status] || 0) + 1
+          return acc
+        }, {}),
+      })
+      
       setAllRequests(data.requests || [])
-    } catch (err: any) {
-      setError(err.message || 'An error occurred while loading requests')
-    } finally {
+      setIsLoading(false)
+    } catch (err) {
+      console.error('[v0] Error loading pending requests:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load requests')
       setIsLoading(false)
     }
   }

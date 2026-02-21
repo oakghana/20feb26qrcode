@@ -49,7 +49,7 @@ import { Label } from "@/components/ui/label"
 import { ToastAction } from "@/components/ui/toast"
 import { clearAttendanceCache, shouldClearCache, setCachedDate } from "@/lib/utils/attendance-cache"
 import { cn } from "@/lib/utils"
-import { requiresLatenessReason, requiresEarlyCheckoutReason, canCheckInAtTime, canCheckOutAtTime, getCheckInDeadline, getCheckOutDeadline } from "@/lib/attendance-utils"
+import { requiresLatenessReason, requiresEarlyCheckoutReason, canCheckInAtTime, canCheckOutAtTime, getCheckInDeadline, getCheckOutDeadline, isWeekend } from "@/lib/attendance-utils"
 import { DeviceActivityHistory } from "@/components/attendance/device-activity-history"
 import { ActiveSessionTimer } from "@/components/attendance/active-session-timer"
 
@@ -206,6 +206,11 @@ export function AttendanceRecorder({
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
 
+  // Off-premises request states
+  const [showOffPremisesReasonDialog, setShowOffPremisesReasonDialog] = useState(false)
+  const [offPremisesReason, setOffPremisesReason] = useState("")
+  const [pendingOffPremisesLocation, setPendingOffPremisesLocation] = useState<any>(null)
+
   const [detectedLocationName, setDetectedLocationName] = useState<string | null>(null)
 
   const [locationPermissionStatusSimplified, setLocationPermissionStatusSimplified] = useState<{
@@ -236,19 +241,21 @@ export function AttendanceRecorder({
     const now = new Date()
     const userDept = userProfile?.departments
     const userRole = userProfile?.role
+    const isWeekendDay = isWeekend(now)
     
     const canCheckIn = canCheckInAtTime(now, userDept, userRole)
     const canCheckOut = canCheckOutAtTime(now, userDept, userRole)
     
-    if (!canCheckIn && !localTodayAttendance?.check_in_time) {
+    // Only show time restriction warnings on working days
+    if (!isWeekendDay && !canCheckIn && !localTodayAttendance?.check_in_time) {
       setTimeRestrictionWarning({
         type: 'checkin',
-        message: `Check-in is only allowed before ${getCheckInDeadline()}. Your department does not have exemptions for late check-ins.`
+        message: `Check-in is only allowed before ${getCheckInDeadline()} on working days. Your department does not have exemptions for late check-ins.`
       })
-    } else if (!canCheckOut && localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time) {
+    } else if (!isWeekendDay && !canCheckOut && localTodayAttendance?.check_in_time && !localTodayAttendance?.check_out_time) {
       setTimeRestrictionWarning({
         type: 'checkout',
-        message: `Check-out is only allowed before ${getCheckOutDeadline()}. Your department does not have exemptions for late check-outs.`
+        message: `Check-out is only allowed before ${getCheckOutDeadline()} on working days. Your department does not have exemptions for late check-outs.`
       })
     } else {
       setTimeRestrictionWarning(null)
@@ -986,16 +993,24 @@ export function AttendanceRecorder({
           }))
           .sort((a, b) => a.distance - b.distance)
 
-        // Use device-specific proximity radius: 400m for mobile/tablet, 700m for laptop, 2000m for desktop PC
-        let deviceProximityRadius = 400
-        if (deviceInfo.isMobile || deviceInfo.isTablet) {
-          deviceProximityRadius = 400
-        } else if (deviceInfo.isLaptop) {
-          deviceProximityRadius = 700
-        } else {
-          deviceProximityRadius = 2000 // Desktop PC
+        // Use device-specific proximity radius from settings
+        // Fallback to defaults if settings unavailable
+        let deviceProximityRadius = 100 // Default for mobile
+        
+        if (deviceRadiusSettings) {
+          if (deviceInfo.isMobile) {
+            deviceProximityRadius = deviceRadiusSettings.mobile.checkIn
+          } else if (deviceInfo.isTablet) {
+            deviceProximityRadius = deviceRadiusSettings.tablet.checkIn
+          } else if (deviceInfo.isLaptop) {
+            deviceProximityRadius = deviceRadiusSettings.laptop.checkIn
+          } else {
+            deviceProximityRadius = deviceRadiusSettings.desktop.checkIn // Desktop PC
+          }
         }
-        const displayRadius = 50 // Trade secret - what we show to users
+        
+        // Display radius: Always show 100m to users (trade secret)
+        const displayRadius = 100
         
         console.log("[v0] Check-in proximity validation:", {
           nearestLocation: distances[0]?.location.name,
@@ -1149,6 +1164,81 @@ export function AttendanceRecorder({
     }
   }
 
+  // Perform actual check-in API call
+  const performCheckInAPI = async (locationData: any, nearestLocation: any, latenessReason: string = "") => {
+    try {
+      const deviceInfo = getDeviceInfo()
+
+      const response = await fetch("/api/attendance/check-in", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-device-type": deviceInfo.device_type || "desktop",
+        },
+        body: JSON.stringify({
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          accuracy: locationData.accuracy || 10,
+          location_source: "gps",
+          location_timestamp: locationData.timestamp || Date.now(),
+          location_id: nearestLocation?.id || null,
+          device_info: deviceInfo,
+          location_name: nearestLocation?.name || "Unknown Location",
+          lateness_reason: latenessReason,
+          is_within_range: true,
+        }),
+      })
+
+      const result = await response.json()
+
+      console.log("[v0] Check-in API response:", {
+        status: response.status,
+        ok: response.ok,
+        result,
+        nearestLocation: nearestLocation?.name,
+        is_within_range: true,
+        userData: { lat: locationData.latitude, lng: locationData.longitude }
+      })
+
+      if (!response.ok) {
+        console.error("[v0] Check-in API error response:", result)
+        throw new Error(result.error || `Check-in failed: ${response.status}`)
+      }
+
+      if (result.success && result.data) {
+        // Update local state with check-in data
+        setLocalTodayAttendance({
+          ...localTodayAttendance,
+          check_in_time: result.data.check_in_time,
+          check_in_location_id: result.data.check_in_location_id,
+          check_in_location_name: result.data.check_in_location_name,
+        })
+
+        setFlashMessage({
+          message: `Successfully checked in at ${nearestLocation?.name || "Location"}`,
+          type: "success",
+        })
+
+        toast({
+          title: "Checked In",
+          description: `You have successfully checked in at ${nearestLocation?.name || "your location"}`,
+          action: <ToastAction altText="OK">OK</ToastAction>,
+        })
+
+        setRecentCheckIn(true)
+      } else {
+        throw new Error(result.message || "Check-in did not complete successfully")
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to check in. Please try again."
+      setFlashMessage({
+        message: errorMessage,
+        type: "error",
+      })
+      throw error
+    }
+  }
+
   const handleLatenessCancel = () => {
     setShowLatenessDialog(false)
     setLatenessReason("")
@@ -1156,6 +1246,89 @@ export function AttendanceRecorder({
     setIsCheckingIn(false)
     setIsCheckInProcessing(false)
     setRecentCheckIn(false)
+  }
+
+  // Off-premises request handlers
+  const handleOffPremisesCancel = () => {
+    setShowOffPremisesReasonDialog(false)
+    setOffPremisesReason("")
+    setPendingOffPremisesLocation(null)
+    setIsCheckingIn(false)
+  }
+
+  const handleOffPremisesConfirm = async () => {
+    const trimmedReason = offPremisesReason.trim()
+    
+    if (!trimmedReason) {
+      setFlashMessage({
+        message: "Please provide a reason for your off-premises request.",
+        type: "error",
+      })
+      return
+    }
+    
+    if (trimmedReason.length < 10) {
+      setFlashMessage({
+        message: "Off-premises reason must be at least 10 characters long.",
+        type: "error",
+      })
+      return
+    }
+
+    setIsCheckingIn(true)
+    try {
+      // Submit off-premises request to supervisor for approval
+      const deviceInfo = getDeviceInfo()
+      const response = await fetch("/api/attendance/off-premises-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          latitude: pendingOffPremisesLocation?.latitude,
+          longitude: pendingOffPremisesLocation?.longitude,
+          accuracy: pendingOffPremisesLocation?.accuracy,
+          location_name: pendingOffPremisesLocation?.location_name || "Unknown Location",
+          reason: trimmedReason,
+          device_info: deviceInfo,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to submit off-premises request")
+      }
+
+      // Immediately close the modal
+      setShowOffPremisesReasonDialog(false)
+      setOffPremisesReason("")
+      setPendingOffPremisesLocation(null)
+
+      // Show prominent success notification to user
+      setFlashMessage({
+        message: "Request Submitted Successfully! Your off-premises check-in request has been sent to your supervisor and department head for approval. You will receive a notification once your request is reviewed.",
+        type: "success",
+      })
+
+      // Show additional toast notification for better visibility
+      toast({
+        title: "Off-Premises Request Submitted",
+        description: "Your request will be reviewed by your supervisor and department head. Check your notifications for updates.",
+        action: <ToastAction altText="OK">OK</ToastAction>,
+      })
+
+      // Refresh attendance data in background
+      await fetchTodayAttendance()
+      setIsCheckingIn(false)
+    } catch (error) {
+      console.error("[v0] Error submitting off-premises request:", error)
+      setFlashMessage({
+        message: error instanceof Error ? error.message : "Failed to submit request. Please try again.",
+        type: "error",
+      })
+      setIsCheckingIn(false)
+    }
   }
 
   const handleCheckOut = async () => {
@@ -1751,6 +1924,73 @@ export function AttendanceRecorder({
           </Card>
         </div>
       )}
+
+      {/* Off-Premises Check-In Request Modal */}
+      {showOffPremisesReasonDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-blue-600">
+                <MapPin className="h-5 w-5" />
+                Off-Premises Check-In Request
+              </CardTitle>
+              <CardDescription>
+                Provide a reason for your off-premises check-in. This will be sent to your supervisor for approval.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-blue-200 bg-blue-50">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800">Required Approval</AlertTitle>
+                <AlertDescription className="text-blue-700">
+                  Your request will be reviewed by your supervisor and department head. You will be notified once approved or rejected.
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <Label htmlFor="offpremises-reason">Reason for Off-Premises Work *</Label>
+                <textarea
+                  id="offpremises-reason"
+                  value={offPremisesReason}
+                  onChange={(e) => setOffPremisesReason(e.target.value)}
+                  placeholder="e.g., Official meeting at partner office, client site visit, training program..."
+                  className="w-full min-h-[100px] p-3 border rounded-md resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  maxLength={500}
+                />
+                <p className={`text-xs ${offPremisesReason.length < 10 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                  {offPremisesReason.length}/500 characters (minimum 10 required)
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleOffPremisesCancel}
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  disabled={isCheckingIn}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleOffPremisesConfirm}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  disabled={isCheckingIn || offPremisesReason.trim().length < 10}
+                >
+                  {isCheckingIn ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    "Submit Request"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* GPS Location Required badge moved to bottom */}
       {!locationPermissionStatusSimplified.granted && !isCompletedForDay && (
         <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-500/50 mt-8">

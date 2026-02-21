@@ -36,7 +36,17 @@ export function useRealTimeLocations() {
     while (attempt <= MAX_RETRIES) {
       try {
         console.log("[v0] Real-time locations - Fetching locations (attempt)", attempt + 1)
-        const response = await fetch("/api/attendance/user-location", { credentials: "same-origin" })
+        // Add cache-busting query parameter to force fresh data from server
+        const timestamp = Date.now()
+        const response = await fetch(`/api/attendance/user-location?t=${timestamp}`, { 
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+          }
+        })
 
         // Try to parse body safely
         let result: any = {}

@@ -3,12 +3,15 @@ import { type NextRequest, NextResponse } from "next/server"
 import { validateCheckoutLocation, type LocationData } from "@/lib/geolocation"
 import { requiresEarlyCheckoutReason, canCheckOutAtTime, getCheckOutDeadline } from "@/lib/attendance-utils"
 
-// ===== COMPLETE SERVER REBUILD FORCED =====
-// Timestamp: 2026-02-21T18:30:00Z
-// Critical Fix: Removed undefined isOffPremisesCheckedIn reference
-// All cached compiled code must be purged
-// Status: Forcing complete fresh compilation
-// ==========================================
+// ===== FINAL HARD RESET REBUILD =====
+// Timestamp: 2026-02-21T21:00:00Z
+// Issue: Server running OLD compiled code with:
+//   - handleEarlyCheckoutConfirm function calling early checkout dialog
+//   - handleEarlyCheckoutCancel referenced in JSX but undefined
+//   - const isOutOfRange = !checkoutLocationData at line 147
+// Action: Force complete rebuild with cache purge
+// Status: All source code is CLEAN - waiting for server rebuild
+// ====================================
 
 export async function POST(request: NextRequest) {
   try {

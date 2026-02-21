@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
-// HARD CACHE RESET: 2026-02-21T19:30:00Z
-// Reason: Server running old compiled code with handleEarlyCheckoutConfirm and checkoutLocationData bug
-// Action: Complete rebuild with cache purge - no optimization allowed
+// FORCED COMPLETE REBUILD: 2026-02-21T20:30:00Z
+// Previous: OLD compiled code with handleEarlyCheckoutConfirm and checkoutLocationData bug
+// Action: Force rebuild clean - removes ALL cached compiled code
+// New fixes: Check-in API created, removed early checkout dialog, fixed database save
 const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,

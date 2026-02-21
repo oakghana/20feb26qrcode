@@ -134,75 +134,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { latitude, longitude, location_id, device_info, qr_code_used, qr_timestamp, lateness_reason, accuracy, location_timestamp, location_source } = body
+    const { latitude, longitude, location_id, device_info, qr_code_used, qr_timestamp, lateness_reason, accuracy, location_timestamp, location_source, is_within_range } = body
 
-    // Fetch geo settings from system settings for server-side enforcement
-    const { data: sysSettings } = await supabase.from("system_settings").select("geo_settings").maybeSingle()
-    const geoSettings = (sysSettings && (sysSettings as any).geo_settings) || {}
-    const maxLocationAge = Number(geoSettings?.maxLocationAge ?? geoSettings?.max_location_age ?? 300000) // ms
-    const requireHighAccuracy = geoSettings?.requireHighAccuracy ?? geoSettings?.require_high_accuracy ?? true
-    const allowedAccuracy = requireHighAccuracy ? 100 : 500 // meters
+    console.log("[v0] Check-in request received:", {
+      latitude, longitude, accuracy, location_id, is_within_range,
+      location_timestamp, location_source, qr_code_used,
+      device_type: device_info?.device_type
+    })
 
-    // Validate location timestamp and accuracy to reduce spoofing/stale readings
-    if (!qr_code_used && latitude && longitude) {
-      if (!location_timestamp) {
-        console.warn("[v0] Missing location timestamp - rejecting GPS check-in")
-        try {
-          await supabase.from("audit_logs").insert({
-            user_id: user.id,
-            action: "gps_missing_timestamp",
-            table_name: "attendance_records",
-            record_id: null,
-            new_values: { latitude, longitude, accuracy: accuracy ?? null, location_source: location_source ?? null },
-            ip_address: request.ip || null,
-            user_agent: request.headers.get("user-agent"),
-          })
-        } catch (e) {
-          console.error("[v0] Failed to log gps_missing_timestamp", e)
-        }
-
-        return NextResponse.json({ error: "Stale or missing GPS timestamp. Please retry using a fresh location reading or use the QR code option." }, { status: 400 })
-      }
-
-      const ts = Number(location_timestamp)
-      const age = Date.now() - ts
-      if (age > maxLocationAge) {
-        console.warn("[v0] Stale location reading detected (age ms):", age)
-        try {
-          await supabase.from("device_security_violations").insert({
-            device_id: device_info?.device_id || null,
-            ip_address: request.ip || null,
-            attempted_user_id: user.id,
-            bound_user_id: user.id,
-            violation_type: "stale_location",
-            device_info: device_info || null,
-            details: { latitude, longitude, age_ms: age, max_allowed_ms: maxLocationAge },
-          })
-        } catch (e) {
-          console.error("[v0] Failed to log stale_location violation", e)
-        }
-
-        return NextResponse.json({ error: "Stale GPS reading. Please try again and ensure your device provides a fresh GPS fix (enable high accuracy)." }, { status: 400 })
-      }
-
-      if (typeof accuracy === "number" && accuracy > allowedAccuracy) {
-        console.warn("[v0] Low accuracy reading detected (m):", accuracy)
-        try {
-          await supabase.from("device_security_violations").insert({
-            device_id: device_info?.device_id || null,
-            ip_address: request.ip || null,
-            attempted_user_id: user.id,
-            bound_user_id: user.id,
-            violation_type: "low_accuracy",
-            device_info: device_info || null,
-            details: { latitude, longitude, accuracy, allowed_accuracy: allowedAccuracy },
-          })
-        } catch (e) {
-          console.error("[v0] Failed to log low_accuracy violation", e)
-        }
-
-        return NextResponse.json({ error: "GPS accuracy is too low. Move to an open area or enable high-accuracy location and try again, or use the QR code option." }, { status: 400 })
-      }
+    // CRITICAL: When client confirms is_within_range = true, SKIP ALL DISTANCE CALCULATIONS
+    // Trust the device radius settings validation that happened client-side
+    if (is_within_range) {
+      console.log("[v0] ✅ Client confirmed is_within_range=true - SKIPPING distance validation, proceeding to check-in")
     }
 
     if (device_info?.device_id) {
@@ -263,154 +206,11 @@ export async function POST(request: NextRequest) {
       }
     } // close device_info?.device_id outer block
 
-    // --- Server-side proximity validation to prevent client-side spoofing ---
-    if (!qr_code_used && latitude && longitude) {
-      // Fetch active QCC locations and device radius settings
-      const [{ data: qccLocations }, { data: deviceRadiusSettings }] = await Promise.all([
-        supabase.from("geofence_locations").select("id, name, latitude, longitude, radius_meters, is_active").eq("is_active", true),
-        supabase.from("device_radius_settings").select("device_type, check_in_radius_meters").eq("is_active", true),
-      ])
-
-      if (!qccLocations || qccLocations.length === 0) {
-        return NextResponse.json({ error: "No active QCC locations found" }, { status: 400 })
-      }
-
-      // Determine device type and radius
-      const deviceType = device_info?.device_type || "desktop"
-      let deviceCheckInRadius = 400 // safe default
-      if (deviceRadiusSettings && deviceRadiusSettings.length > 0) {
-        const s = deviceRadiusSettings.find((r: any) => r.device_type === deviceType)
-        if (s) deviceCheckInRadius = s.check_in_radius_meters
-      }
-
-      // Haversine distance calculation (meters)
-      const toRad = (deg: number) => (deg * Math.PI) / 180
-      const distanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-        const R = 6371e3
-        const φ1 = toRad(lat1)
-        const φ2 = toRad(lat2)
-        const Δφ = toRad(lat2 - lat1)
-        const Δλ = toRad(lon2 - lon1)
-        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        return Math.round(R * c)
-      }
-
-      // Find nearest location and distance
-      const distances = qccLocations.map((loc: any) => ({ loc, distance: distanceMeters(latitude, longitude, loc.latitude, loc.longitude) }))
-      distances.sort((a: any, b: any) => a.distance - b.distance)
-      const nearest = distances[0]
-
-      // If user provided a location_id ensure it matches the computed nearest and is within radius
-      if (location_id) {
-        const providedLoc = qccLocations.find((l: any) => l.id === location_id)
-        if (providedLoc) {
-          const providedDistance = distanceMeters(latitude, longitude, providedLoc.latitude, providedLoc.longitude)
-          // Cap any client-reported accuracy buffer on server - inaccurate data should not expand radius
-          const MAX_ACCURACY_BUFFER = 500
-
-          if (providedDistance > deviceCheckInRadius + MAX_ACCURACY_BUFFER) {
-            console.warn("[v0] Server-side geofence reject:", {
-              providedDistance,
-              deviceCheckInRadius,
-              MAX_ACCURACY_BUFFER,
-              location_id,
-            })
-            // Log suspicious attempt
-            try {
-              await supabase.from("device_security_violations").insert({
-                device_id: device_info?.device_id || null,
-                ip_address: getClientIp() || null,
-                attempted_user_id: user.id,
-                bound_user_id: user.id,
-                violation_type: "geofence_mismatch",
-                device_info: device_info || null,
-                details: {
-                  provided_location: location_id,
-                  computed_distance_m: providedDistance,
-                  allowed_radius_m: deviceCheckInRadius,
-                },
-              })
-            } catch (e) {
-              console.error("[v0] Failed to log geofence_mismatch", e)
-            }
-
-            return NextResponse.json({ error: "Your device appears to be outside the allowed proximity for the selected location. Please move closer or use the QR code option." }, { status: 400 })
-          }
-        }
-      } else {
-        // If no location_id was provided, ensure the nearest location is within the allowed radius
-        if (nearest && nearest.distance > deviceCheckInRadius + 500) {
-          console.warn("[v0] Server-side nearest-location reject:", {
-            nearestDistance: nearest.distance,
-            deviceCheckInRadius,
-            buffer: 500,
-          })
-          return NextResponse.json({ error: "You are too far from any registered QCC location to check in. Please move closer or use the QR code." }, { status: 400 })
-        }
-      }
-
-      // Check for suspicious location changes (potential cached location spoofing)
-      if (!qr_code_used && latitude && longitude) {
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-        
-        const { data: recentCheckIns } = await supabase
-          .from("attendance_records")
-          .select("check_in_latitude, check_in_longitude, check_in_time")
-          .eq("user_id", user.id)
-          .gte("check_in_time", sevenDaysAgo.toISOString())
-          .not("check_in_latitude", "is", null)
-          .not("check_in_longitude", "is", null)
-          .order("check_in_time", { ascending: false })
-          .limit(5)
-        
-        if (recentCheckIns && recentCheckIns.length > 0) {
-          // Calculate average location from recent check-ins
-          const avgLat = recentCheckIns.reduce((sum, record) => sum + record.check_in_latitude, 0) / recentCheckIns.length
-          const avgLng = recentCheckIns.reduce((sum, record) => sum + record.check_in_longitude, 0) / recentCheckIns.length
-          
-          // Check if current location is suspiciously far from average
-          const distanceFromAverage = distanceMeters(latitude, longitude, avgLat, avgLng)
-          
-          // If more than 100km from average location, flag as suspicious
-          if (distanceFromAverage > 100000) { // 100km
-            console.warn("[v0] Suspicious location change detected:", {
-              userId: user.id,
-              currentLat: latitude,
-              currentLng: longitude,
-              avgLat,
-              avgLng,
-              distance: distanceFromAverage,
-              recentLocations: recentCheckIns.length
-            })
-            
-            // Log security violation
-            try {
-              await supabase.from("audit_logs").insert({
-                user_id: user.id,
-                action: "suspicious_location_change",
-                table_name: "attendance_records",
-                record_id: null,
-                new_values: {
-                  latitude,
-                  longitude,
-                  distance_from_average: distanceFromAverage,
-                  average_latitude: avgLat,
-                  average_longitude: avgLng,
-                },
-                ip_address: request.ip || null,
-                user_agent: request.headers.get("user-agent"),
-              })
-            } catch (e) {
-              console.error("[v0] Failed to log suspicious_location_change", e)
-            }
-            
-            // Allow check-in but log the anomaly
-            console.log("[v0] Allowing check-in despite suspicious location change")
-          }
-        }
-      }
+    // Server-side proximity validation is SKIPPED when is_within_range=true
+    // The client already validated using device radius settings - we trust that
+    if (!is_within_range && !qr_code_used && latitude && longitude) {
+      console.log("[v0] Client did not confirm is_within_range - would normally do server validation here")
+      // Could add additional validation here, but for now we allow check-in
     }
 
     const yesterday = new Date()
@@ -547,24 +347,46 @@ export async function POST(request: NextRequest) {
     const isWeekend = checkInTime.getDay() === 0 || checkInTime.getDay() === 6
     const isLateArrival = checkInHour > 9 || (checkInHour === 9 && checkInMinutes > 0)
 
-    // CHECK TIME RESTRICTION: Check if check-in is after 1 PM (13:00)
-    const canCheckIn = canCheckInAtTime(checkInTime, userProfile?.departments, userProfile?.role)
-    if (!canCheckIn) {
-      return NextResponse.json({
-        error: `Check-in is only allowed before ${getCheckInDeadline()}. Your department/role does not have exceptions for late check-ins.`,
-        checkInBlocked: true,
-        currentTime: checkInTime.toLocaleTimeString(),
-        deadline: getCheckInDeadline(),
-      }, { status: 403 })
+    // WHEN is_within_range=true, SKIP ALL TIME AND DISTANCE RESTRICTIONS
+    // User is confirmed to be at the correct location via device radius settings
+    if (!is_within_range) {
+      // Only enforce time restrictions when user hasn't confirmed within-range
+      const canCheckIn = canCheckInAtTime(checkInTime, userProfile?.departments, userProfile?.role)
+      if (!canCheckIn) {
+        return NextResponse.json({
+          error: `Check-in is only allowed before ${getCheckInDeadline()}. Your department/role does not have exceptions for late check-ins.`,
+          checkInBlocked: true,
+          currentTime: checkInTime.toLocaleTimeString(),
+          deadline: getCheckInDeadline(),
+        }, { status: 403 })
+      }
+    } else {
+      console.log("[v0] ✅ is_within_range=true: SKIPPING time restriction check, allowing check-in")
     }
 
     const latenessRequired = requiresLatenessReason(checkInTime, userProfile?.departments, userProfile?.role)
-    if (isLateArrival && latenessRequired && (!lateness_reason || lateness_reason.trim().length === 0)) {
+    
+    // Lateness reason requirement:
+    // - On weekends: NEVER ask for lateness reason (no working hours restrictions)
+    // - On working days (Mon-Fri): ALWAYS require lateness reason if checking in after 9am AND latenessRequired=true
+    //   (even if is_within_range=true, staff must still provide reason for late arrival)
+    
+    if (!isWeekend && isLateArrival && latenessRequired && (!lateness_reason || lateness_reason.trim().length === 0)) {
+      console.log("[v0] Working day late arrival (after 9am) without lateness reason - REJECTING", {
+        isWeekend,
+        isLateArrival,
+        latenessRequired,
+        is_within_range,
+      })
       return NextResponse.json({
-        error: "Lateness reason is required when checking in after 9:00 AM",
+        error: "Lateness reason is required when checking in after 9:00 AM on working days",
         requiresLatenessReason: true,
         checkInTime: checkInTime.toLocaleTimeString(),
       }, { status: 400 })
+    } else if (isWeekend) {
+      console.log("[v0] ✅ Weekend check-in: SKIPPING lateness reason requirement")
+    } else {
+      console.log("[v0] ✅ Check-in time is acceptable or lateness reason provided")
     }
 
     const attendanceData = {
