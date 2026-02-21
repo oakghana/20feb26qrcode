@@ -147,15 +147,19 @@ export async function POST(request: NextRequest) {
     if (!qr_code_used && latitude && longitude) {
       if (!location_timestamp) {
         console.warn("[v0] Missing location timestamp - rejecting GPS check-in")
-        await supabase.from("audit_logs").insert({
-          user_id: user.id,
-          action: "gps_missing_timestamp",
-          table_name: "attendance_records",
-          record_id: null,
-          new_values: { latitude, longitude, accuracy: accuracy ?? null, location_source: location_source ?? null },
-          ip_address: request.ip || null,
-          user_agent: request.headers.get("user-agent"),
-        }).catch(() => {})
+        try {
+          await supabase.from("audit_logs").insert({
+            user_id: user.id,
+            action: "gps_missing_timestamp",
+            table_name: "attendance_records",
+            record_id: null,
+            new_values: { latitude, longitude, accuracy: accuracy ?? null, location_source: location_source ?? null },
+            ip_address: request.ip || null,
+            user_agent: request.headers.get("user-agent"),
+          })
+        } catch (e) {
+          console.error("[v0] Failed to log gps_missing_timestamp", e)
+        }
 
         return NextResponse.json({ error: "Stale or missing GPS timestamp. Please retry using a fresh location reading or use the QR code option." }, { status: 400 })
       }
@@ -164,30 +168,38 @@ export async function POST(request: NextRequest) {
       const age = Date.now() - ts
       if (age > maxLocationAge) {
         console.warn("[v0] Stale location reading detected (age ms):", age)
-        await supabase.from("device_security_violations").insert({
-          device_id: device_info?.device_id || null,
-          ip_address: request.ip || null,
-          attempted_user_id: user.id,
-          bound_user_id: user.id,
-          violation_type: "stale_location",
-          device_info: device_info || null,
-          details: { latitude, longitude, age_ms: age, max_allowed_ms: maxLocationAge },
-        }).catch(() => {})
+        try {
+          await supabase.from("device_security_violations").insert({
+            device_id: device_info?.device_id || null,
+            ip_address: request.ip || null,
+            attempted_user_id: user.id,
+            bound_user_id: user.id,
+            violation_type: "stale_location",
+            device_info: device_info || null,
+            details: { latitude, longitude, age_ms: age, max_allowed_ms: maxLocationAge },
+          })
+        } catch (e) {
+          console.error("[v0] Failed to log stale_location violation", e)
+        }
 
         return NextResponse.json({ error: "Stale GPS reading. Please try again and ensure your device provides a fresh GPS fix (enable high accuracy)." }, { status: 400 })
       }
 
       if (typeof accuracy === "number" && accuracy > allowedAccuracy) {
         console.warn("[v0] Low accuracy reading detected (m):", accuracy)
-        await supabase.from("device_security_violations").insert({
-          device_id: device_info?.device_id || null,
-          ip_address: request.ip || null,
-          attempted_user_id: user.id,
-          bound_user_id: user.id,
-          violation_type: "low_accuracy",
-          device_info: device_info || null,
-          details: { latitude, longitude, accuracy, allowed_accuracy: allowedAccuracy },
-        }).catch(() => {})
+        try {
+          await supabase.from("device_security_violations").insert({
+            device_id: device_info?.device_id || null,
+            ip_address: request.ip || null,
+            attempted_user_id: user.id,
+            bound_user_id: user.id,
+            violation_type: "low_accuracy",
+            device_info: device_info || null,
+            details: { latitude, longitude, accuracy, allowed_accuracy: allowedAccuracy },
+          })
+        } catch (e) {
+          console.error("[v0] Failed to log low_accuracy violation", e)
+        }
 
         return NextResponse.json({ error: "GPS accuracy is too low. Move to an open area or enable high-accuracy location and try again, or use the QR code option." }, { status: 400 })
       }
@@ -298,20 +310,30 @@ export async function POST(request: NextRequest) {
           const MAX_ACCURACY_BUFFER = 500
 
           if (providedDistance > deviceCheckInRadius + MAX_ACCURACY_BUFFER) {
+            console.warn("[v0] Server-side geofence reject:", {
+              providedDistance,
+              deviceCheckInRadius,
+              MAX_ACCURACY_BUFFER,
+              location_id,
+            })
             // Log suspicious attempt
-            await supabase.from("device_security_violations").insert({
-              device_id: device_info?.device_id || null,
-              ip_address: getClientIp() || null,
-              attempted_user_id: user.id,
-              bound_user_id: user.id,
-              violation_type: "geofence_mismatch",
-              device_info: device_info || null,
-              details: {
-                provided_location: location_id,
-                computed_distance_m: providedDistance,
-                allowed_radius_m: deviceCheckInRadius,
-              },
-            }).catch(() => {})
+            try {
+              await supabase.from("device_security_violations").insert({
+                device_id: device_info?.device_id || null,
+                ip_address: getClientIp() || null,
+                attempted_user_id: user.id,
+                bound_user_id: user.id,
+                violation_type: "geofence_mismatch",
+                device_info: device_info || null,
+                details: {
+                  provided_location: location_id,
+                  computed_distance_m: providedDistance,
+                  allowed_radius_m: deviceCheckInRadius,
+                },
+              })
+            } catch (e) {
+              console.error("[v0] Failed to log geofence_mismatch", e)
+            }
 
             return NextResponse.json({ error: "Your device appears to be outside the allowed proximity for the selected location. Please move closer or use the QR code option." }, { status: 400 })
           }
@@ -319,6 +341,11 @@ export async function POST(request: NextRequest) {
       } else {
         // If no location_id was provided, ensure the nearest location is within the allowed radius
         if (nearest && nearest.distance > deviceCheckInRadius + 500) {
+          console.warn("[v0] Server-side nearest-location reject:", {
+            nearestDistance: nearest.distance,
+            deviceCheckInRadius,
+            buffer: 500,
+          })
           return NextResponse.json({ error: "You are too far from any registered QCC location to check in. Please move closer or use the QR code." }, { status: 400 })
         }
       }
@@ -359,21 +386,25 @@ export async function POST(request: NextRequest) {
             })
             
             // Log security violation
-            await supabase.from("audit_logs").insert({
-              user_id: user.id,
-              action: "suspicious_location_change",
-              table_name: "attendance_records",
-              record_id: null,
-              new_values: {
-                latitude,
-                longitude,
-                distance_from_average: distanceFromAverage,
-                average_latitude: avgLat,
-                average_longitude: avgLng,
-              },
-              ip_address: request.ip || null,
-              user_agent: request.headers.get("user-agent"),
-            }).catch(() => {})
+            try {
+              await supabase.from("audit_logs").insert({
+                user_id: user.id,
+                action: "suspicious_location_change",
+                table_name: "attendance_records",
+                record_id: null,
+                new_values: {
+                  latitude,
+                  longitude,
+                  distance_from_average: distanceFromAverage,
+                  average_latitude: avgLat,
+                  average_longitude: avgLng,
+                },
+                ip_address: request.ip || null,
+                user_agent: request.headers.get("user-agent"),
+              })
+            } catch (e) {
+              console.error("[v0] Failed to log suspicious_location_change", e)
+            }
             
             // Allow check-in but log the anomaly
             console.log("[v0] Allowing check-in despite suspicious location change")

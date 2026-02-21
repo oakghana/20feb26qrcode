@@ -795,16 +795,20 @@ export function AttendanceRecorder({
             employee_id,
             position,
             assigned_location_id,
-          password_changed_at,
-              name,
-              code
-            )
+            password_changed_at,
+            name,
+            code
           `)
           .eq("id", user.id)
           .single()
 
         if (error) {
-          console.error("[v0] Failed to fetch user profile:", error)
+          // supabase error objects aren't always serializable, so log individual fields too
+          console.error("[v0] Failed to fetch user profile:", error, {
+            message: error?.message,
+            details: error?.details,
+            hint: error?.hint,
+          })
           return
         }
 
@@ -988,6 +992,7 @@ export function AttendanceRecorder({
           nearestLocation: distances[0]?.location.name,
           distance: distances[0]?.distance,
           deviceProximityRadius,
+          displayRadius,
           deviceType: deviceInfo.device_type,
           isLaptop: deviceInfo.isLaptop,
           isWithinRange: distances.length > 0 && distances[0].distance <= deviceProximityRadius
@@ -1490,6 +1495,10 @@ export function AttendanceRecorder({
       console.log("[v0] Check-in API response:", result)
 
       if (!response.ok) {
+        console.warn("[v0] Server rejected check-in", {
+          status: response.status,
+          body: result,
+        })
         // Handle completed work for the day with friendly message
         if (result.alreadyCompleted && result.details) {
           console.log("[v0] User has already completed work for today")
@@ -1537,12 +1546,27 @@ export function AttendanceRecorder({
           device_sharing_warning: result.deviceSharingWarning?.message || null
         }
         setLocalTodayAttendance(attendanceWithWarning)
+      } else {
+        // rare case: response success but no record returned
+        console.warn("[v0] Check-in succeeded but no attendance record included; refreshing manually")
+        await fetchTodayAttendance()
+        if (!localTodayAttendance?.check_in_time) {
+          toast({
+            title: "Check-in recorded but state not updated",
+            description: "Your check-in went through but the client could not verify it. Please refresh the page.",
+            variant: "warning",
+          })
+        }
       }
 
       setFlashMessage({
         message: result.message || "Successfully checked in!",
         type: "success",
       })
+
+      // always refresh to guarantee state
+      await fetchTodayAttendance()
+
 
       // Refresh attendance data
       await fetchTodayAttendance()
