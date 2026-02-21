@@ -4,6 +4,8 @@ import "./globals.css"
 import { metadata, viewport } from "./metadata"
 import RootLayoutClient from "./root-layout-client"
 
+// FORCE REBUILD: Cache invalidation timestamp 2026-02-21T17:00:00Z
+// Clears all stale server-compiled code
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",

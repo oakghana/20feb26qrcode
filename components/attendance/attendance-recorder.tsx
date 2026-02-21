@@ -1154,10 +1154,7 @@ export function AttendanceRecorder({
   }
 
   const handleCheckOut = async () => {
-    console.log("[v0] Check-out initiated")
-
     if (isLoading) {
-      console.log("[v0] Check-out already in progress")
       return
     }
 
@@ -1184,7 +1181,6 @@ export function AttendanceRecorder({
     setCheckingMessage("Processing check-out...")
 
     try {
-      console.log("[v0] Starting check-out process...")
       setError(null)
       setFlashMessage(null)
 
@@ -1202,8 +1198,6 @@ export function AttendanceRecorder({
         longitude = currentLocation.longitude
       }
 
-      console.log("[v0] Sending checkout request with location:", { latitude, longitude })
-
       const response = await fetch("/api/attendance/check-out", {
         method: "POST",
         headers: {
@@ -1220,7 +1214,6 @@ export function AttendanceRecorder({
       })
 
       const result = await response.json()
-      console.log("[v0] Checkout API response:", { status: response.status, data: result })
 
       if (!response.ok) {
         throw new Error(result.error || `Checkout failed: ${response.status}`)
@@ -1228,8 +1221,6 @@ export function AttendanceRecorder({
 
       // Success
       if (result.success && result.data) {
-        console.log("[v0] Checkout successful:", result.data)
-        
         const workHours = parseFloat(result.workHours || "0").toFixed(2)
         const checkOutLocation = result.checkoutLocation || "Unknown Location"
 
@@ -1257,7 +1248,6 @@ export function AttendanceRecorder({
         throw new Error(result.message || "Checkout did not complete successfully")
       }
     } catch (error) {
-      console.error("[v0] Check-out error:", error)
       const errorMessage = error instanceof Error ? error.message : "Failed to check out. Please try again."
       setFlashMessage({
         message: errorMessage,
