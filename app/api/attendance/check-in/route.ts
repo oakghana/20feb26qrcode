@@ -365,12 +365,15 @@ export async function POST(request: NextRequest) {
     }
 
     const latenessRequired = requiresLatenessReason(checkInTime, userProfile?.departments, userProfile?.role)
-    if (isLateArrival && latenessRequired && (!lateness_reason || lateness_reason.trim().length === 0)) {
+    // Only require lateness reason if NOT within range (client-side validation skipped time checks)
+    if (!is_within_range && isLateArrival && latenessRequired && (!lateness_reason || lateness_reason.trim().length === 0)) {
       return NextResponse.json({
         error: "Lateness reason is required when checking in after 9:00 AM",
         requiresLatenessReason: true,
         checkInTime: checkInTime.toLocaleTimeString(),
       }, { status: 400 })
+    } else if (is_within_range) {
+      console.log("[v0] ✅ is_within_range=true: SKIPPING lateness reason requirement")
     }
 
     const attendanceData = {
