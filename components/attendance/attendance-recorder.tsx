@@ -1745,13 +1745,6 @@ A manager will review it shortly and you will be notified of the outcome.`,
     setRecentCheckIn(false)
   }
 
-  const handleEarlyCheckoutCancel = () => {
-    setShowEarlyCheckoutDialog(false)
-    setEarlyCheckoutReason("")
-    setPendingCheckoutData(null)
-    setIsLoading(false)
-  }
-
   const getFormattedCheckoutTime = () => {
     const assignedLoc = realTimeLocations?.find(loc => loc.id === userProfile?.assigned_location_id)
     const checkOutTime = assignedLoc?.check_out_end_time || "17:00"
@@ -1814,6 +1807,13 @@ A manager will review it shortly and you will be notified of the outcome.`,
   const handleLocationSelect = (location: GeofenceLocation) => {
     console.log("Location selected:", location.name)
     // Logic to handle location selection, e.g., pre-filling a form or triggering an action
+  }
+
+  const handleEarlyCheckoutCancel = () => {
+    setShowEarlyCheckoutDialog(false)
+    setEarlyCheckoutReason("")
+    setPendingCheckoutData(null)
+    setIsLoading(false)
   }
 
   return (
