@@ -993,16 +993,24 @@ export function AttendanceRecorder({
           }))
           .sort((a, b) => a.distance - b.distance)
 
-        // Use device-specific proximity radius: 400m for mobile/tablet, 700m for laptop, 2000m for desktop PC
-        let deviceProximityRadius = 400
-        if (deviceInfo.isMobile || deviceInfo.isTablet) {
-          deviceProximityRadius = 400
-        } else if (deviceInfo.isLaptop) {
-          deviceProximityRadius = 700
-        } else {
-          deviceProximityRadius = 2000 // Desktop PC
+        // Use device-specific proximity radius from settings
+        // Fallback to defaults if settings unavailable
+        let deviceProximityRadius = 100 // Default for mobile
+        
+        if (deviceRadiusSettings) {
+          if (deviceInfo.isMobile) {
+            deviceProximityRadius = deviceRadiusSettings.mobile.checkIn
+          } else if (deviceInfo.isTablet) {
+            deviceProximityRadius = deviceRadiusSettings.tablet.checkIn
+          } else if (deviceInfo.isLaptop) {
+            deviceProximityRadius = deviceRadiusSettings.laptop.checkIn
+          } else {
+            deviceProximityRadius = deviceRadiusSettings.desktop.checkIn // Desktop PC
+          }
         }
-        const displayRadius = 50 // Trade secret - what we show to users
+        
+        // Display radius: Always show 100m to users (trade secret)
+        const displayRadius = 100
         
         console.log("[v0] Check-in proximity validation:", {
           nearestLocation: distances[0]?.location.name,
