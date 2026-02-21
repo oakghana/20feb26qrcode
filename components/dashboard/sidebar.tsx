@@ -83,7 +83,7 @@ const navigationItems = [
   },
   {
     title: "Off-Premises Approvals",
-    href: "/offpremises-approvals",
+    href: "/dashboard/offpremises-approvals",
     icon: MapPin,
     roles: ["admin", "regional_manager", "department_head"],
     category: "main",
