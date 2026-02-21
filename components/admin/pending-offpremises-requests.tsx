@@ -77,6 +77,8 @@ export function PendingOffPremisesRequests() {
       setIsLoading(true)
       setError(null)
 
+      console.log('[v0] Starting to load pending off-premises requests...')
+      
       // Always fetch all statuses - the API handles authentication and role checks
       const response = await fetch(`/api/attendance/offpremises/pending?status=all`, {
         method: 'GET',
@@ -85,8 +87,12 @@ export function PendingOffPremisesRequests() {
         },
       })
 
+      console.log('[v0] API response status:', response.status)
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error('[v0] API error response:', errorData)
+        
         if (response.status === 401) {
           setError('Unable to authenticate - please log in again')
         } else if (response.status === 403) {
@@ -96,47 +102,36 @@ export function PendingOffPremisesRequests() {
         } else {
           setError('Failed to fetch requests: ' + (errorData.error || response.statusText) + (errorData.details ? ' (' + errorData.details + ')' : ''))
         }
+        setIsLoading(false)
         return
       }
 
       const data = await response.json()
-      console.log("[v0] Loaded requests:", data.requests)
-      console.log("[v0] Total count:", data.count)
-      console.log("[v0] Pending filter:", data.requests?.filter((r: any) => r.status === 'pending'))
+      console.log('[v0] Successfully loaded off-premises requests:', {
+        totalCount: data.count,
+        requestsReceived: data.requests?.length || 0,
+        firstRequest: data.requests?.[0]?.id,
+        statuses: data.requests?.reduce((acc: any, r: any) => {
+          acc[r.status] = (acc[r.status] || 0) + 1
+          return acc
+        }, {}),
+      })
       
-      // Filter requests based on user role
-      let filteredRequests = data.requests || []
-      
-      if (userRole === 'regional_manager' && userLocation) {
-        // Regional manager sees only requests from their region
-        filteredRequests = filteredRequests.filter((r: any) => {
-          // Check if request's user is in the same region
-          return r.user_profiles?.assigned_location_id === userLocation
-        })
-      } else if (userRole === 'departmental_head' && userDepartment) {
-        // Departmental head sees only requests from their department
-        filteredRequests = filteredRequests.filter((r: any) => {
-          return r.user_profiles?.department_id === userDepartment
-        })
-      }
-      // Admin and other roles see all requests
-      
-      setAllRequests(filteredRequests)
-    } catch (err: any) {
-      setError(err.message || 'An error occurred while loading requests')
-    } finally {
+      setAllRequests(data.requests || [])
+      setIsLoading(false)
+    } catch (err) {
+      console.error('[v0] Error loading pending requests:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load requests')
       setIsLoading(false)
     }
   }
 
   // Load all requests on mount, poll every 30 seconds
   useEffect(() => {
-    if (userRole) {
-      loadPendingRequests()
-      const interval = setInterval(loadPendingRequests, 30000)
-      return () => clearInterval(interval)
-    }
-  }, [userRole, userLocation, userDepartment])
+    loadPendingRequests()
+    const interval = setInterval(loadPendingRequests, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Derive counts and filtered list from allRequests
   const pendingCount = allRequests.filter(r => r.status === 'pending').length
