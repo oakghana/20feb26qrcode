@@ -214,6 +214,9 @@ export function AttendanceRecorder({
   const [recentCheckOut, setRecentCheckOut] = useState(false)
   const [localTodayAttendance, setLocalTodayAttendance] = useState(initialTodayAttendance)
 
+  // Derived state: user has completed their attendance for the day (both checked in AND checked out)
+  const isCompletedForDay = !!(localTodayAttendance?.check_in_time && localTodayAttendance?.check_out_time)
+
   const [checkoutTimeReached, setCheckoutTimeReached] = useState(false)
   const [minutesUntilOffPremisesCheckout, setMinutesUntilOffPremisesCheckout] = useState<number | null>(null)
 
