@@ -1,6 +1,7 @@
 "use client"
 
-// Force rebuild cache purge: 2026-02-21T16:30:00Z
+// FORCE COMPLETE REBUILD: 2026-02-21T17:15:00Z
+// Invalidates all cached compiled code - enables new checkout range validation
 import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   getCurrentLocation,
@@ -1477,6 +1478,12 @@ export function AttendanceRecorder({
                     isCheckingOut={isLoading}
                     userDepartment={userProfile?.departments}
                     userRole={userProfile?.role}
+                    isOutOfRange={
+                      checkoutTimeReached && locationValidation?.canCheckOut === false
+                    }
+                    nearestLocation={
+                      locationValidation?.nearestLocation?.name || null
+                    }
                   />
                 )
               })()

@@ -3,7 +3,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { validateCheckoutLocation, type LocationData } from "@/lib/geolocation"
 import { requiresEarlyCheckoutReason, canCheckOutAtTime, getCheckOutDeadline } from "@/lib/attendance-utils"
 
-// Force rebuild: 2026-02-21T16:30:00Z - Cache purge
+// FORCE COMPLETE REBUILD: 2026-02-21T17:15:00Z
+// This comment triggers server cache invalidation and forces full recompilation
+// Removes all stale compiled code from previous builds
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()

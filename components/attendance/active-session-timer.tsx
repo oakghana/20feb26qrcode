@@ -20,6 +20,8 @@ interface ActiveSessionTimerProps {
   isCheckingOut?: boolean
   userDepartment?: { code?: string | null; name?: string | null } | undefined | null
   userRole?: string | null
+  isOutOfRange?: boolean
+  nearestLocation?: string | null
 }
 
 export function ActiveSessionTimer({
@@ -34,6 +36,8 @@ export function ActiveSessionTimer({
   isCheckingOut = false,
   userDepartment,
   userRole,
+  isOutOfRange = false,
+  nearestLocation = null,
 }: ActiveSessionTimerProps) {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [timeUntilCheckout, setTimeUntilCheckout] = useState<{
@@ -144,6 +148,7 @@ export function ActiveSessionTimer({
             // allow checkout if location is valid OR the user has met time/remote conditions
             disabled={
               isCheckingOut ||
+              isOutOfRange ||
               !(
                 canCheckOut ||
                 canCheckOutAtTime(new Date(), userDepartment, userRole) ||
@@ -154,9 +159,10 @@ export function ActiveSessionTimer({
             className="w-full transition-all duration-300 bg-red-600 hover:bg-red-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
             size="lg"
             title={
-              // explain why button is disabled if still blocked by time restrictions
-              !(canCheckOut || canCheckOutAtTime(new Date(), userDepartment, userRole) || timeUntilCheckout.canCheckout)
-                ? `Check-out only allowed before ${getCheckOutDeadline()} or after minimum work period of ${minimumWorkMinutes} minutes or if in range`
+              isOutOfRange
+                ? `You are out of range. Please get within 100 meters of ${nearestLocation || 'an approved QCC location'}`
+                : !(canCheckOut || canCheckOutAtTime(new Date(), userDepartment, userRole) || timeUntilCheckout.canCheckout)
+                ? `Check-out only allowed before ${getCheckOutDeadline()} or after minimum work period of ${minimumWorkMinutes} minutes`
                 : "Check out from your location"
             }
           >
@@ -172,6 +178,23 @@ export function ActiveSessionTimer({
               </>
             )}
           </Button>
+        )}
+
+        {/* Out of Range Warning - Show when user is beyond 100 meters */}
+        {isOutOfRange && (
+          <div className="rounded-lg bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/60 dark:to-rose-900/60 border border-red-200 dark:border-red-500/50 p-4">
+            <div className="flex items-start gap-3">
+              <div className="bg-red-500 rounded-full p-2 mt-0.5">
+                <MapPin className="h-5 w-5 text-white" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-red-900 dark:text-red-100">Out of Range - Checkout Disabled</p>
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  You are currently beyond 100 meters from {nearestLocation || 'an approved QCC location'}. Please move closer to an active QCC location to complete your checkout.
+                </p>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Countdown Timer - Show when checkout is available or when waiting */}
