@@ -1273,6 +1273,31 @@ export function AttendanceRecorder({
     }
   }
 
+  const handleRefreshLocations = async () => {
+    console.log("[v0] Refreshing attendance status...")
+    setIsLoading(true)
+    try {
+      await fetchTodayAttendance()
+      setFlashMessage({
+        message: "Attendance status refreshed successfully",
+        type: "success",
+      })
+      toast({
+        title: "Status Updated",
+        description: "Your attendance status has been refreshed",
+        action: <ToastAction altText="OK">OK</ToastAction>,
+      })
+    } catch (error) {
+      console.error("[v0] Failed to refresh attendance:", error)
+      setFlashMessage({
+        message: "Failed to refresh attendance status. Please try again.",
+        type: "error",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleLocationSelect = (location: GeofenceLocation) => {
     console.log("Location selected:", location.name)
     // Logic to handle location selection
