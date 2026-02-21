@@ -1277,18 +1277,25 @@ export function AttendanceRecorder({
         throw new Error(result.error || "Failed to submit off-premises request")
       }
 
-      // Reset dialog
+      // Immediately close the modal
       setShowOffPremisesReasonDialog(false)
       setOffPremisesReason("")
       setPendingOffPremisesLocation(null)
 
-      // Show success message
+      // Show prominent success notification to user
       setFlashMessage({
-        message: "Your off-premises check-in request has been sent to your supervisor for approval. You will be notified once it is reviewed.",
+        message: "Request Submitted Successfully! Your off-premises check-in request has been sent to your supervisor and department head for approval. You will receive a notification once your request is reviewed.",
         type: "success",
       })
 
-      // Refresh attendance data
+      // Show additional toast notification for better visibility
+      toast({
+        title: "Off-Premises Request Submitted",
+        description: "Your request will be reviewed by your supervisor and department head. Check your notifications for updates.",
+        action: <ToastAction altText="OK">OK</ToastAction>,
+      })
+
+      // Refresh attendance data in background
       await fetchTodayAttendance()
       setIsCheckingIn(false)
     } catch (error) {
