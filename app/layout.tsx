@@ -4,10 +4,9 @@ import "./globals.css"
 import { metadata, viewport } from "./metadata"
 import RootLayoutClient from "./root-layout-client"
 
-// FORCE COMPLETE CACHE INVALIDATION: 2026-02-21T19:00:00Z
-// Purpose: Wipe all compiled cache and force complete rebuild
-// Issue: Server still serving OLD code with handleEarlyCheckoutConfirm
-// Action: Force Vercel to discard all cache and recompile everything
+// FORCE COMPLETE REBUILD: 2026-02-21T20:00:00Z
+// Critical changes: Added performCheckInAPI and check-in API endpoint
+// Removed all old early checkout dialog code from compiled cache
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",

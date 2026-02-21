@@ -1149,6 +1149,68 @@ export function AttendanceRecorder({
     }
   }
 
+  // Perform actual check-in API call
+  const performCheckInAPI = async (locationData: any, nearestLocation: any, latenessReason: string = "") => {
+    try {
+      const deviceInfo = getDeviceInfo()
+
+      const response = await fetch("/api/attendance/check-in", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-device-type": deviceInfo.device_type || "desktop",
+        },
+        body: JSON.stringify({
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          accuracy: locationData.accuracy || 10,
+          location_source: "gps",
+          device_info: deviceInfo,
+          location_name: nearestLocation?.name || "Unknown Location",
+          lateness_reason: latenessReason,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || `Check-in failed: ${response.status}`)
+      }
+
+      if (result.success && result.data) {
+        // Update local state with check-in data
+        setLocalTodayAttendance({
+          ...localTodayAttendance,
+          check_in_time: result.data.check_in_time,
+          check_in_location_id: result.data.check_in_location_id,
+          check_in_location_name: result.data.check_in_location_name,
+        })
+
+        setFlashMessage({
+          message: `Successfully checked in at ${nearestLocation?.name || "Location"}`,
+          type: "success",
+        })
+
+        toast({
+          title: "Checked In",
+          description: `You have successfully checked in at ${nearestLocation?.name || "your location"}`,
+          action: <ToastAction altText="OK">OK</ToastAction>,
+        })
+
+        setRecentCheckIn(true)
+      } else {
+        throw new Error(result.message || "Check-in did not complete successfully")
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to check in. Please try again."
+      setFlashMessage({
+        message: errorMessage,
+        type: "error",
+      })
+      throw error
+    }
+  }
+
   const handleLatenessCancel = () => {
     setShowLatenessDialog(false)
     setLatenessReason("")
