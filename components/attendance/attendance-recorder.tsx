@@ -811,21 +811,23 @@ export function AttendanceRecorder({
           return
         }
 
-        const { data: profileData, error } = await supabase
-          .from("user_profiles")
-          .select(`
-            id,
-            first_name,
-            last_name,
-            employee_id,
-            position,
-            assigned_location_id,
-            password_changed_at,
-            name,
-            code
-          `)
-          .eq("id", user.id)
-          .single()
+  const { data: profileData, error } = await supabase
+    .from("user_profiles")
+    .select(`
+      id,
+      first_name,
+      last_name,
+      employee_id,
+      position,
+      assigned_location_id,
+      password_changed_at,
+      departments (
+        name,
+        code
+      )
+    `)
+    .eq("id", user.id)
+    .single()
 
         if (error) {
           // supabase error objects aren't always serializable, so log individual fields too
