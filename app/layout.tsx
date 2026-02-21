@@ -4,10 +4,10 @@ import "./globals.css"
 import { metadata, viewport } from "./metadata"
 import RootLayoutClient from "./root-layout-client"
 
-// CRITICAL REBUILD TRIGGER: 2026-02-21T17:45:00Z
-// Clears ALL cached compiled code - forces complete fresh compilation
-// Removes all stale handleEarlyCheckoutConfirm and early checkout dialog code
-// Forces new build without cached optimization
+// FORCE COMPLETE CACHE INVALIDATION: 2026-02-21T19:00:00Z
+// Purpose: Wipe all compiled cache and force complete rebuild
+// Issue: Server still serving OLD code with handleEarlyCheckoutConfirm
+// Action: Force Vercel to discard all cache and recompile everything
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
