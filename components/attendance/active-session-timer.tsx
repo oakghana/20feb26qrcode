@@ -139,8 +139,8 @@ export function ActiveSessionTimer({
           </div>
         </div>
 
-        {/* Checkout Button - Show when ready */}
-        {(timeUntilCheckout.canCheckout || isOffPremisesCheckedIn) && onCheckOut && (
+        {/* Checkout Button - Show ONLY when ready (hide during 2-hour countdown) */}
+        {timeUntilCheckout.canCheckout && onCheckOut && (
           <Button
             onClick={onCheckOut}
             // once the minimum work period has elapsed we allow checkout regardless of the 6pm deadline
@@ -150,8 +150,7 @@ export function ActiveSessionTimer({
               !(
                 canCheckOut ||
                 canCheckOutAtTime(new Date(), userDepartment, userRole) ||
-                timeUntilCheckout.canCheckout ||
-                isOffPremisesCheckedIn
+                timeUntilCheckout.canCheckout
               )
             }
             variant="destructive"
@@ -159,22 +158,20 @@ export function ActiveSessionTimer({
             size="lg"
             title={
               // explain why button is disabled if still blocked by time restrictions
-              !(canCheckOut || canCheckOutAtTime(new Date(), userDepartment, userRole) || timeUntilCheckout.canCheckout || isOffPremisesCheckedIn)
+              !(canCheckOut || canCheckOutAtTime(new Date(), userDepartment, userRole) || timeUntilCheckout.canCheckout)
                 ? `Check-out only allowed before ${getCheckOutDeadline()} or after minimum work period of ${minimumWorkMinutes} minutes or if in range`
-                : isOffPremisesCheckedIn
-                ? "Off‑premises checkout allowed — will be recorded as remote"
                 : "Check out from your location"
             }
           >
             {isCheckingOut ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                {isOffPremisesCheckedIn ? 'Checking Out (Off‑Premises)...' : 'Checking Out...'}
+                Checking Out...
               </>
             ) : (
               <>
                 <LogOut className="mr-2 h-5 w-5" />
-                {isOffPremisesCheckedIn ? 'Off‑Premises Check Out' : 'Check Out Now'}
+                Check Out Now
               </>
             )}
           </Button>
