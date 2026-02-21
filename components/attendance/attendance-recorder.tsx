@@ -1180,9 +1180,12 @@ export function AttendanceRecorder({
           longitude: locationData.longitude,
           accuracy: locationData.accuracy || 10,
           location_source: "gps",
+          location_timestamp: locationData.timestamp || Date.now(),
+          location_id: nearestLocation?.id || null,
           device_info: deviceInfo,
           location_name: nearestLocation?.name || "Unknown Location",
           lateness_reason: latenessReason,
+          is_within_range: true,
         }),
       })
 

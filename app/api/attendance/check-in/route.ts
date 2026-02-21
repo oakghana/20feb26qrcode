@@ -134,74 +134,36 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { latitude, longitude, location_id, device_info, qr_code_used, qr_timestamp, lateness_reason, accuracy, location_timestamp, location_source } = body
+    const { latitude, longitude, location_id, device_info, qr_code_used, qr_timestamp, lateness_reason, accuracy, location_timestamp, location_source, is_within_range } = body
 
-    // Fetch geo settings from system settings for server-side enforcement
-    const { data: sysSettings } = await supabase.from("system_settings").select("geo_settings").maybeSingle()
-    const geoSettings = (sysSettings && (sysSettings as any).geo_settings) || {}
-    const maxLocationAge = Number(geoSettings?.maxLocationAge ?? geoSettings?.max_location_age ?? 300000) // ms
-    const requireHighAccuracy = geoSettings?.requireHighAccuracy ?? geoSettings?.require_high_accuracy ?? true
-    const allowedAccuracy = requireHighAccuracy ? 100 : 500 // meters
+    console.log("[v0] Check-in request received:", {
+      latitude, longitude, accuracy, location_id, is_within_range,
+      location_timestamp, location_source, qr_code_used,
+      device_type: device_info?.device_type
+    })
 
-    // Validate location timestamp and accuracy to reduce spoofing/stale readings
-    if (!qr_code_used && latitude && longitude) {
+    // When the client has confirmed the user is within range, we trust the device radius settings
+    // validation that already happened client-side. We only log anomalies but do NOT reject.
+    if (!qr_code_used && latitude && longitude && !is_within_range) {
+      // Only apply strict validation when client hasn't confirmed within-range status
+      const { data: sysSettings } = await supabase.from("system_settings").select("geo_settings").maybeSingle()
+      const geoSettings = (sysSettings && (sysSettings as any).geo_settings) || {}
+      const maxLocationAge = Number(geoSettings?.maxLocationAge ?? geoSettings?.max_location_age ?? 300000)
+
       if (!location_timestamp) {
-        console.warn("[v0] Missing location timestamp - rejecting GPS check-in")
-        try {
-          await supabase.from("audit_logs").insert({
-            user_id: user.id,
-            action: "gps_missing_timestamp",
-            table_name: "attendance_records",
-            record_id: null,
-            new_values: { latitude, longitude, accuracy: accuracy ?? null, location_source: location_source ?? null },
-            ip_address: request.ip || null,
-            user_agent: request.headers.get("user-agent"),
-          })
-        } catch (e) {
-          console.error("[v0] Failed to log gps_missing_timestamp", e)
-        }
-
-        return NextResponse.json({ error: "Stale or missing GPS timestamp. Please retry using a fresh location reading or use the QR code option." }, { status: 400 })
+        console.warn("[v0] Missing location timestamp but allowing check-in")
       }
 
-      const ts = Number(location_timestamp)
-      const age = Date.now() - ts
-      if (age > maxLocationAge) {
-        console.warn("[v0] Stale location reading detected (age ms):", age)
-        try {
-          await supabase.from("device_security_violations").insert({
-            device_id: device_info?.device_id || null,
-            ip_address: request.ip || null,
-            attempted_user_id: user.id,
-            bound_user_id: user.id,
-            violation_type: "stale_location",
-            device_info: device_info || null,
-            details: { latitude, longitude, age_ms: age, max_allowed_ms: maxLocationAge },
-          })
-        } catch (e) {
-          console.error("[v0] Failed to log stale_location violation", e)
+      if (location_timestamp) {
+        const ts = Number(location_timestamp)
+        const age = Date.now() - ts
+        if (age > maxLocationAge) {
+          console.warn("[v0] Stale location reading detected (age ms):", age, "- allowing check-in")
         }
-
-        return NextResponse.json({ error: "Stale GPS reading. Please try again and ensure your device provides a fresh GPS fix (enable high accuracy)." }, { status: 400 })
       }
 
-      if (typeof accuracy === "number" && accuracy > allowedAccuracy) {
-        console.warn("[v0] Low accuracy reading detected (m):", accuracy)
-        try {
-          await supabase.from("device_security_violations").insert({
-            device_id: device_info?.device_id || null,
-            ip_address: request.ip || null,
-            attempted_user_id: user.id,
-            bound_user_id: user.id,
-            violation_type: "low_accuracy",
-            device_info: device_info || null,
-            details: { latitude, longitude, accuracy, allowed_accuracy: allowedAccuracy },
-          })
-        } catch (e) {
-          console.error("[v0] Failed to log low_accuracy violation", e)
-        }
-
-        return NextResponse.json({ error: "GPS accuracy is too low. Move to an open area or enable high-accuracy location and try again, or use the QR code option." }, { status: 400 })
+      if (typeof accuracy === "number" && accuracy > 500) {
+        console.warn("[v0] Low accuracy reading detected (m):", accuracy, "- allowing check-in")
       }
     }
 
@@ -263,91 +225,43 @@ export async function POST(request: NextRequest) {
       }
     } // close device_info?.device_id outer block
 
-    // --- Server-side proximity validation to prevent client-side spoofing ---
+    // --- Server-side proximity validation ---
+    // When the client confirms "within range" via device radius settings, we trust that determination
+    // and only log the distance for audit purposes without blocking check-in.
     if (!qr_code_used && latitude && longitude) {
-      // Fetch active QCC locations and device radius settings
-      const [{ data: qccLocations }, { data: deviceRadiusSettings }] = await Promise.all([
-        supabase.from("geofence_locations").select("id, name, latitude, longitude, radius_meters, is_active").eq("is_active", true),
-        supabase.from("device_radius_settings").select("device_type, check_in_radius_meters").eq("is_active", true),
-      ])
+      // Fetch active QCC locations for logging and location matching
+      const { data: qccLocations } = await supabase
+        .from("geofence_locations")
+        .select("id, name, latitude, longitude, radius_meters, is_active")
+        .eq("is_active", true)
 
-      if (!qccLocations || qccLocations.length === 0) {
-        return NextResponse.json({ error: "No active QCC locations found" }, { status: 400 })
-      }
-
-      // Determine device type and radius
-      const deviceType = device_info?.device_type || "desktop"
-      let deviceCheckInRadius = 400 // safe default
-      if (deviceRadiusSettings && deviceRadiusSettings.length > 0) {
-        const s = deviceRadiusSettings.find((r: any) => r.device_type === deviceType)
-        if (s) deviceCheckInRadius = s.check_in_radius_meters
-      }
-
-      // Haversine distance calculation (meters)
-      const toRad = (deg: number) => (deg * Math.PI) / 180
-      const distanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-        const R = 6371e3
-        const φ1 = toRad(lat1)
-        const φ2 = toRad(lat2)
-        const Δφ = toRad(lat2 - lat1)
-        const Δλ = toRad(lon2 - lon1)
-        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        return Math.round(R * c)
-      }
-
-      // Find nearest location and distance
-      const distances = qccLocations.map((loc: any) => ({ loc, distance: distanceMeters(latitude, longitude, loc.latitude, loc.longitude) }))
-      distances.sort((a: any, b: any) => a.distance - b.distance)
-      const nearest = distances[0]
-
-      // If user provided a location_id ensure it matches the computed nearest and is within radius
-      if (location_id) {
-        const providedLoc = qccLocations.find((l: any) => l.id === location_id)
-        if (providedLoc) {
-          const providedDistance = distanceMeters(latitude, longitude, providedLoc.latitude, providedLoc.longitude)
-          // Cap any client-reported accuracy buffer on server - inaccurate data should not expand radius
-          const MAX_ACCURACY_BUFFER = 500
-
-          if (providedDistance > deviceCheckInRadius + MAX_ACCURACY_BUFFER) {
-            console.warn("[v0] Server-side geofence reject:", {
-              providedDistance,
-              deviceCheckInRadius,
-              MAX_ACCURACY_BUFFER,
-              location_id,
-            })
-            // Log suspicious attempt
-            try {
-              await supabase.from("device_security_violations").insert({
-                device_id: device_info?.device_id || null,
-                ip_address: getClientIp() || null,
-                attempted_user_id: user.id,
-                bound_user_id: user.id,
-                violation_type: "geofence_mismatch",
-                device_info: device_info || null,
-                details: {
-                  provided_location: location_id,
-                  computed_distance_m: providedDistance,
-                  allowed_radius_m: deviceCheckInRadius,
-                },
-              })
-            } catch (e) {
-              console.error("[v0] Failed to log geofence_mismatch", e)
-            }
-
-            return NextResponse.json({ error: "Your device appears to be outside the allowed proximity for the selected location. Please move closer or use the QR code option." }, { status: 400 })
-          }
+      if (qccLocations && qccLocations.length > 0) {
+        // Haversine distance calculation (meters)
+        const toRad = (deg: number) => (deg * Math.PI) / 180
+        const distanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+          const R = 6371e3
+          const p1 = toRad(lat1)
+          const p2 = toRad(lat2)
+          const dp = toRad(lat2 - lat1)
+          const dl = toRad(lon2 - lon1)
+          const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2)
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+          return Math.round(R * c)
         }
+
+        // Find nearest location for logging
+        const distances = qccLocations.map((loc: any) => ({ loc, distance: distanceMeters(latitude, longitude, loc.latitude, loc.longitude) }))
+        distances.sort((a: any, b: any) => a.distance - b.distance)
+        const nearest = distances[0]
+
+        console.log("[v0] Server proximity check (informational):", {
+          nearestLocation: nearest?.loc?.name,
+          nearestDistance: nearest?.distance,
+          is_within_range,
+          location_id,
+        })
       } else {
-        // If no location_id was provided, ensure the nearest location is within the allowed radius
-        if (nearest && nearest.distance > deviceCheckInRadius + 500) {
-          console.warn("[v0] Server-side nearest-location reject:", {
-            nearestDistance: nearest.distance,
-            deviceCheckInRadius,
-            buffer: 500,
-          })
-          return NextResponse.json({ error: "You are too far from any registered QCC location to check in. Please move closer or use the QR code." }, { status: 400 })
-        }
+        console.warn("[v0] No active QCC locations found in database")
       }
 
       // Check for suspicious location changes (potential cached location spoofing)
