@@ -3,13 +3,12 @@ import { type NextRequest, NextResponse } from "next/server"
 import { validateCheckoutLocation, type LocationData } from "@/lib/geolocation"
 import { requiresEarlyCheckoutReason, canCheckOutAtTime, getCheckOutDeadline } from "@/lib/attendance-utils"
 
-// ===== HARD RESET REBUILD TRIGGER =====
-// Timestamp: 2026-02-21T18:00:00Z
-// Action: Complete server cache invalidation
-// Purpose: Force rebuild without ANY cached compiled code
-// Previous issues: OLD compiled code with checkoutLocationData bug
-// Status: Rebuilding clean copy of checkout route
-// ======================================
+// ===== COMPLETE SERVER REBUILD FORCED =====
+// Timestamp: 2026-02-21T18:30:00Z
+// Critical Fix: Removed undefined isOffPremisesCheckedIn reference
+// All cached compiled code must be purged
+// Status: Forcing complete fresh compilation
+// ==========================================
 
 export async function POST(request: NextRequest) {
   try {
@@ -386,7 +385,9 @@ export async function POST(request: NextRequest) {
 
     let checkoutLocationData = null
 
-    // Determine if this was an off-premises check-in (already checked above, but set location data)
+    // Determine if this was an off-premises check-in
+    const isOffPremisesCheckedIn = !!attendanceRecord.on_official_duty_outside_premises
+
     // When checking out, validate location ONLY if not off-premises
     if (!isOffPremisesCheckedIn) {
       if (!qr_code_used && latitude && longitude) {

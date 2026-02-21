@@ -1,12 +1,11 @@
 "use client"
 
-// ===== HARD RESET REBUILD TRIGGER =====
-// Timestamp: 2026-02-21T18:00:00Z
-// Action: Complete client cache invalidation
-// Purpose: Force rebuild without ANY cached compiled code
-// Previous issue: OLD code with handleEarlyCheckoutConfirm and handleEarlyCheckoutCancel
-// Status: Rebuilding clean copy without early checkout functions
-// ======================================
+// ===== COMPLETE CLIENT REBUILD FORCED =====
+// Timestamp: 2026-02-21T18:30:00Z
+// Critical: Removed all early checkout code
+// All cached compiled code must be purged
+// Status: Forcing complete fresh compilation
+// ==========================================
 import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   getCurrentLocation,
