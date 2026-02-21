@@ -51,6 +51,25 @@ export async function GET() {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 })
     }
 
+    // Check for duplicate or incorrect location records
+    const { data: allCocobods } = await supabase
+      .from("geofence_locations")
+      .select("id, name, latitude, longitude, is_active")
+      .ilike("name", "%cocobod%")
+
+    if (allCocobods && allCocobods.length > 0) {
+      console.log("[v0] User Location API - All Cocobod records found:", allCocobods.length)
+      allCocobods.forEach((record, idx) => {
+        console.log(`[v0]   Cocobod ${idx + 1}:`, {
+          id: record.id,
+          name: record.name,
+          latitude: record.latitude,
+          longitude: record.longitude,
+          is_active: record.is_active
+        })
+      })
+    }
+
     const { data: locations, error } = await supabase
       .from("geofence_locations")
       .select(`
@@ -68,6 +87,7 @@ export async function GET() {
       `)
       .eq("is_active", true)
       .order("name")
+      .limit(100)  // Force fresh query
 
     if (error) {
       console.error("[v0] User Location API - Database error:", error)
@@ -75,6 +95,17 @@ export async function GET() {
     }
 
     console.log("[v0] User Location API - Found locations:", locations?.length)
+    
+    // Log Cocobod Archives specifically to verify coordinates
+    const cocobodArchives = locations?.find(l => l.name === 'Cocobod Archives')
+    if (cocobodArchives) {
+      console.log("[v0] User Location API - Cocobod Archives coordinates from DB:", {
+        name: cocobodArchives.name,
+        latitude: cocobodArchives.latitude,
+        longitude: cocobodArchives.longitude,
+        isGhanaCoordinates: cocobodArchives.latitude > 0 && cocobodArchives.latitude < 12 && cocobodArchives.longitude > -4 && cocobodArchives.longitude < 2
+      })
+    }
 
     // Return with cache-control headers to prevent caching
     const response = NextResponse.json({
